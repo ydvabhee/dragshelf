@@ -20,6 +20,7 @@ Every task's implicit ACs (QA checks always):
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | DONE (2026-10-20) |
+| T-16 | UI polish: no focus ring/outline, inset scroll bar, user-resizable shelf | M4 | T-13, T-14 | US-3, US-10 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | DONE (2026-10-20) |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | DONE (2026-10-20) |
@@ -141,6 +142,18 @@ Milestone M4. Depends on: T-10 (touches `DragOutSource` after T-10's keepAfterDr
 - AC-5: Unit tests: mask decision (modifiers × item kinds × inside/outside app); removal decision for `.move` vs `.copy` × keepAfterDragOut.
 - AC-6: Manual: same volume and cross-volume ⌘-drag into Finder; ⌘-drag into apps that only accept copy (e.g. Mail compose) still works or falls back to copy.
 - AC-7 (carried from T-10 QA): `AppDelegate.applyPreferences` remembers last applied values and only calls DragMonitor start/stop and HotKey register/unregister when a value changed (no repeated register error log on every shelf move).
+
+## T-16 UI polish: no focus ring/outline, inset scroll bar, user-resizable shelf
+Milestone M4. Depends on: T-13, T-14. Source: user report 2026-10-20 ("UI not looking good": outline on click, stray outline on screen, ugly scroll bar; wants drag-to-resize).
+- AC-1: Clicking anywhere on the shelf (tiles, header, empty area, footer) never draws a focus ring or outline: SwiftUI `.focusEffectDisabled()` where focusable, AppKit views `focusRingType = .none`; keyboard selection is shown only by the tile's own accent selection style.
+- AC-2: No rectangular border, hairline, or square shadow around the rounded shelf in any state (shown, key, non-key, drop-target, Reduce Transparency, Increase Contrast). Shadow follows the rounded shape (`invalidateShadow()` after resize/glass layout; transparent window background; `isOpaque = false`). Increase Contrast stroke, if any, follows the same rounded corners and sits inside the edge.
+- AC-3: Scroll bar: system overlay style (thin, auto-hides), inset inside the rounded shelf: never touches or is clipped by the corner radius (scroller insets / content margins ≥ corner radius at top and bottom, ~4–6 pt from the right edge). Only visible when content overflows.
+- AC-4: Shelf is user-resizable by dragging its bottom edge, left/right edges, and bottom corners (top edge stays the header/move area). Cursor shows resize arrows on hover. Panel stays non-activating while resizing.
+- AC-5: Width resize reflows tiles into more/fewer columns (adaptive grid); min size = 1 tile column + header, 1 row; max = screen `visibleFrame`.
+- AC-6: Height resize sets the user's max height; content still fits-to-content below that (T-13 AC-1 behavior), scrolls above it. If the user never resized, defaults from T-13 AC-2 apply.
+- AC-7: User size is remembered per display with the position (T-13 AC-5) and restored on show/relaunch; "Reset Shelf Position" (menu, Settings, header double-click) also resets size.
+- AC-8: Unit tests for size math (min/max clamps, columns from width, persisted size per screen, reset).
+- AC-9: No regressions: drag-out, drop-in, header move, auto-hide, promo footer, Quick Look.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
