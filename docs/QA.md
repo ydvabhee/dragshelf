@@ -88,3 +88,21 @@ Precedence: real file URLs on pasteboard beat promises; promises beat image/url/
 6. Race: start big promise drop, press Clear (or quit) before it finishes -> shelf stays empty, `Shelf/` empty after. (Expected FAIL-ish: see finding, low.)
 7. Hover a rejected drag (e.g. empty/unsupported type) -> no copy badge, no highlight.
 Matrix rows for T-05: Mail attachment, Photos (drop-in only).
+
+## T-06 Drag out, multi-select, Cmd-C (manual)
+Auto: `DragOutSourceTests` (writer types, copy-only mask, end-of-session removal, select/shift/cmd), `DropReceiverTests` (self-drop rejected). Real sessions are manual only.
+Deviation (manager-approved): AC-5 text says "cached dirs deleted" on drop; actual: item leaves shelf, cache dir stays until Clear/quit/next launch (receivers read file after drop). TASKS.md AC-5 needs this wording.
+Known for T-07: tile handle overlay is an AppKit view above the tile; hover xmark and context menu "Remove" must be verified to still work (right-click is not forwarded explicitly).
+1. Finder: drag 1 file tile to a Finder folder -> copy appears, cursor copy badge, tile leaves shelf. Dir still under `.../Shelf/<UUID>/` (expected) if the item was cached.
+2. Same-volume original: drop a non-cached file tile into another folder on the same volume -> copied, original stays, even with Cmd/Option held.
+3. Mail compose, Messages/Slack, browser upload field: drag file tile -> attached/uploaded with correct content.
+4. Link tile -> browser address bar = URL; -> Finder = .webloc. Text tile -> TextEdit = text.
+5. Click tile = select; Cmd-click toggles; Shift-click selects range; click empty grid space deselects. Click without moving never starts a drag; move >= 3 pt does.
+6. Select 3, drag one selected tile -> all 3 drop; plain-click one selected tile of 3 without moving -> selection collapses to it on mouse up. Drag unselected tile while others selected -> only that one.
+7. Drag All button -> every item drops (5 files into a Finder folder -> 5 files). Button with empty shelf does nothing.
+8. Cancel: Esc mid-drag, and drop on desktop-less empty area/menu bar -> items stay. Drop onto the shelf itself -> rejected (no badge), items stay, no duplicate.
+9. Remove on success: after the last item drops, panel hides. Change selection (Cmd-click) during a drag is not possible; check only dragged items left the shelf when 5 items on shelf and 2 dragged.
+10. Cmd-C: click a tile (panel becomes key), Cmd-C, paste in Finder/TextEdit -> file/text pasted. With nothing selected, Cmd-C does nothing. Cmd-C while another app has keyboard focus (panel not key) goes to that app (expected).
+11. Focus: with TextEdit frontmost, drag from shelf. DragShelf never appears in Cmd-Tab/Dock, menu bar stays TextEdit's. Note: tile mouse-down makes the panel key, so typing goes to the panel until you click the other app's window.
+12. Multi-display, full-screen app target, Space switch mid-drag, large file drag.
+Matrix rows for T-06: all targets x drag out; item removal = removed on success, kept on cancel; cache = survives drop, gone after Clear/quit.
