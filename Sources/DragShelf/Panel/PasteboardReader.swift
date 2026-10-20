@@ -3,18 +3,26 @@ import UniformTypeIdentifiers
 
 /// Parses a pasteboard into shelf-ready values (ARCHITECTURE §4).
 /// Per pasteboard item precedence: file URL > image data > web URL > string.
-/// ponytail: file promises (`.promise`) arrive with T-05.
+/// Real file URLs on the pasteboard win; promises are used only when there are none.
 enum PasteboardReader {
     enum Incoming: Equatable {
         case file(URL)
+        case promise(NSFilePromiseReceiver)
         case image(Data, UTType)
         case url(URL)
         case text(String)
     }
 
-    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .URL, .string, .png, .tiff]
+    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .URL, .string, .png, .tiff] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
 
     static func read(_ pb: NSPasteboard) -> [Incoming] {
+        let parsed = parseItems(pb)
+        if parsed.contains(where: { if case .file = $0 { true } else { false } }) { return parsed }
+        let promises = (pb.readObjects(forClasses: [NSFilePromiseReceiver.self]) as? [NSFilePromiseReceiver]) ?? []
+        return promises.isEmpty ? parsed : promises.map(Incoming.promise)
+    }
+
+    private static func parseItems(_ pb: NSPasteboard) -> [Incoming] {
         (pb.pasteboardItems ?? []).compactMap { item in
             if let url = item.string(forType: .fileURL).flatMap(URL.init(string:)), url.isFileURL {
                 return .file(url)

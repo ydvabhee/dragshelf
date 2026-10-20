@@ -41,3 +41,38 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(!store.isDropTargeted)
     #expect(store.items.map(\.kind) == [.file(a), .file(b), .text("hello")])
 }
+
+@Test func finishPromiseAddsCachedFile() throws {
+    let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
+    let store = ShelfStore(cache: cache)
+    let dir = try cache.newItemDir()
+    let file = dir.appendingPathComponent("a.pdf")
+    try Data("x".utf8).write(to: file)
+    DropReceiver<EmptyView>.finishPromise(url: file, dir: dir, store: store)
+    #expect(store.items.count == 1)
+    #expect(store.items[0].kind == .file(file))
+    #expect(store.items[0].isCached)
+    cache.wipe()
+}
+
+@Test func finishPromiseFailureLeavesNoDir() throws {
+    let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
+    let store = ShelfStore(cache: cache)
+    let dir = try cache.newItemDir()
+    DropReceiver<EmptyView>.finishPromise(url: nil, error: CocoaError(.fileReadUnknown), dir: dir, store: store)
+    #expect(store.items.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: dir.path))
+    cache.wipe()
+}
+
+@Test func draggingUpdatedRejectsUnacceptableDrag() {
+    let pb = NSPasteboard(name: .init("test-drop-\(UUID())"))
+    defer { pb.releaseGlobally() }
+    pb.clearContents()
+    let receiver = DropReceiver(rootView: EmptyView())
+    let info = FakeDraggingInfo(pb)
+    #expect(receiver.draggingEntered(info) == [])
+    #expect(receiver.draggingUpdated(info) == [])
+    pb.writeObjects(["hi" as NSString])
+    #expect(receiver.draggingUpdated(info) == .copy)
+}

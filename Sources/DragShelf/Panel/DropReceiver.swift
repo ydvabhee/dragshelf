@@ -1,9 +1,13 @@
 import AppKit
 import UniformTypeIdentifiers
 import SwiftUI
+import os
 
 /// Panel content view and drop destination. Lives on the panel's content view so drops work
 /// while the app is inactive. Subclasses the hosting view so SwiftUI keeps sizing the panel.
+private let log = Logger(subsystem: "com.abhishekyadav.DragShelf", category: "drop")
+private let promiseQueue = OperationQueue()
+
 final class DropReceiver<Content: View>: NSHostingView<Content> {
     var store: ShelfStore?
 
@@ -23,7 +27,9 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
         return .copy
     }
 
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation { .copy }
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        PasteboardReader.canAccept(sender.draggingPasteboard) ? .copy : []
+    }
     override func draggingExited(_ sender: (any NSDraggingInfo)?) { setTargeted(false) }
     override func draggingEnded(_ sender: any NSDraggingInfo) { setTargeted(false) }
 
@@ -47,12 +53,32 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
             case .file(let url): added = store.add(ShelfItem(kind: .file(url))) || added
             case .url(let url): added = store.add(ShelfItem(kind: .url(url))) || added
             case .text(let text): added = store.add(ShelfItem(kind: .text(text))) || added
+            case .promise(let receiver):
+                // Item lands asynchronously, so a promise alone does not count as added now.
+                receive(receiver, into: store)
+                added = true
             case .image(let data, let type):
                 guard let (file, dir) = writeImage(data, type: type, cache: store.cache) else { continue }
                 if store.add(ShelfItem(kind: .file(file), isCached: true)) { added = true } else { store.cache.remove(dir: dir) }
             }
         }
         return added
+    }
+
+    /// Receives a file promise into `root/<UUID>/` on a background queue, then adds the item on main.
+    private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore) {
+        let cache = store.cache
+        guard let dir = try? cache.newItemDir() else { log.error("promise: cannot create cache dir"); return }
+        receiver.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: promiseQueue) { url, error in
+            Task { @MainActor in finishPromise(url: error == nil ? url : nil, error: error, dir: dir, store: store) }
+        }
+    }
+
+    /// Adds the received file as a cached item; on failure or duplicate removes the (now empty) dir.
+    static func finishPromise(url: URL?, error: (any Error)? = nil, dir: URL, store: ShelfStore) {
+        if let url, store.add(ShelfItem(kind: .file(url), isCached: true)) { return }
+        if let error { log.error("promise failed: \(error.localizedDescription, privacy: .public)") }
+        store.cache.remove(dir: dir)
     }
 
     /// Writes PNG as-is (TIFF converted to PNG) to `root/<UUID>/Image <timestamp>.png`.
