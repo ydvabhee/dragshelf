@@ -23,6 +23,10 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
+    // ponytail: explicit empty deinit works around a swift-frontend 6.3 -O crash (EarlyPerfInliner on the
+    // synthesized deinit of this generic hosting-view subclass); remove once the toolchain is fixed.
+    nonisolated deinit {}
+
     /// The app is never active, so the first click on the panel must reach SwiftUI controls.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     /// Any click turns the panel key (never activates the app) so Esc/Space/Delete/arrows reach it.
