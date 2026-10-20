@@ -76,3 +76,15 @@ Auto: `PasteboardReaderTests`, `DropReceiverTests` (fake NSDraggingInfo: 2 files
 
 Matrix rows for T-04 (drop-in only): Finder 1/many/folder, Safari image/link/text, Desktop item.
 Drag-out columns wait for T-06.
+
+## T-05 Drop in: file promises (manual)
+Auto: `finishPromiseAddsCachedFile`, `finishPromiseFailureLeavesNoDir`, `draggingUpdatedRejectsUnacceptableDrag`. Real promises are manual only.
+Precedence: real file URLs on pasteboard beat promises; promises beat image/url/text. Known: promise + image in same drag (Safari/Chrome image) now yields the promised file, not raw image data.
+1. Mail: drag 1 attachment, then 2 attachments -> tile(s) with original filename(s); file under `.../Shelf/<UUID>/<name>`.
+2. Photos: drag 1 photo, then 3 photos -> file tiles; filenames from Photos.
+3. Safari/Chrome: drag image from page -> tile appears (file or PNG), no orphan dir. Note which.
+4. Large file: drag 100 MB+ promised file (Mail big attachment / Photos video) -> shelf stays scrollable/responsive while writing; tile appears after write.
+5. Failure: drag attachment from Mail while offline (not downloaded) -> no tile; Console (subsystem `com.abhishekyadav.DragShelf`, category `drop`) shows "promise failed"; `ls Shelf/` has no empty UUID dir.
+6. Race: start big promise drop, press Clear (or quit) before it finishes -> shelf stays empty, `Shelf/` empty after. (Expected FAIL-ish: see finding, low.)
+7. Hover a rejected drag (e.g. empty/unsupported type) -> no copy badge, no highlight.
+Matrix rows for T-05: Mail attachment, Photos (drop-in only).
