@@ -14,7 +14,7 @@ Every task's implicit ACs (QA checks always):
 | T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | DONE (2026-10-20) |
 | T-04 | Drop in: files, folders, links, text, image data | M1 | T-03 | US-2 | DONE (2026-10-20) |
 | T-05 | Drop in: file promises | M1 | T-04 | US-2 | DONE (2026-10-20) |
-| T-06 | Drag out: single, multi-select, drag all, Cmd-C | M2 | T-04 | US-4, US-5 | QA |
+| T-06 | Drag out: single, multi-select, drag all, Cmd-C | M2 | T-04 | US-4, US-5 | DONE (2026-10-20) |
 | T-07 | Manage items: remove, clear, missing files, Quick Look, keyboard | M2 | T-06 | US-6, US-7 | TODO |
 | T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | TODO |
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | TODO |
@@ -81,7 +81,7 @@ Milestone M2. Depends on: T-04. `DragOutSource`, selection in `ShelfStore`.
 - AC-2: Dragging a link item into a browser address bar delivers the URL; into Finder creates a `.webloc`. Text item into TextEdit inserts the text.
 - AC-3: Cmd-click / Shift-click select multiple; dragging a selected tile drags all selected. Drag-all handle drags every item. 5 files into a Finder folder → 5 files.
 - AC-4: Operation mask is `.copy` only: dragging an original into another Finder folder on the same volume copies it; the original stays (unit test on mask + manual check).
-- AC-5: Successful drop → dragged items removed (cached dirs deleted); cancelled drag (Esc / drop on nothing) → items stay. Shelf hides when it becomes empty.
+- AC-5: Successful drop → dragged items removed (cached dirs kept until Clear/quit/launch wipe, because receivers read the file after the drop); cancelled drag (Esc / drop on nothing) → items stay. Shelf hides when it becomes empty.
 - AC-6: Cmd-C copies selected items to `NSPasteboard.general` with the same writers (unit test on `writer(for:)`).
 - AC-7: Dragging out of the panel does not activate DragShelf.
 
@@ -94,6 +94,7 @@ Milestone M2. Depends on: T-06.
 - AC-5: Tiles expose VoiceOver actions "Remove" and "Quick Look".
 - AC-6 (carried from T-03 AC-6): Esc hides the panel even though it is non-activating (panel becomes key on click, or a local key monitor), without activating DragShelf.
 - AC-7 (carried from T-05 QA): a file promise that completes after Clear/quit adds no item and leaves no file (e.g. generation counter bumped in `clear()`, checked in `DropReceiver.finishPromise`). Unit test.
+- AC-8 (carried from T-06 QA): right-click context menu and hover `xmark` work on tiles despite the `DragOutHandleView` overlay (overlay below controls, or forward rightMouseDown/hover).
 
 ## T-08 Auto-show/hide on drag (DragMonitor)
 Milestone M3. Depends on: T-03, T-04.
