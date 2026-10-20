@@ -15,6 +15,7 @@ final class ShelfPanelController {
     @ObservationIgnored private(set) var reason: ShowReason?
     @ObservationIgnored private var droppedOnShelf = false
     @ObservationIgnored private var dragActive = false
+    @ObservationIgnored private var hideTask: Task<Void, Never>?
 
     /// Gap below the menu bar / notch, and the entry slide distance.
     static let topInset: CGFloat = 12
@@ -25,13 +26,15 @@ final class ShelfPanelController {
         let receiver = DropReceiver(rootView: PanelRoot(controller: self))
         receiver.store = store
         receiver.onDrop = { [weak self] in self?.droppedOnShelf = true }
+        receiver.onPromiseFailed = { [weak self] in self?.promiseFailed() }
         panel.contentView = receiver
         panel.onCancel = { [weak self] in self?.hide() }
     }
 
     /// Top center of `visible`, top edge fixed so content growth extends downward (AC-9).
-    static func topCenterFrame(size: NSSize, in visible: NSRect) -> NSRect {
-        NSRect(x: (visible.midX - size.width / 2).rounded(), y: visible.maxY - topInset - size.height,
+    /// `safeTop` = screen top minus the notch inset; matters when the menu bar is hidden (full screen).
+    static func topCenterFrame(size: NSSize, in visible: NSRect, safeTop: CGFloat = .infinity) -> NSRect {
+        NSRect(x: (visible.midX - size.width / 2).rounded(), y: min(visible.maxY, safeTop) - topInset - size.height,
                width: size.width, height: size.height)
     }
 
@@ -45,19 +48,30 @@ final class ShelfPanelController {
     }
 
     func dragStarted(at point: NSPoint) {
+        hideTask?.cancel()
         dragActive = true
         droppedOnShelf = false
         show(reason: .autoDrag, at: point)
     }
 
-    /// 300 ms grace lets an in-flight drop or promise land first.
+    /// 250 ms grace lets an in-flight drop land first (+0.2 s fade stays under AC-3's 500 ms).
     func dragEnded() {
         dragActive = false
-        Task {
-            try? await Task.sleep(for: .milliseconds(300))
-            if Self.shouldAutoHide(reason: reason, droppedOnShelf: droppedOnShelf,
-                                   isEmpty: store.items.isEmpty, dragActive: dragActive) { hide() }
+        hideTask?.cancel()
+        hideTask = Task {
+            guard (try? await Task.sleep(for: .milliseconds(250))) != nil else { return }
+            hideIfUnused(droppedOnShelf: droppedOnShelf)
         }
+    }
+
+    /// A promise drop counted as a drop but never landed: treat it as no drop.
+    private func promiseFailed() {
+        hideIfUnused(droppedOnShelf: false)
+    }
+
+    private func hideIfUnused(droppedOnShelf: Bool) {
+        if Self.shouldAutoHide(reason: reason, droppedOnShelf: droppedOnShelf,
+                               isEmpty: store.items.isEmpty, dragActive: dragActive) { hide() }
     }
 
     func show(reason: ShowReason = .manual, at point: NSPoint = NSEvent.mouseLocation) {
@@ -67,7 +81,8 @@ final class ShelfPanelController {
         self.reason = reason
         let visible = screen.visibleFrame
         maxHeight = visible.height * 0.7
-        let frame = Self.topCenterFrame(size: panel.contentView?.fittingSize ?? .zero, in: visible)
+        let frame = Self.topCenterFrame(size: panel.contentView?.fittingSize ?? .zero, in: visible,
+                                        safeTop: screen.frame.maxY - screen.safeAreaInsets.top)
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // Slides down from just under the menu bar while fading in; Reduce Motion → fade only.
         panel.setFrame(reduceMotion ? frame : frame.offsetBy(dx: 0, dy: Self.slide), display: false)

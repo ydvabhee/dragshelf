@@ -35,3 +35,14 @@ func topCenterFrame(visible: NSRect) {
     #expect(f.maxY == visible.maxY - 12)
     #expect(visible.contains(f))
 }
+
+@Test func topCenterFrameClearsNotchWhenMenuBarHidden() {
+    // Full-screen app on a notch Mac: visibleFrame reaches the screen top; safe area is 32 pt lower.
+    let screen = NSRect(x: 0, y: 0, width: 1512, height: 982)
+    let f = ShelfPanelController.topCenterFrame(size: NSSize(width: 288, height: 160), in: screen, safeTop: 950)
+    #expect(f.maxY == CGFloat(950 - 12))
+    // Normal desktop: visibleFrame already below the menu bar, safeTop does not lower it further.
+    let g = ShelfPanelController.topCenterFrame(size: NSSize(width: 288, height: 160),
+                                                in: NSRect(x: 0, y: 0, width: 1512, height: 945), safeTop: 950)
+    #expect(g.maxY == CGFloat(945 - 12))
+}

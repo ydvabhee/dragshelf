@@ -31,13 +31,11 @@ final class DragMonitor {
         }
     }
 
-    /// Removes the monitor (auto-show off, T-10). No `onDragEnd` is sent.
+    /// Removes the monitor (auto-show off, T-10). A drag in progress gets its `onDragEnd`.
     func stop() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
-        endPoll?.invalidate()
-        endPoll = nil
-        dragging = false
+        end()
     }
 
     private func handle(_ type: NSEvent.EventType) {

@@ -12,6 +12,8 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     var store: ShelfStore?
     /// A drop landed (keeps an auto-shown shelf open, T-08 AC-3).
     var onDrop: (() -> Void)?
+    /// A file promise from that drop failed (e.g. offline Mail attachment).
+    var onPromiseFailed: (() -> Void)?
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -57,7 +59,9 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         setTargeted(false)
         guard let store, accepts(sender) else { return false }
-        guard Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store) else { return false }
+        let failed = onPromiseFailed
+        guard Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store,
+                          onPromiseFailed: { failed?() }) else { return false }
         onDrop?()
         return true
     }
@@ -69,7 +73,8 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     /// Adds each incoming value; returns true if any item landed. Images are written to the cache.
     @discardableResult
-    static func ingest(_ incoming: [PasteboardReader.Incoming], into store: ShelfStore) -> Bool {
+    static func ingest(_ incoming: [PasteboardReader.Incoming], into store: ShelfStore,
+                       onPromiseFailed: @escaping () -> Void = {}) -> Bool {
         var added = false
         for value in incoming {
             switch value {
@@ -78,7 +83,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
             case .text(let text): added = store.add(ShelfItem(kind: .text(text))) || added
             case .promise(let receiver):
                 // Item lands asynchronously, so a promise alone does not count as added now.
-                receive(receiver, into: store)
+                receive(receiver, into: store, onFail: onPromiseFailed)
                 added = true
             case .image(let data, let type):
                 guard let (file, dir) = writeImage(data, type: type, cache: store.cache) else { continue }
@@ -89,19 +94,24 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     }
 
     /// Receives a file promise into `root/<UUID>/` on a background queue, then adds the item on main.
-    private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore) {
+    private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore, onFail: @escaping () -> Void) {
         let cache = store.cache
-        guard let dir = try? cache.newItemDir() else { log.error("promise: cannot create cache dir"); return }
+        guard let dir = try? cache.newItemDir() else { log.error("promise: cannot create cache dir"); onFail(); return }
         receiver.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: promiseQueue) { url, error in
-            Task { @MainActor in finishPromise(url: error == nil ? url : nil, error: error, dir: dir, store: store) }
+            Task { @MainActor in
+                if !finishPromise(url: error == nil ? url : nil, error: error, dir: dir, store: store) { onFail() }
+            }
         }
     }
 
     /// Adds the received file as a cached item; on failure or duplicate removes the (now empty) dir.
-    static func finishPromise(url: URL?, error: (any Error)? = nil, dir: URL, store: ShelfStore) {
-        if let url, store.add(ShelfItem(kind: .file(url), isCached: true)) { return }
+    /// Returns false when no item landed.
+    @discardableResult
+    static func finishPromise(url: URL?, error: (any Error)? = nil, dir: URL, store: ShelfStore) -> Bool {
+        if let url, store.add(ShelfItem(kind: .file(url), isCached: true)) { return true }
         if let error { log.error("promise failed: \(error.localizedDescription, privacy: .public)") }
         store.cache.remove(dir: dir)
+        return false
     }
 
     /// Writes PNG as-is (TIFF converted to PNG) to `root/<UUID>/Image <timestamp>.png`.
