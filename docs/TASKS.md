@@ -19,6 +19,7 @@ Every task's implicit ACs (QA checks always):
 | T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | DONE (2026-10-20) |
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
+| T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
@@ -130,6 +131,15 @@ Root cause: panel frame set only once in `ShelfPanelController.show()`; auto-sho
 - AC-7: Dedupe via `keys: [Key: UUID]` beside ordered `items`; `Key` = `file(normalized path, resolved once per add)`, `url(absoluteString)`, `text(String)`, `image(SHA256.Digest)`. `remove` and `clear` drop keys. Same-image replace (T-07 AC-9) still works — verify against current code.
 - AC-8: Perf unit test: adding 5000 file items completes < 1 s; 1 add at N=5000 < 1 ms average. Decision recorded: **no item limit** (UI cost is flat: lazy grid, bounded thumbnails, ~3 MB view memory at N=5000).
 - AC-9: No regressions: auto-hide rules (T-08), Quick Look sync (T-07), drag-out (T-06), all tests green.
+
+## T-15 Drag out: ⌘-drag moves file items (plain drag copies)
+Milestone M4. Depends on: T-10 (touches `DragOutSource` after T-10's keepAfterDragOut change). Source: user request 2026-10-20; ⌘ chosen over Shift to match Finder convention (⌘ = move, ⌥ = copy).
+- AC-1: Plain drag of file items out of the shelf → receiver copies (current behavior). Holding ⌘ during the drag → move: Finder moves the file (original gone from its folder). Toggling ⌘ mid-drag switches live; cursor badge updates (`ignoreModifierKeys = false`, mask computed per `sourceOperationMaskFor` call from current modifier flags).
+- AC-2: Link and text items always copy (⌘ has no effect). Mixed selection with ⌘: files move, links/text copy (or whole drag copies if per-item masks unsupported; document choice).
+- AC-3: Session ended with `.move` → dragged items always removed from the shelf, even when "Keep items after drag out" is on. Cached items moved out leave no empty cache dir.
+- AC-4: Inside-app mask stays `[]` (self-drop still a no-op).
+- AC-5: Unit tests: mask decision (modifiers × item kinds × inside/outside app); removal decision for `.move` vs `.copy` × keepAfterDragOut.
+- AC-6: Manual: same volume and cross-volume ⌘-drag into Finder; ⌘-drag into apps that only accept copy (e.g. Mail compose) still works or falls back to copy.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
