@@ -10,6 +10,7 @@ struct DragShelfApp: App {
             Button(appDelegate.panelController.isShown ? "Hide Shelf" : "Show Shelf") {
                 appDelegate.panelController.toggle()
             }
+            .keyboardShortcut("d", modifiers: [.control, .option, .command])
             Button("Settings…") {
                 NSApp.activate()
                 openSettings()
