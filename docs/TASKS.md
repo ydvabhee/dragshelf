@@ -20,7 +20,7 @@ Every task's implicit ACs (QA checks always):
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | TODO |
-| T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | QA |
+| T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
 | T-12 | Developer ID signing + notarization | M5 | T-11 | — | BLOCKED (user: Developer ID cert + notary creds) |
@@ -140,6 +140,7 @@ Milestone M4. Depends on: T-10 (touches `DragOutSource` after T-10's keepAfterDr
 - AC-4: Inside-app mask stays `[]` (self-drop still a no-op).
 - AC-5: Unit tests: mask decision (modifiers × item kinds × inside/outside app); removal decision for `.move` vs `.copy` × keepAfterDragOut.
 - AC-6: Manual: same volume and cross-volume ⌘-drag into Finder; ⌘-drag into apps that only accept copy (e.g. Mail compose) still works or falls back to copy.
+- AC-7 (carried from T-10 QA): `AppDelegate.applyPreferences` remembers last applied values and only calls DragMonitor start/stop and HotKey register/unregister when a value changed (no repeated register error log on every shelf move).
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
