@@ -34,4 +34,4 @@ product-architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-27 | T-14 promo placement? | One-line footer under the shelf grid (hidden during drags, ✕ per promo) + "More Apps" submenu in the menu bar menu | Menu-only is less visible but never in the shelf; Settings-only is nearly invisible. Small UI change either way |
 | OQ-28 | T-14 promos on by default? | On, with Settings toggle "Show other apps from the developer" | Off by default = fewer views, no network request until the user opts in |
 | OQ-29 | T-14: hide promos for apps the user already has installed? | No (schema has no promoted-app bundle id) | Add optional `appBundleId` to the schema and check `NSWorkspace.urlForApplication(withBundleIdentifier:)` locally; no data leaves the Mac |
-
+| OQ-30 | Item limit on the shelf? | **RESOLVED (measured) 2026-10-20: no limit** after O(1) dedupe (T-13). 5000 items: 0.05 ms/add, 8 ms UI update, +3 MB | Revisit only if a real user hits a problem |

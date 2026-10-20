@@ -6,3 +6,4 @@ xcuserdata/
 .claude/settings.local.json
 .build/
 .swiftpm/
+.claude/worktrees/

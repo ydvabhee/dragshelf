@@ -18,6 +18,7 @@ Every task's implicit ACs (QA checks always):
 | T-07 | Manage items: remove, clear, missing files, Quick Look, keyboard | M2 | T-06 | US-6, US-7 | DONE (2026-10-20) |
 | T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | DONE (2026-10-20) |
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
+| T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
@@ -116,6 +117,19 @@ Milestone M3. Depends on: T-03.
 - AC-2: No permission prompt.
 - AC-3: Menu "Show Shelf" shows the shortcut ⌃⌥⌘D.
 - AC-4: If registration fails (shortcut taken), app keeps running and logs it; menu item still works.
+
+## T-13 Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe
+Milestone M3. Depends on: T-07, T-08. Source: user reports 2026-10-20 + investigation (scroll root cause, perf table below).
+Root cause: panel frame set only once in `ShelfPanelController.show()`; auto-show opens empty (1 row), later rows clip and nothing scrolls. Dedupe is O(n^2) (re-resolves symlinks for every existing item per add): 1000 files = 23.5 s, 5000 ~ 10 min.
+- AC-1: Panel resizes to fit content whenever items change (grow and shrink), keeping its **top edge fixed** (`setFrame` with `y = maxY - h`). Fit runs async after geometry change (`.onGeometryChange` then `Task { @MainActor }`; synchronous `fittingSize` in the callback returns 0).
+- AC-2: Max height = min(4.5 tile rows, 50% of the screen's `visibleFrame` height); the half row hints there is more. Beyond that the grid scrolls with trackpad/wheel anywhere over tiles or gaps. Scroll indicators flash when items are added (`scrollIndicatorsFlash`, macOS 15+ behind `#available`).
+- AC-3: After a drop, the grid scrolls to reveal the newly added item(s).
+- AC-4 (user request): The shelf can be **dragged to move it** by its header bar (empty header area; tiles keep drag-out, buttons keep working). No `isMovableByWindowBackground` on tiles. Native feel; panel stays non-activating while moving.
+- AC-5: Moved position is remembered across shows and relaunches (UserDefaults, stored per screen as offset of the panel's top-center from the screen's `visibleFrame`), used by auto-show, hotkey and menu. If the saved spot is off-screen (display removed / resolution change), clamp into `visibleFrame`. Growing near the bottom of the screen clamps so the panel never extends past `visibleFrame`.
+- AC-6: Menu bar menu item "Reset Shelf Position" and double-click on the header restore top center (default from T-08 AC-9).
+- AC-7: Dedupe via `keys: [Key: UUID]` beside ordered `items`; `Key` = `file(normalized path, resolved once per add)`, `url(absoluteString)`, `text(String)`, `image(SHA256.Digest)`. `remove` and `clear` drop keys. Same-image replace (T-07 AC-9) still works — verify against current code.
+- AC-8: Perf unit test: adding 5000 file items completes < 1 s; 1 add at N=5000 < 1 ms average. Decision recorded: **no item limit** (UI cost is flat: lazy grid, bounded thumbnails, ~3 MB view memory at N=5000).
+- AC-9: No regressions: auto-hide rules (T-08), Quick Look sync (T-07), drag-out (T-06), all tests green.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
