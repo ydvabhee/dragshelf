@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dragshelf-promos-v1",
+  "title": "DragShelf More-apps promo feed v1",
+  "description": "Static file served over HTTPS. The client drops invalid entries; see docs/ARCHITECTURE.md section 12.",
+  "type": "object",
+  "required": ["version", "promos"],
+  "properties": {
+    "version": { "const": 1 },
+    "promos": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "url"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "subtitle": { "type": "string", "maxLength": 80 },
+          "url": { "type": "string", "pattern": "^https://", "maxLength": 2048 },
+          "symbol": { "type": "string", "maxLength": 64 },
+          "minAppVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$" },
+          "maxAppVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$" },
+          "startsAt": { "type": "string", "format": "date-time" },
+          "endsAt": { "type": "string", "format": "date-time" },
+          "excludeBundleIds": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 255 } }
+        }
+      }
+    }
+  }
+}

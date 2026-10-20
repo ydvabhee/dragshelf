@@ -30,4 +30,8 @@ product-architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-23 | v2 Resize: presets only, or a custom size and quality? | Presets 512/1024/2048/3840 px longest edge, quality 0.85 fixed | Custom size/quality needs a small popover UI; new task |
 | OQ-24 | v2 Rename: Return key to rename (Finder) conflicts with nothing today. Also double-click? | Return and context menu only | Double-click to rename would conflict with a future "open" action |
 | OQ-25 | v2 Share/AirDrop: remove items after sharing? | No, keep them. Share completion does not reliably confirm delivery | Removing = hook `NSSharingServiceDelegate` `didShareItems`; risk of losing items on a failed AirDrop |
+| OQ-26 | T-14 promo feed: final feed URL and allowlisted domain(s)? **User must provide before release (T-12).** | Placeholder `https://example.com/dragshelf/promos.json`, allowlist `["example.com"]` | Change 2 constants in `PromoFeed.swift`. Shipping the placeholder means promos never appear and cannot be fixed without an app update |
+| OQ-27 | T-14 promo placement? | One-line footer under the shelf grid (hidden during drags, ✕ per promo) + "More Apps" submenu in the menu bar menu | Menu-only is less visible but never in the shelf; Settings-only is nearly invisible. Small UI change either way |
+| OQ-28 | T-14 promos on by default? | On, with Settings toggle "Show other apps from the developer" | Off by default = fewer views, no network request until the user opts in |
+| OQ-29 | T-14: hide promos for apps the user already has installed? | No (schema has no promoted-app bundle id) | Add optional `appBundleId` to the schema and check `NSWorkspace.urlForApplication(withBundleIdentifier:)` locally; no data leaves the Mac |
 

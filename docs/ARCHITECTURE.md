@@ -44,7 +44,11 @@ Sources/DragShelf/                            # executableTarget DragShelf
     Glass.swift               # shelfBackground() modifier: Liquid Glass / material fallback
     Thumbnail.swift           # QLThumbnailGenerator + NSWorkspace icon fallback
     QuickLook.swift           # QLPreviewPanel data source for selected file items
-    SettingsView.swift        # Form with the 5 settings
+    SettingsView.swift        # Form with the 5 settings (+ promo toggle, T-14)
+    PromoFooter.swift         # one-line promo footer (T-14)
+  Promos/
+    PromoFeed.swift           # feed model, strict decode + validation, filter, daily pick (pure)
+    PromoLoader.swift         # HTTPS fetch, ETag, disk cache, staleness (T-14)
 Tests/DragShelfTests/                         # testTarget DragShelfTests (Swift Testing)
   ShelfStoreTests.swift
   ItemCacheTests.swift
@@ -100,7 +104,7 @@ open build/DragShelf.app         # run; never run the bare binary
 | `ShelfItem` | `struct`, `Identifiable, Hashable` | `id: UUID`, `kind: Kind`, `isCached: Bool`. `enum Kind { case file(URL), url(URL), text(String) }`. Images and promises are materialized to cache files → `.file` with `isCached = true` (ADR-012) |
 | `ShelfStore` | `@Observable final class` | `items`, `selection: Set<UUID>`, `add(_:)` (dedupe by file path / URL / text), `remove(ids:)`, `clear()`, `missing(id:)`. Deletes cache dir of cached items on remove/clear |
 | `ItemCache` | `enum` (static funcs) | `root` = `~/Library/Caches/<bundle id>/Shelf/`; `newItemDir() -> URL` = `root/<UUID>/`; `remove(dir:)`; `wipe()` |
-| `Preferences` | `enum` keys + defaults | `autoShow` (true), `position` (`.topCenter`), `keepAfterDragOut` (false), `hotKeyEnabled` (true). Launch at login is read from `SMAppService.mainApp.status`, never stored |
+| `Preferences` | `enum` keys + defaults | `autoShow` (true), `position` (`.topCenter`), `keepAfterDragOut` (false), `hotKeyEnabled` (true), `showPromos` (true, T-14), `dismissedPromoIDs` ([String], T-14). Launch at login is read from `SMAppService.mainApp.status`, never stored |
 | `ShelfPanel` | `NSPanel` subclass | styleMask `[.nonactivatingPanel, .borderless, .fullSizeContentView]`, `level = .floating`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]`, `hidesOnDeactivate = false`, `isOpaque = false`, `backgroundColor = .clear`, `hasShadow = true`, `becomesKeyOnlyIfNeeded = true`, `canBecomeKey` → true (Space/Delete/Esc/arrows), `canBecomeMain` → false |
 | `ShelfPanelController` | `final class` | `show(reason:)`, `hide()`, `toggle()`. Positions on screen with cursor per `Preferences.position`. Visibility rules below. Fade/scale animation honoring Reduce Motion |
 | `DropReceiver` | `NSView` | Panel `contentView`; hosts `NSHostingView(rootView: ShelfView)` filling it. `registerForDraggedTypes([.fileURL, .URL, .string, .png, .tiff] + NSFilePromiseReceiver.readableDraggedTypes)`. Highlight state → store flag `isDropTargeted`. Uses `PasteboardReader` |
@@ -186,7 +190,7 @@ open build/DragShelf.app         # run; never run the bare binary
 - **None requested.** No Accessibility, Input Monitoring, Full Disk Access, Screen Recording.
 - Global mouse monitors and Carbon hotkeys work without TCC permission. If QA ever sees a prompt, it is a bug.
 - Files dropped by the user are readable without TCC prompts (user-intent grant), including Desktop/Documents/Downloads.
-- No network access. No data leaves the machine.
+- Network: only the promo feed (T-14, §12): one HTTPS GET to a hardcoded URL, at most once per 24 h, none when promos are off. No identifiers, no analytics, no cookies. No user data leaves the machine.
 - Cache dir holds copies of promised/image content only; always wiped (see §5).
 - Drag out offers `.copy` only, so targets can never move or delete the user's originals.
 
@@ -223,6 +227,7 @@ open build/DragShelf.app         # run; never run the bare binary
 - **ADR-012: Images and promised files are materialized to cache files; `ShelfItem.Kind` = file/url/text.** Why: one drag-out path for files, real files work in every target. Rejected: separate image kind with in-memory `NSImage` (two drag-out paths, fails in Finder/upload fields).
 - **ADR-013: SwiftPM package + `scripts/build-app.sh` instead of an `.xcodeproj` (supersedes ADR-003).** Why: `xcodebuild` (even `-list`) exits 70 on this machine (missing IDESimulatorFoundation symbol from stale `/Library/Developer/PrivateFrameworks/DVTDownloads`); the fix needs `sudo`, which only the user can run. `swift build`/`swift test` work, compile `.glassEffect` behind `#available(macOS 26, *)`, and run Swift Testing. A 30-line script gives the app bundle, Info.plist, and signing that Xcode would. Xcode can still open `Package.swift` later. Rejected: keep xcodeproj (cannot build or test), wait for the user (blocks all work), `swift build` xcbuild backend / universal `--arch` flags (route through the broken Xcode build system).
 - **ADR-014 (v2): Shelf Actions use native tools only and produce new cached items.** Zip = `/usr/bin/ditto` via `Process`; Share/AirDrop = SwiftUI `ShareLink` (wraps `NSSharingServicePicker`) + `NSSharingService(named: .sendViaAirDrop)`; Convert/Resize = ImageIO; Rename = rename the shelf copy (APFS clone into the cache), never the original. Work runs off `MainActor`, one job at a time, cancellable. Why: no deps (ADR-001), originals never touched (same rule as ADR-007), outputs reuse the existing cached-file drag-out path (ADR-012). Rejected: `NSFileCoordinator` `.forUploading` (zips only a single directory, returns a plain file unchanged, no cancel), ZIPFoundation/libarchive (deps), Apple Archive (`.aar`, not zip), `NSImage`/Core Image resize (more memory, loses orientation/metadata control), libwebp for WebP output (dep; ImageIO cannot write WebP), renaming originals in place (touches user data; OQ-17).
+- **ADR-015: "More apps" promo = static JSON feed over HTTPS, text only, hardcoded URL + host allowlist, opt-out toggle (T-14, §12).** Why: new apps must appear without a DragShelf update, and users who never update must still see them, so the fetch code ships in v1. A static file (GitHub Pages/S3/our site) needs no server code. Text + SF Symbol only means no remote images (no tracking pixels, no image decoder attack surface). Rejected: own API server (ops cost), remote images/HTML/`WKWebView` (tracking, attack surface, weight), CloudKit (entitlements, Apple ID coupling), Sparkle-style appcast or any package (ADR-001), list bundled in the app (needs an update for every new app).
 
 ## 11. v2: Shelf Actions design (BACKLOG)
 Scope: `docs/PRD.md` §10 (US-11..US-14). Tasks: `docs/TASKS.md` v2 backlog. Not built in v1.
@@ -258,4 +263,48 @@ v2 risks:
 | Zipping 2+ items cross-volume copies them into `stage/` first | Same as above; ponytail ceiling documented in `Zipper`; upgrade = `ditto` per item into a shared archive if it matters |
 | ImageIO writers differ by OS (HEIC encode needs hardware support on some Macs) | Menu lists only `writableTypes` computed at runtime |
 | Text field inside a SwiftUI grid in an `NSPanel` loses focus on drag-out handle views | Rename task verifies keyboard focus with the T-07/T-13 overlay views in place |
+
+## 12. "More apps" promo feed (T-14, v1)
+Scope: PRD US-15. ADR-015.
+
+### Feed
+- Static JSON over HTTPS. URL and allowed hosts are **hardcoded constants** in `PromoFeed.swift` (`PromoConfig.feedURL`, `PromoConfig.allowedHosts`). Placeholder until the user answers OQ-26: `https://example.com/dragshelf/promos.json`, hosts `["example.com"]`.
+- Schema: `backend/promos.schema.json` (JSON Schema). Example: `backend/promos.json`. The publisher validates the file against the schema before upload.
+
+| Field | Type | Rule (client drops the entry if broken) |
+|---|---|---|
+| `version` | Int | Must be `1`. Any other value → ignore the whole feed, keep the last good cache |
+| `promos` | Array | ≤ 20 entries kept, rest ignored |
+| `id` | String | `^[a-z0-9-]{1,40}$`, unique; key for ✕ dismiss |
+| `title` | String | 1–60 chars, no control/format chars (`\n`, bidi overrides) |
+| `subtitle` | String? | ≤ 80 chars, same character rule |
+| `url` | String | `https` scheme, host exactly in `allowedHosts`, no user/password, ≤ 2048 chars |
+| `symbol` | String? | SF Symbol name ≤ 64 chars; ignored (not the entry) if `NSImage(systemSymbolName:)` is nil |
+| `minAppVersion` / `maxAppVersion` | String? | `MAJOR.MINOR[.PATCH]`, inclusive, compared to `CFBundleShortVersionString` |
+| `startsAt` / `endsAt` | String? | ISO 8601 date-time; shown when `startsAt ≤ now < endsAt` |
+| `excludeBundleIds` | [String]? | ≤ 20 entries. The entry is hidden in apps whose bundle id is listed. Every promo for an app lists that app's own bundle id, so DragShelf never promotes itself |
+
+Unknown fields are ignored. Body > 64 KB → rejected.
+
+### Client
+| Type | Kind | Responsibility |
+|---|---|---|
+| `PromoFeed` | `struct`, `Decodable` + `nonisolated` static funcs | `decode(_ data: Data) -> PromoFeed?` decodes leniently per entry (`[FailableEntry]`) then validates; invalid entries dropped. `eligible(now:appVersion:bundleID:dismissed:) -> [Promo]` (sorted by `id`). `pick(from:now:calendar:)` = `eligible[dayOrdinal % count]` (daily rotation, stable) |
+| `PromoLoader` | `@Observable final class` (MainActor) | `init(session: URLSession, cacheURL: URL, defaults: UserDefaults, now: () -> Date)`. `feed: PromoFeed?`. `refreshIfStale()` called at launch and on each panel show: does nothing when `showPromos` is off or last fetch < 24 h ago. Loads disk cache first |
+| `PromoFooter` | SwiftUI view | One line: `Image(systemName:)` (if any), `title` in `.callout`, `subtitle` in `.secondary` with tail truncation, `xmark` dismiss button. Whole line is one `Button`; a11y label "<title>, <subtitle>. Opens in browser"; ✕ label "Hide this suggestion" |
+
+Fetch:
+- Session: `URLSessionConfiguration.ephemeral`, `httpCookieStorage = nil`, `httpShouldSetCookies = false`, `urlCache = nil`, `timeoutIntervalForRequest = 15`, `httpAdditionalHeaders = ["User-Agent": "DragShelf/<CFBundleShortVersionString>"]`. Tests pass a session whose `protocolClasses` holds a stub `URLProtocol`.
+- `GET feedURL` with `If-None-Match: <stored ETag>`. 200 → validate → write `<caches>/com.abhishekyadav.DragShelf/Promos/feed.json` atomically + store ETag and `lastFetch` in UserDefaults. 304 → bump `lastFetch`, keep cache. Anything else, decode failure, or > 64 KB → keep cache, `Logger(subsystem: bundle id, category: "promos").error`, bump `lastFetch` (no retry storm).
+- Redirects: `URLSessionTaskDelegate.willPerformHTTPRedirection` allows only `https` to an allowlisted host; otherwise cancels.
+- Promo cache dir is outside `ItemCache.root`, so shelf clear/quit wipes do not touch it.
+
+Opening a promo:
+- Re-check the URL (`https` + allowlisted host) at click time, then `NSWorkspace.shared.open(url)`. Never open other schemes. Does not activate DragShelf.
+
+Display rules:
+- Footer is a separate row under the grid. Panel height grows by one line; the grid/drop area keeps its size.
+- Hidden when `showPromos` is off, no eligible promo, or a drag is in progress (`isDropTargeted`, auto-drag show until drag end, or a drag-out session).
+- ✕ adds the id to `dismissedPromoIDs`; the footer then shows the next eligible promo, if any. Dismissed promos still appear in the menu bar "More Apps" submenu (user asked for it there).
+- "More Apps" submenu in `MenuBarExtra`: one item per eligible promo (dismissed included), hidden when the list is empty.
 

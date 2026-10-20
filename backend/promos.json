@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "promos": [
+    {
+      "id": "example-app",
+      "title": "ExampleApp: a tiny tool for your Mac",
+      "subtitle": "Free on the Mac App Store",
+      "url": "https://example.com/exampleapp",
+      "symbol": "sparkles",
+      "minAppVersion": "0.1",
+      "excludeBundleIds": ["com.abhishekyadav.ExampleApp"]
+    },
+    {
+      "id": "launch-week",
+      "title": "AnotherApp is out: launch week discount",
+      "url": "https://example.com/anotherapp",
+      "startsAt": "2026-11-01T00:00:00Z",
+      "endsAt": "2026-11-08T00:00:00Z",
+      "excludeBundleIds": ["com.abhishekyadav.AnotherApp"]
+    }
+  ]
+}

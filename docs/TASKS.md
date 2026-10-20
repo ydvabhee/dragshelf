@@ -20,6 +20,7 @@ Every task's implicit ACs (QA checks always):
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
+| T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
 | T-12 | Developer ID signing + notarization | M5 | T-11 | — | BLOCKED (user: Developer ID cert + notary creds) |
 
 ---
@@ -133,6 +134,20 @@ Milestone M4. Depends on: T-07, T-10.
 - AC-4: Full keyboard path: hotkey → arrows → Space → Cmd-C → Esc works without the mouse.
 - AC-5: Idle CPU ~0% and memory < 60 MB with 50 items (Activity Monitor).
 - AC-6 (carried from T-04 QA): drop-target highlight animation in `DropReceiver` is gated on Reduce Motion (no spring when on).
+
+## T-14 Remote "More apps" promo line
+Milestone M4. Depends on: T-10. v1: users who never update must still get new promos, so this ships in the first release.
+Design: ARCHITECTURE §12, ADR-015. Files: `Promos/PromoFeed.swift`, `Promos/PromoLoader.swift`, `UI/PromoFooter.swift`, a menu entry in `DragShelfApp`, the `showPromos` + `dismissedPromoIDs` keys in `Preferences`, and a toggle row in `SettingsView`.
+- AC-1: Unit test `PromoFeed.decode` on `backend/promos.json` (copied into the test as a string): all entries valid.
+- AC-2: Unit tests: entries are dropped for `http:` URL, `file:`/custom scheme, host not in allowlist, title > 60 chars, title with `\n` or bidi override, bad id, bad version string, and `version != 1` (whole feed ignored). Valid neighbors are kept.
+- AC-3: Unit tests `eligible`: version window, date window, `excludeBundleIds` containing `com.abhishekyadav.DragShelf`, dismissed ids. `pick` is stable within a day and rotates the next day (injected `now`/calendar).
+- AC-4: Unit tests `PromoLoader` with a stub `URLProtocol`: 200 writes cache + ETag; second call within 24 h makes no request; after 24 h sends `If-None-Match`; 304 keeps cache; 500/garbage/> 64 KB keeps the previous cache and does not throw; redirect to `http` or another host is refused; request has `User-Agent: DragShelf/<version>` and no `Cookie` header.
+- AC-5: With `showPromos` off, `refreshIfStale()` makes no request (stub counts 0) and no footer or menu item shows.
+- AC-6: Manual (serve `backend/promos.json` locally or point a debug build at a test host): footer shows one line under the grid; hidden during a drag; ✕ hides it permanently across relaunch; click opens the browser without activating DragShelf; "More Apps" submenu lists eligible promos.
+- AC-7: Offline launch with a cached feed shows the cached promo; without a cache shows nothing; no error UI.
+- AC-8: Settings toggle "Show other apps from the developer" (default on) persists and takes effect immediately.
+- AC-9: VoiceOver reads the footer and the ✕ with the labels in ARCHITECTURE §12.
+- Limit: the feed URL and host are placeholders (OQ-26). Release (T-12) must not ship until OQ-26 is answered.
 
 ## T-12 Developer ID signing + notarization — BLOCKED
 Milestone M5. Depends on: T-11. **Blocked on user:** needs a Developer ID Application certificate in the keychain and `notarytool` credentials (Apple ID app-specific password or API key).

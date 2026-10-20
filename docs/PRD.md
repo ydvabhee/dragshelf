@@ -41,6 +41,7 @@ looks and behaves like part of macOS.
   keep items after drag out, hotkey on/off.
 - Modern Apple look: Liquid Glass on macOS 26, material fallback on macOS 14–15. SF Symbols,
   system fonts, light/dark, VoiceOver, Reduce Motion, Reduce Transparency.
+- One-line "More apps" promo for the developer's other apps, from a remote feed (US-15). Off with one toggle.
 
 ## 6. Non-goals (MVP)
 - Cloud sync, upload, or share extensions.
@@ -137,9 +138,26 @@ As a user, I drop files, images, links, or text on the shelf and they stay there
 - AC-4: VoiceOver reads every item ("PDF document, Report.pdf") and every button; items expose Remove and Quick Look actions.
 - AC-5: Only SF Symbols and system fonts; all text supports the system text size setting where SwiftUI provides it.
 
+### US-15 Discover the developer's other apps (M4, T-14)
+As the developer, I promote my other apps inside DragShelf, and new apps appear without a DragShelf update.
+As a user, I see at most one small line, and I can hide it.
+- AC-1: When the feed has an eligible promo, the panel shows one footer line (optional SF Symbol, title, secondary subtitle, small ✕) under the grid. It never covers tiles or the drop area.
+- AC-2: The footer is hidden while any drag is in progress (auto-show, hovering, or drag out).
+- AC-3: Clicking the line opens its `https` URL in the default browser. DragShelf downloads and installs nothing.
+- AC-4: ✕ hides that promo for good (also after relaunch). Other promos can still appear.
+- AC-5: The menu bar menu has "More Apps" with every eligible promo; it is hidden when there are none.
+- AC-6: One promo at a time; the footer promo changes once per day when several are eligible.
+- AC-7: A new entry added to the hosted JSON appears within 24 h with no app update.
+- AC-8: Offline or a broken feed: last good promos still show (or nothing); no error UI, no slowdown.
+- AC-9: Settings toggle "Show other apps from the developer" (default on). Off → no footer, no menu item, no network requests.
+- AC-10: Promos for DragShelf itself, or outside their app version or date window, are never shown.
+- AC-11: The request carries no identifiers: plain GET, `User-Agent: DragShelf/<version>`, no cookies.
+- AC-12: A feed entry with a non-`https` URL or a host not on the built-in allowlist is never shown and never opened.
+
 ## 9. Success metrics (manual, MVP)
 - Drag from Finder into a hidden app via shelf in ≤ 2 gestures, no lost drops in the QA matrix.
 - Zero permission prompts. Idle CPU ~0%, memory < 60 MB with 50 items.
+- Network: at most 1 small request per 24 h (promo feed only), none when promos are off.
 
 ## 10. v2: Shelf Actions (next version, BACKLOG)
 Not part of v1. v1 scope and T-01..T-12 do not change. User picked 4 actions (2026-10-20):
