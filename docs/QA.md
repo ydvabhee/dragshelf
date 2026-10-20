@@ -61,3 +61,18 @@ drag out gives right content, removal works, cache empty after clear/quit.
 ## Edge cases (every task)
 Multi-display, Stage Manager, full-screen app, Space switch mid-drag, Esc cancel, huge file,
 file deleted while on shelf, duplicate items, dark mode, VoiceOver labels.
+
+## T-04 Drop in (manual)
+Auto: `PasteboardReaderTests`, `DropReceiverTests` (fake NSDraggingInfo: 2 files + text -> 3 items). Real drag delivery is manual only.
+1. Finder: drag 1 file, 5 files, 1 folder onto shelf -> 1, 5, 1 tiles. Originals untouched. Cursor shows copy badge (not move/link).
+2. Safari/Chrome: drag an image -> PNG tile; file under `~/Library/Caches/com.abhishekyadav.DragShelf/Shelf/<UUID>/`. Drop same image again -> no 2nd tile, no orphan dir.
+3. Drag a link -> link tile. Drag selected text -> text tile, first line shown. Drop same text twice -> 1 tile.
+4. While hovering: accent border + tint appear; leave panel or press Esc -> clears. After drop -> clears.
+5. Hover with Reduce Motion on: note whether the highlight still springs (known: not gated).
+6. 50 files: all tiles show, grid scrolls. Drop onto the scrolling grid area as well as the header: both accept.
+7. Drop while another app is frontmost: it stays frontmost, shelf does not steal focus.
+8. VoiceOver: tile reads "<type>, <name>". Thumbnails: file = QuickLook or icon, link `link`, text `text.alignleft`.
+9. Mail attachment / Photos: expected to NOT work until T-05 (file promises).
+
+Matrix rows for T-04 (drop-in only): Finder 1/many/folder, Safari image/link/text, Desktop item.
+Drag-out columns wait for T-06.
