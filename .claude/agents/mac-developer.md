@@ -27,7 +27,8 @@ You are a senior macOS engineer implementing **DragShelf**, a floating drag-and-
   - `NSEvent.addGlobalMonitorForEvents(.leftMouseDragged/.leftMouseUp)` and
     `NSPasteboard(name: .drag).changeCount` for drag-start detection
 - Keep the project buildable from the CLI:
-  `swift build`, `swift test`, and `scripts/build-app.sh` (makes `build/DragShelf.app`).
+  `swift build`, `swift test`, `scripts/build-app.sh` (makes `build/DragShelf.app`), and
+  `scripts/build-app.sh release` (optimized build; the -O compiler can crash where debug does not).
 - Write unit tests for logic that does not depend on the UI (pasteboard parsing, shelf item model,
   cache cleanup). Do not try to unit-test real drag gestures. QA covers those manually.
 - No speculative abstractions, no unused settings, no third-party packages without an ADR.
