@@ -11,6 +11,7 @@ struct DragShelfApp: App {
                 appDelegate.panelController.toggle()
             }
             .keyboardShortcut("d", modifiers: [.control, .option, .command])
+            Button("Reset Shelf Position") { appDelegate.panelController.resetPosition() }
             Button("Settings…") {
                 NSApp.activate()
                 openSettings()

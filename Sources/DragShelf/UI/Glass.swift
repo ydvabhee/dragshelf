@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// The only file that checks OS availability for styling (ARCHITECTURE §6).
+// The only file that checks OS availability for styling and view behavior (ARCHITECTURE §6).
 
 extension View {
     /// Panel background: Liquid Glass on macOS 26, vibrant material on 14–15, solid with Reduce Transparency.
@@ -16,6 +16,13 @@ extension View {
         } else {
             buttonStyle(.borderless)
         }
+    }
+}
+
+extension View {
+    /// Flashes scroll indicators when `trigger` changes (macOS 15+; no-op on 14).
+    @ViewBuilder func flashScrollIndicators(trigger: some Equatable) -> some View {
+        if #available(macOS 15, *) { scrollIndicatorsFlash(trigger: trigger) } else { self }
     }
 }
 

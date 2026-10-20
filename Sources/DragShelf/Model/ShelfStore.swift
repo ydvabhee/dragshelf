@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 
@@ -14,6 +15,12 @@ final class ShelfStore {
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
+    /// Dedupe index beside `items` (O(1) add). Image items key by content hash, everything else by kind.
+    @ObservationIgnored private var keys: [Key: UUID] = [:]
+
+    enum Key: Hashable {
+        case file(String), url(String), text(String), image(SHA256.Digest)
+    }
 
     init(cache: ItemCache = ItemCache()) {
         self.cache = cache
@@ -24,13 +31,19 @@ final class ShelfStore {
     /// Caller owns any cache dir of a rejected duplicate.
     @discardableResult
     func add(_ item: ShelfItem) -> Bool {
-        let key = Self.dedupeKey(item.kind)
-        guard !items.contains(where: { Self.dedupeKey($0.kind) == key }) else { return false }
-        let stale = item.contentHash == nil ? [] : items.filter { $0.contentHash == item.contentHash }
-        stale.forEach(removeCacheDir(of:))
-        selection.subtract(stale.map(\.id))
-        // One assignment: the shelf never looks empty mid-replace (empty → panel hides).
-        items = items.filter { !stale.contains($0) } + [item]
+        let key = Self.key(for: item)
+        if let old = keys[key] {
+            guard case .image = key, let i = items.firstIndex(where: { $0.id == old }) else { return false }
+            removeCacheDir(of: items[i])
+            selection.remove(old)
+            // One assignment: the shelf never looks empty mid-replace (empty → panel hides).
+            var next = items
+            next.remove(at: i)
+            items = next + [item]
+        } else {
+            items.append(item)
+        }
+        keys[key] = item.id
         return true
     }
 
@@ -38,6 +51,7 @@ final class ShelfStore {
     func remove(ids: Set<UUID>, deletingCache: Bool = true) {
         if deletingCache { items.filter { ids.contains($0.id) }.forEach(removeCacheDir(of:)) }
         items.removeAll { ids.contains($0.id) }
+        keys = keys.filter { !ids.contains($0.value) }
         selection.subtract(ids)
     }
 
@@ -104,17 +118,23 @@ final class ShelfStore {
         generation += 1
         cache.wipe()
         items.removeAll()
+        keys.removeAll()
         selection.removeAll()
         missingIDs.removeAll()
     }
 
-    /// File paths compare after resolving `..`, trailing slash, and symlinks (/tmp vs /private/tmp).
-    private static func dedupeKey(_ kind: ShelfItem.Kind) -> ShelfItem.Kind {
-        if case .file(let url) = kind { let u = url.standardizedFileURL
+    /// File paths compare after resolving `..`, trailing slash, and symlinks (/tmp vs /private/tmp), once per add.
+    static func key(for item: ShelfItem) -> Key {
+        if let hash = item.contentHash { return .image(hash) }
+        switch item.kind {
+        case .file(let url):
+            let u = url.standardizedFileURL
             // Resolve the parent so symlinks normalize even when the file itself is gone.
-            return .file(u.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(u.lastPathComponent))
+            return .file(u.deletingLastPathComponent().resolvingSymlinksInPath()
+                .appendingPathComponent(u.lastPathComponent).path(percentEncoded: false))
+        case .url(let url): return .url(url.absoluteString)
+        case .text(let text): return .text(text)
         }
-        return kind
     }
 
     private func removeCacheDir(of item: ShelfItem) {

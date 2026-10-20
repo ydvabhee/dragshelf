@@ -7,6 +7,9 @@ struct ShelfView: View {
     var maxHeight: CGFloat = 600
     var onClose: () -> Void = {}
     var onQuickLook: (UUID) -> Void = { _ in }
+    /// Header drag moved the panel / header double-clicked (T-13 AC-4, AC-6).
+    var onMoved: () -> Void = {}
+    var onResetPosition: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
@@ -14,8 +17,11 @@ struct ShelfView: View {
 
     static let columnCount = 3
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: columnCount)
-    /// ponytail: fixed header allowance; measure it if the header grows.
-    private let headerHeight: CGFloat = 52
+    /// ponytail: fixed header and tile heights; `tileHeightMatchesLayout` test catches drift.
+    private static let headerHeight: CGFloat = 52
+    static let tileHeight: CGFloat = 103
+    /// Panel height for 4.5 tile rows: the half row hints there is more (T-13 AC-2).
+    static let maxContentHeight = headerHeight + 4 * (tileHeight + 12) + tileHeight / 2
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,6 +75,8 @@ struct ShelfView: View {
         .padding(.horizontal, 12)
         .padding(.top, 12)
         .padding(.bottom, 8)
+        // Empty header area moves the panel; buttons above it keep their clicks.
+        .background { WindowDragArea(onMoved: onMoved, onDoubleClick: onResetPosition) }
     }
 
     private var emptyState: some View {
@@ -106,30 +114,76 @@ struct ShelfView: View {
     }
 
     private var grid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(store.items) { item in
-                    ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
-                                  isMissing: store.missing(id: item.id),
-                                  onRemove: { store.remove(ids: [item.id]) },
-                                  onQuickLook: { onQuickLook(item.id) })
-                        .overlay {
-                            DragOutHandle(store: store, id: item.id, onHover: { inside in
-                                if inside { hovered = item.id } else if hovered == item.id { hovered = nil }
-                            }, onQuickLook: onQuickLook)
-                        }
-                        // Above the handle so it gets the click.
-                        .overlay(alignment: .top) { if hovered == item.id { removeBadge(item.id) } }
-                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(store.items) { item in
+                        ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
+                                      isMissing: store.missing(id: item.id),
+                                      onRemove: { store.remove(ids: [item.id]) },
+                                      onQuickLook: { onQuickLook(item.id) })
+                            .overlay {
+                                DragOutHandle(store: store, id: item.id, onHover: { inside in
+                                    if inside { hovered = item.id } else if hovered == item.id { hovered = nil }
+                                }, onQuickLook: onQuickLook)
+                            }
+                            // Above the handle so it gets the click.
+                            .overlay(alignment: .top) { if hovered == item.id { removeBadge(item.id) } }
+                            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 14)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 14)
+            // Click on empty space deselects.
+            .background { Color.clear.contentShape(.rect).onTapGesture { store.selection = [] } }
+            // Hug content until the cap, then scroll.
+            .frame(maxHeight: maxHeight - Self.headerHeight)
+            .fixedSize(horizontal: false, vertical: true)
+            .flashScrollIndicators(trigger: store.items.count)
+            // Reveal what was just added (appended at the end) (T-13 AC-3).
+            .onChange(of: store.items.count) { old, new in
+                guard new > old, let last = store.items.last?.id else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { proxy.scrollTo(last, anchor: .bottom) }
+            }
         }
-        // Click on empty space deselects.
-        .background { Color.clear.contentShape(.rect).onTapGesture { store.selection = [] } }
-        // Hug content until the cap, then scroll.
-        .frame(maxHeight: maxHeight - headerHeight)
-        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Moves the window by dragging; AppKit so the first click in the inactive, non-activating panel works.
+private struct WindowDragArea: NSViewRepresentable {
+    let onMoved: () -> Void
+    let onDoubleClick: () -> Void
+
+    func makeNSView(context: Context) -> WindowDragView { WindowDragView() }
+
+    func updateNSView(_ view: WindowDragView, context: Context) {
+        view.onMoved = onMoved
+        view.onDoubleClick = onDoubleClick
+    }
+}
+
+final class WindowDragView: NSView {
+    var onMoved: () -> Void = {}
+    var onDoubleClick: () -> Void = {}
+    private var start: (mouse: NSPoint, origin: NSPoint)?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        start = nil
+        if event.clickCount == 2 { return onDoubleClick() }
+        start = window.map { (NSEvent.mouseLocation, $0.frame.origin) }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window, let start else { return }
+        let p = NSEvent.mouseLocation
+        window.setFrameOrigin(NSPoint(x: start.origin.x + p.x - start.mouse.x, y: start.origin.y + p.y - start.mouse.y))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if let start, window?.frame.origin != start.origin { onMoved() }
+        start = nil
     }
 }

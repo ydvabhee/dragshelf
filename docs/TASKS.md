@@ -18,7 +18,7 @@ Every task's implicit ACs (QA checks always):
 | T-07 | Manage items: remove, clear, missing files, Quick Look, keyboard | M2 | T-06 | US-6, US-7 | DONE (2026-10-20) |
 | T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | DONE (2026-10-20) |
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
-| T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | TODO |
+| T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | QA |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
