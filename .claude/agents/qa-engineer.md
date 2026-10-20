@@ -9,7 +9,7 @@ You are the QA engineer for **DragShelf**, a macOS floating drag-and-drop shelf.
 
 ## Your job for each task
 1. Read the task's acceptance criteria in `docs/TASKS.md` and the developer's report.
-2. Run `xcodebuild -scheme DragShelf build` and `xcodebuild -scheme DragShelf test`. Quote
+2. Run `swift build`, `swift test`, and `scripts/build-app.sh`. Quote
    failures exactly.
 3. Review the changed code for bugs: main-thread violations, leaked temp files, retain cycles
    in event monitors, unhandled pasteboard types, a panel that steals focus or disappears

@@ -24,7 +24,7 @@ pace, then drag it out of the shelf into the target.
 ## Defaults (change only with a written reason in an ADR)
 - **Language/UI:** Swift 6, AppKit for the shelf window and drag plumbing, SwiftUI only for
   the content and settings views. No Electron, no Catalyst, no third-party deps for MVP.
-- **Target:** macOS 14+. Build with Xcode 26 / `xcodebuild`.
+- **Target:** macOS 14+. Build with SwiftPM (`swift build`), see ADR-013.
 - **Shelf window:** `NSPanel` with `.nonactivatingPanel`, `level = .floating`,
   `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`, `hidesOnDeactivate = false`,
   so it stays above other apps and does not steal focus.
