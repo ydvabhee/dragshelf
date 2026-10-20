@@ -28,7 +28,7 @@ private let web = URL(string: "https://example.com/x")!
         let m: NSEvent.ModifierFlags = cmd ? .command : []
         #expect(DragOutSource.mask(for: .withinApplication, modifiers: m, allFiles: true) == [])
         #expect(DragOutSource.mask(for: .outsideApplication, modifiers: m, allFiles: false) == .copy)
-        #expect(DragOutSource.mask(for: .outsideApplication, modifiers: m, allFiles: true) == (cmd ? .move : .copy))
+        #expect(DragOutSource.mask(for: .outsideApplication, modifiers: m, allFiles: true) == (cmd ? [.move, .copy] : .copy))
     }
     #expect(DragOutSource.mask(for: .outsideApplication, modifiers: [.option, .shift], allFiles: true) == .copy)
 }

@@ -54,13 +54,13 @@ final class DragOutSource: NSObject, NSDraggingSource {
         }
     }
 
-    /// Outside the app: Cmd held and every item is a file → `.move`; else `.copy`. Inside the app: `[]`
+    /// Outside the app: Cmd held and every item is a file → `[.move, .copy]` (copy-only receivers still accept); else `.copy`. Inside the app: `[]`
     /// (a drop on our own shelf would be a no-op duplicate).
-    /// Single-operation masks (never `[.copy, .move]`) keep the receiver and the badge predictable.
+    /// Without Cmd the mask is copy only, so Finder's own ⌥/⌘ semantics never turn a plain drag into a move.
     /// Mixed selection: whole drag copies (per-item masks are not supported by AppKit).
     static func mask(for context: NSDraggingContext, modifiers: NSEvent.ModifierFlags = [], allFiles: Bool = false) -> NSDragOperation {
         guard context == .outsideApplication else { return [] }
-        return allFiles && modifiers.contains(.command) ? .move : .copy
+        return allFiles && modifiers.contains(.command) ? [.move, .copy] : .copy
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
