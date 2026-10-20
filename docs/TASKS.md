@@ -11,7 +11,7 @@ Every task's implicit ACs (QA checks always):
 |---|---|---|---|---|---|
 | T-01 | Project skeleton + menu bar item + CLI build/test green | M0 | — | US-8 (part) | DONE (2026-10-20) |
 | T-02 | Shelf model: ShelfItem, ShelfStore, ItemCache | M1 | T-01 | US-2, US-6 (model) | DONE (2026-10-20) |
-| T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | TODO |
+| T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | QA |
 | T-04 | Drop in: files, folders, links, text, image data | M1 | T-03 | US-2 | TODO |
 | T-05 | Drop in: file promises | M1 | T-04 | US-2 | TODO |
 | T-06 | Drag out: single, multi-select, drag all, Cmd-C | M2 | T-04 | US-4, US-5 | TODO |

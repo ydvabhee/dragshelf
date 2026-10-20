@@ -7,8 +7,9 @@ struct DragShelfApp: App {
 
     var body: some Scene {
         MenuBarExtra("DragShelf", systemImage: "tray.and.arrow.down") {
-            Button("Show Shelf") {}
-                .disabled(true)
+            Button(appDelegate.panelController.isShown ? "Hide Shelf" : "Show Shelf") {
+                appDelegate.panelController.toggle()
+            }
             Button("Settings…") {
                 NSApp.activate()
                 openSettings()
