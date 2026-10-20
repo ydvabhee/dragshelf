@@ -21,7 +21,7 @@ Every task's implicit ACs (QA checks always):
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | DONE (2026-10-20) |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
-| T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | QA |
+| T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | DONE (2026-10-20) |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
 | T-12 | Developer ID signing + notarization | M5 | T-11 | — | BLOCKED (user: Developer ID cert + notary creds) |
 
@@ -177,6 +177,7 @@ Design: ARCHITECTURE §12, ADR-015. Files: `Promos/PromoFeed.swift`, `Promos/Pro
 - AC-8: Settings toggle "Show other apps from the developer" (default on) persists and takes effect immediately.
 - AC-9: VoiceOver reads the footer and the ✕ with the labels in ARCHITECTURE §12.
 - Limit: the feed URL and host are placeholders (OQ-26). Release (T-12) must not ship until OQ-26 is answered.
+- AC-X (carried from T-11 QA): panel becomes key only when shown via the hotkey (`ShowReason.hotkey`); menu "Show Shelf" and auto-show keep it non-key so the frontmost app keeps keyboard focus.
 
 ## T-12 Developer ID signing + notarization — BLOCKED
 Milestone M5. Depends on: T-11. **Blocked on user:** needs a Developer ID Application certificate in the keychain and `notarytool` credentials (Apple ID app-specific password or API key).
