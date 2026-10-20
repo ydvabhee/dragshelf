@@ -127,3 +127,20 @@ Findings (see verdict): failed promise drop leaves empty panel open; notch + ful
 14. Other apps: drag from Mail attachment, Photos, Desktop; test lazy writers (Chrome/Electron): does panel show within 300 ms?
 15. AC-8: no UI until T-10; code check only (`stop()` removes monitor + timer).
 Matrix rows for T-08: all sources x "shelf appears on drag start".
+
+## T-07 Manage items: remove, missing, Quick Look, keyboard (manual)
+Auto: `swift build` clean, `swift test` 32 pass (hash replace, missing files, arrow nav, promise-after-clear). `build-app.sh` not run by QA (user's instance running).
+Findings: Quick Look `previewItemAt` unguarded + preview not reloaded on click-select/remove; Cmd-C copies missing files; scroll over tiles (DragOutHandleView has no scrollWheel) is carried to T-13.
+1. Hover tile -> xmark badge top-left; click removes. Move pointer onto the badge -> no flicker. Scroll grid under stationary pointer -> badge follows (AC-1, AC-8).
+2. Click tile, Delete / Fwd-Delete removes selection. Right-click unselected tile -> selects it; menu Remove, Quick Look work (AC-1, AC-8).
+3. Clear button: items gone, panel hides, `~/Library/Caches/<bundle>` empty (AC-2).
+4. Delete a file in Finder while on shelf, hide + show panel -> dimmed + "Missing". Cannot drag it, Space does nothing for it (AC-3). Deleting while panel is open updates only on next show (expected).
+5. TextEdit frontmost, click a tile, Space -> preview opens, TextEdit menu bar stays, DragShelf not in Cmd-Tab. Space/Esc closes preview; arrows move selection and preview follows (AC-4).
+6. With preview open: click another tile, remove a tile via badge/menu -> preview must not crash or show stale item (known gap).
+7. Preview open, Esc once closes preview only; Esc again hides panel. Hide panel / Clear with preview open -> preview closes (AC-6).
+8. Preview in front of other apps' windows and above/near the floating shelf? Report stacking. Also Space / Mission Control switch.
+9. VoiceOver: tile actions "Remove", "Quick Look" in rotor; missing tile label ends ", missing" (AC-5).
+10. Cmd-C still copies; Cmd-Q / Cmd-Tab unaffected; Space with nothing selected does nothing.
+11. Drop same image twice (Safari) -> one tile, old cache dir gone (AC-9). Drop a 50 MB+ image: no UI hitch (hash on main).
+12. Drop Mail/Photos promise, hit Clear before it finishes -> no tile, no leftover dir (AC-7).
+13. Scroll with 5+ tiles using trackpad over tiles and over gaps (T-13).
