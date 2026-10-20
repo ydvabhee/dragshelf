@@ -21,6 +21,8 @@ Every task's implicit ACs (QA checks always):
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | DONE (2026-10-20) |
 | T-16 | UI polish: no focus ring/outline, inset scroll bar, user-resizable shelf | M4 | T-13, T-14 | US-3, US-10 | DONE (2026-10-20) |
+| T-17 | Recent drag-outs (last 5) + ⌘Z undo | M4 | T-16 | US-4, US-6 | TODO |
+| T-18 | Contextual hints (one line, shown a few times) | M4 | T-17 | US-3, US-10 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | DONE (2026-10-20) |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | DONE (2026-10-20) |
@@ -154,6 +156,31 @@ Milestone M4. Depends on: T-13, T-14. Source: user report 2026-10-20 ("UI not lo
 - AC-7: User size is remembered per display with the position (T-13 AC-5) and restored on show/relaunch; "Reset Shelf Position" (menu, Settings, header double-click) also resets size.
 - AC-8: Unit tests for size math (min/max clamps, columns from width, persisted size per screen, reset).
 - AC-9: No regressions: drag-out, drop-in, header move, auto-hide, promo footer, Quick Look.
+
+## T-17 Recent drag-outs (last 5) + ⌘Z undo
+Milestone M4. Depends on: T-16. Source: user idea 2026-10-20 (validated): items are removed after drag out (OQ-08), so a wrong drop or a later upload failure loses the item. Name it "Recent", not "History".
+- AC-1: Every successful drag out (copy or move) records one Recent entry = the batch of items dragged (a "drag all" of 30 files = 1 entry). Keep the last **5 entries**; oldest falls off. Cancelled drags record nothing.
+- AC-2: ⌘Z (panel key, or menu bar item "Undo Drag Out") puts the most recent entry's items back on the shelf (normal dedupe rules apply) and removes that entry. Repeating ⌘Z walks back through entries.
+- AC-3: Header gets a small `clock.arrow.circlepath` button (hidden when Recent is empty). Click → compact popover/list: one row per entry, e.g. "3 files · 2 min ago" / "photo.heic · just now", newest first. Click row → restore its items to the shelf. Drag a row → drags its items out directly (same copy/⌘-move rules as T-15).
+- AC-4: Items whose file no longer exists (e.g. ⌘-moved, deleted) show the existing "Missing" style and are skipped on restore/drag; a row with nothing present is dimmed and not draggable.
+- AC-5: Cache dirs of cached items (images, promises) are kept while they are in Recent; deleted when their entry falls off, on Clear Recent, Clear shelf? (NO — Clear shelf keeps Recent), and on quit. Recent is memory-only, wiped on quit (OQ-03).
+- AC-6: Recent list has "Clear Recent". VoiceOver labels for button, rows ("3 files, 2 minutes ago"), and actions Restore / Drag.
+- AC-7: Unit tests: entry recording per batch, cap 5, ⌘Z order, restore with dedupe, missing skipped, cache dir lifetime.
+
+## T-18 Contextual hints (one line, shown a few times)
+Milestone M4. Depends on: T-17. Source: user request 2026-10-20 ("add hints for the user"). Rule: never a popup/modal; never more than one hint line at a time; never during an active drag; each hint auto-retires.
+- AC-1: Hints use the single footer line slot (same place as the promo line; a hint takes priority over a promo). Style: `.secondary` caption, leading `lightbulb` SF Symbol, small ✕ to dismiss that hint forever.
+- AC-2: Hint set (each shown at most 3 times, then never again; tracked in UserDefaults):
+  - after first item dropped: "Switch apps, then drag items out of the shelf."
+  - after first drag out: "Removed from shelf · ⌘Z to bring it back" (also shown right after any drag out for the first 3 times).
+  - shelf shown with ≥ 1 file item: "Hold ⌘ while dragging out to move instead of copy."
+  - shelf shown 3rd time: "Drag the top bar to move the shelf · edges to resize."
+  - shelf shown via menu (not hotkey) 2nd time: "Tip: ⌃⌥⌘D shows the shelf from anywhere."
+  - first time Recent has an entry: "Recent drags are under the clock icon."
+- AC-3: Tooltips (`.help`) on every header button, the clock button, and Recent rows (short, verb-first: "Restore to shelf", "Clear all items").
+- AC-4: Settings → "Show tips" toggle (default on) + "Reset tips" button.
+- AC-5: VoiceOver reads the hint line; Reduce Motion → no slide, fade only.
+- AC-6: Unit tests: hint eligibility + show-count retirement + priority over promo + never during drag.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
