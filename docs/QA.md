@@ -232,17 +232,19 @@ Manual (user runs):
 8. Two displays: drag header across screens; panel stays below menu bar and inside screen, no flicker. Max height follows screen after move.
 9. Activity Monitor with 50 items idle: CPU ~0%, memory < 60 MB.
 
-## T-14 Remote "More apps" promo line (bb0dddb) - PASS
+## T-14 Remote "More apps" promo line (bb0dddb, fix ae24845) - PASS
 Auto: build, 53 tests, release build green, no warnings. No real network (stub `URLProtocol`). Mutation check: disabling `RedirectGuard` + final-URL check makes the `http:`/`evil.com` redirect cases fail, so the tests bite.
 
 Security review (trust boundary):
-- Host check: exact `Set.contains` on lowercased `url.host`, no suffix match. Probed on this OS: `evil-example.com`, `example.com.evil.com`, `example.com.` (trailing dot), `evil.com\@example.com`, `example.com%2F@evil.com`, `@example.com`, `:@example.com`, `https:example.com`, IDN homograph (→ `xn--…`), `%00` in host: all denied. `%65xample.com` allowed (browser decodes to the same host). Non-default port allowed (same host, info).
+- Host check: exact `Set.contains` on lowercased `url.host`, no suffix match. Probed on this OS: `evil-example.com`, `example.com.evil.com`, `example.com.` (trailing dot), `evil.com\@example.com`, `example.com%2F@evil.com`, `@example.com`, `:@example.com`, `https:example.com`, IDN homograph (→ `xn--…`), `%00` in host: all denied. `%65xample.com` allowed (browser decodes to the same host). Non-default port now denied.
 - Checked at decode, each redirect (`willPerformHTTPRedirection`, task delegate), final `response.url`, and click (`PromoLoader.open`). `https` only.
-- Size: `expectedContentLength` pre-check + streamed byte cap (throws at 64 KB + 1); `decode` caps again. Timeouts 15 s request / 30 s resource. Ephemeral session, no cookie store, no credential store, no URL cache. Request: UA `DragShelf/<ver>` only (CFNetwork still adds `Accept-Language`, info).
+- Size: `expectedContentLength` pre-check + streamed byte cap (throws at 64 KB + 1); `decode` caps again. Timeouts 15 s request / 30 s resource. Ephemeral session, no cookie store, no credential store, no URL cache. Request: UA `DragShelf/<ver>` only + fixed `Accept-Language: en`.
 - Text: title/subtitle reject Cc/Cf/Zl/Zp (newline, bidi overrides). Rendered via `Text(String)` and `Button(String)` (StringProtocol inits: no Markdown, no localization lookup). Length counts graphemes, so one char can carry many combining marks (low).
 - Cache: `~/Library/Caches/com.abhishekyadav.DragShelf/Promos/feed.json`, outside `ItemCache.root` (`…/Shelf`), atomic write, user perms. Corrupt cache → `feed = nil`, and no `If-None-Match` is sent without a cache.
 
-Findings (non-blocking):
+Re-verify ae24845: build, 54 tests, release build green. All 4 lows fixed and tested: `URLError` (not `.cancelled`) retries after 3 h, server/invalid/refused-redirect errors wait 24 h; titles/subtitles capped at 2 × max scalars (Zalgo test); auto-drag show skips `refreshIfStale`; `url.port` must be nil (`:443` explicit is denied too, fail-closed) and requests send `Accept-Language: en`. Accepted residual: if the launch fetch has no cache and finishes during a drag, the panel grows once mid-drag (rare, once).
+
+Findings (all fixed in ae24845):
 1. PromoLoader.swift:87: low: any failure, including offline at first launch, waits a full 24 h (no promo all day). Fix: on `URLError`, store `lastFetch = now - interval + 3h` so it retries after ~3 h; keep 24 h for server 4xx/5xx/invalid.
 2. PromoFeed.swift:59: low: `count` is graphemes; a Zalgo title (1 letter + 1000s of marks) passes and can overdraw outside the line. Fix: also cap `unicodeScalars.count` (e.g. ≤ 2 × max).
 3. ShelfView.swift:39: low: first fetch (no cache) finishing during an auto-drag show inserts the footer row, so the panel grows mid-drag. Fix: skip `refreshIfStale` when `reason == .autoDrag`, or apply a new feed only when not dragging.
