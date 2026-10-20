@@ -12,7 +12,7 @@ Every task's implicit ACs (QA checks always):
 | T-01 | Project skeleton + menu bar item + CLI build/test green | M0 | — | US-8 (part) | DONE (2026-10-20) |
 | T-02 | Shelf model: ShelfItem, ShelfStore, ItemCache | M1 | T-01 | US-2, US-6 (model) | DONE (2026-10-20) |
 | T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | DONE (2026-10-20) |
-| T-04 | Drop in: files, folders, links, text, image data | M1 | T-03 | US-2 | QA |
+| T-04 | Drop in: files, folders, links, text, image data | M1 | T-03 | US-2 | DONE (2026-10-20) |
 | T-05 | Drop in: file promises | M1 | T-04 | US-2 | TODO |
 | T-06 | Drag out: single, multi-select, drag all, Cmd-C | M2 | T-04 | US-4, US-5 | TODO |
 | T-07 | Manage items: remove, clear, missing files, Quick Look, keyboard | M2 | T-06 | US-6, US-7 | TODO |
@@ -73,6 +73,7 @@ Milestone M1. Depends on: T-04.
 - AC-2: Promise receiving runs off the main thread; UI stays responsive (scroll works) while a 100 MB+ promised file is written.
 - AC-3: A promise that fails (sender error) adds no item and logs the error with `Logger`; no empty dir left in cache.
 - AC-4: Unit test: given a received URL, the store adds a `.file` item with `isCached = true`.
+- AC-5 (carried from T-04 QA): `DropReceiver.draggingUpdated` returns `[]` when the drag was rejected in `draggingEntered`; `.copy` only when acceptable.
 
 ## T-06 Drag out: single, multi-select, drag all, Cmd-C
 Milestone M2. Depends on: T-04. `DragOutSource`, selection in `ShelfStore`.
@@ -127,6 +128,7 @@ Milestone M4. Depends on: T-07, T-10.
 - AC-3: Light/dark and accent color changes render correctly without relaunch.
 - AC-4: Full keyboard path: hotkey → arrows → Space → Cmd-C → Esc works without the mouse.
 - AC-5: Idle CPU ~0% and memory < 60 MB with 50 items (Activity Monitor).
+- AC-6 (carried from T-04 QA): drop-target highlight animation in `DropReceiver` is gated on Reduce Motion (no spring when on).
 
 ## T-12 Developer ID signing + notarization — BLOCKED
 Milestone M5. Depends on: T-11. **Blocked on user:** needs a Developer ID Application certificate in the keychain and `notarytool` credentials (Apple ID app-specific password or API key).

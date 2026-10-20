@@ -20,3 +20,4 @@ product-architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-13 | Text items: drag out as text only, or also as a `.txt` file? | Text only (`NSString`); Finder makes a text clipping | Adding a file representation = small change in `DragOutSource.writer` |
 | OQ-14 | Localization? | English only, but all UI strings via `String(localized:)` | Adding languages later = string catalog only |
 | OQ-15 | Xcode broken (`xcodebuild` exits 70: stale `/Library/Developer/PrivateFrameworks/DVTDownloads`). Run `sudo xcodebuild -runFirstLaunch`? | SwiftPM build (ADR-013), unaffected; no xcodeproj | After the fix: open `Package.swift` in Xcode for debugging/Instruments; universal (arm64+x86_64) release build becomes possible for M5. No architecture change needed |
+| OQ-16 | Same image dropped twice creates two items (each cached at its own path). Dedupe by content hash? | No dedupe for image data | Hash-based dedupe = small change in `DropReceiver.writeImage` + `ShelfStore.add` |
