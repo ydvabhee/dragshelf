@@ -10,6 +10,8 @@ private let promiseQueue = OperationQueue()
 
 final class DropReceiver<Content: View>: NSHostingView<Content> {
     var store: ShelfStore?
+    /// A drop landed (keeps an auto-shown shelf open, T-08 AC-3).
+    var onDrop: (() -> Void)?
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -55,7 +57,9 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         setTargeted(false)
         guard let store, accepts(sender) else { return false }
-        return Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store)
+        guard Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store) else { return false }
+        onDrop?()
+        return true
     }
 
     private func setTargeted(_ on: Bool) {

@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// Drag out and Cmd-C for shelf items (ADR-007): file/url → `NSURL`, text → `NSString`, copy only.
 final class DragOutSource: NSObject, NSDraggingSource {
     /// Keeps the source alive for the running session (one drag at a time).
-    private static var current: DragOutSource?
+    private(set) static var current: DragOutSource?
 
     let store: ShelfStore
     let ids: Set<UUID>

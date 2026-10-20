@@ -16,7 +16,7 @@ Every task's implicit ACs (QA checks always):
 | T-05 | Drop in: file promises | M1 | T-04 | US-2 | DONE (2026-10-20) |
 | T-06 | Drag out: single, multi-select, drag all, Cmd-C | M2 | T-04 | US-4, US-5 | DONE (2026-10-20) |
 | T-07 | Manage items: remove, clear, missing files, Quick Look, keyboard | M2 | T-06 | US-6, US-7 | TODO |
-| T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | TODO |
+| T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | QA |
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
