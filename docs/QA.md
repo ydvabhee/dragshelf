@@ -17,14 +17,10 @@ Manual (user):
 4. Press ⌘Q with menu open, or click "Quit DragShelf": app exits, icon gone.
 5. Light + dark menu bar: icon legible.
 
-## T-02 Shelf model (FAIL)
-Auto: build, test (4 pass), build-app.sh ok. Launch wipe verified: dummy dir in cache gone after `open` + 2s.
-Findings:
-- ShelfStore.add dedupe uses URL ==. Trailing slash same. `/tmp/x` vs `/private/tmp/x` and `a/../b` NOT deduped. Fix: compare `.standardizedFileURL.resolvingSymlinksInPath()`.
-- ShelfStore not `@MainActor`. Fix: annotate store (+ tests).
-- removeCacheDir only deletes direct child of root; nested file (root/uuid/sub/f) leaks. Low. Fix: walk to root's direct child.
-- Path traversal: `..` safe (standardized check, stays inside root). Symlink in item path not resolved, low.
-- Tests use temp root only; real cache untouched.
+## T-02 Shelf model (PASS, re-verified d73f802, 26ab8de)
+Auto: build, test (6 pass), build-app.sh ok. Launch wipe verified.
+Fixed: dedupe normalizes `..`/symlinks (test); nested cached file deletes root child dir (test); MainActor via `.defaultIsolation(MainActor.self)` in Package.swift, accepted.
+Tests use temp root only.
 
 Manual (user):
 1. Quit via menu: confirm cache dir empty (`ls ~/Library/Caches/com.abhishekyadav.DragShelf/Shelf`). (SIGTERM skips willTerminate; only menu Quit covers AC-5 quit.)
