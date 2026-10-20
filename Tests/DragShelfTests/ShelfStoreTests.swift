@@ -142,3 +142,40 @@ private func cachedItem(_ cache: ItemCache, hash: SHA256.Digest? = nil) throws -
     store.moveSelection(by: 1)
     #expect(store.selection == [ids[4]])  // from the last selected when the anchor is not selected
 }
+
+/// Dedupe index matches `items` exactly: one key per item, pointing at it (T-11 AC-10).
+private func expectKeysConsistent(_ store: ShelfStore) {
+    #expect(store.keys.count == store.items.count)
+    #expect(store.items.allSatisfy { store.keys[ShelfStore.key(for: $0)] == $0.id })
+}
+
+@Test func keysStayConsistentAfterReplaceRemoveClear() throws {
+    let cache = tempCache()
+    defer { cache.wipe(); cache.remove(dir: cache.root) }
+    let store = ShelfStore(cache: cache)
+    let hash = SHA256.hash(data: Data("png".utf8))
+    store.add(try cachedItem(cache, hash: hash))
+    let text = ShelfItem(kind: .text("t"))
+    store.add(text)
+    store.add(ShelfItem(kind: .url(URL(string: "https://a.com")!)))
+    store.add(try cachedItem(cache, hash: hash))  // replace
+    expectKeysConsistent(store)
+    store.remove(ids: [text.id])
+    expectKeysConsistent(store)
+    store.add(text)  // removed key is free again
+    #expect(store.items.last == text)
+    expectKeysConsistent(store)
+    store.clear()
+    expectKeysConsistent(store)
+}
+
+@Test func addStaysFastWithManyItems() {
+    let store = ShelfStore(cache: tempCache())
+    let n = 1_000
+    let elapsed = ContinuousClock().measure {
+        for i in 0..<n { store.add(ShelfItem(kind: .text("item \(i)"))) }
+    }
+    #expect(store.items.count == n)
+    // ponytail: loose 5 ms/add bound so loaded CI machines do not flake; catches an O(n) dedupe regression at scale.
+    #expect(elapsed / n < .milliseconds(5))
+}

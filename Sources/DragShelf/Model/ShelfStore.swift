@@ -16,7 +16,7 @@ final class ShelfStore {
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
     /// Dedupe index beside `items` (O(1) add). Image items key by content hash, everything else by kind.
-    @ObservationIgnored private var keys: [Key: UUID] = [:]
+    @ObservationIgnored private(set) var keys: [Key: UUID] = [:]
 
     enum Key: Hashable {
         case file(String), url(String), text(String), image(SHA256.Digest)

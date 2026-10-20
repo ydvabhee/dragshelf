@@ -27,6 +27,7 @@ struct SettingsView: View {
                 }
                 Toggle("Show shelf when dragging", isOn: $autoShow)
                 Toggle("Global shortcut ⌃⌥⌘D", isOn: $hotKeyEnabled)
+                    .accessibilityLabel("Global shortcut Control-Option-Command-D")
             } header: {
                 Text("General")
             } footer: {

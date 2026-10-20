@@ -8,6 +8,10 @@ import os
 /// while the app is inactive. Subclasses the hosting view so SwiftUI keeps sizing the panel.
 private let log = Logger(subsystem: "com.abhishekyadav.DragShelf", category: "drop")
 private let promiseQueue = OperationQueue()
+/// Tail of the drops whose items land asynchronously (image hashing). Later drops chain behind it so items
+/// keep drop order. Tests await it.
+@MainActor var pendingIngest: Task<Void, Never>?
+@MainActor private var pendingIngestCount = 0
 
 final class DropReceiver<Content: View>: NSHostingView<Content> {
     var store: ShelfStore?
@@ -75,30 +79,60 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     private func setTargeted(_ on: Bool) {
         guard let store, store.isDropTargeted != on else { return }
-        withAnimation(.spring(duration: 0.3, bounce: 0.1)) { store.isDropTargeted = on }
+        // Reduce Motion: fade the highlight instead of springing it (T-11 AC-6).
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1)) {
+            store.isDropTargeted = on
+        }
     }
 
-    /// Adds each incoming value; returns true if any item landed. Images are written to the cache.
+    /// Adds each incoming value in order; returns true if any item landed or may still land.
+    /// Image data is converted, written to the cache, and hashed off the main actor (T-11 AC-7); a drop with
+    /// an image, or any drop while one is in flight, lands asynchronously. `onPromiseFailed` fires when
+    /// nothing from an asynchronous drop landed.
     @discardableResult
     static func ingest(_ incoming: [PasteboardReader.Incoming], into store: ShelfStore,
                        onPromiseFailed: @escaping () -> Void = {}) -> Bool {
-        var added = false
-        for value in incoming {
-            switch value {
-            case .file(let url): added = store.add(ShelfItem(kind: .file(url))) || added
-            case .url(let url): added = store.add(ShelfItem(kind: .url(url))) || added
-            case .text(let text): added = store.add(ShelfItem(kind: .text(text))) || added
-            case .promise(let receiver):
-                // Item lands asynchronously, so a promise alone does not count as added now.
-                receive(receiver, into: store, onFail: onPromiseFailed)
-                added = true
-            case .image(let data, let type):
-                guard let (file, dir) = writeImage(data, type: type, cache: store.cache) else { continue }
-                let item = ShelfItem(kind: .file(file), isCached: true, contentHash: SHA256.hash(data: data))
-                if store.add(item) { added = true } else { store.cache.remove(dir: dir) }
-            }
+        let hasImage = incoming.contains { if case .image = $0 { true } else { false } }
+        if !hasImage, pendingIngestCount == 0 {
+            return incoming.reduce(false) { add($1, into: store, onPromiseFailed: onPromiseFailed) || $0 }
         }
-        return added
+        let previous = pendingIngest, generation = store.generation
+        pendingIngestCount += 1
+        pendingIngest = Task {
+            await previous?.value
+            var landed = false
+            // A Clear after the drop drops what has not landed yet, like a late file promise.
+            for value in incoming where generation == store.generation {
+                guard case .image(let data, let type) = value else {
+                    landed = add(value, into: store, onPromiseFailed: onPromiseFailed) || landed
+                    continue
+                }
+                let cache = store.cache
+                guard let (file, dir, hash) = await Task.detached(operation: { prepareImage(data, type: type, cache: cache) }).value
+                else { continue }
+                if generation == store.generation,
+                   store.add(ShelfItem(kind: .file(file), isCached: true, contentHash: hash)) { landed = true }
+                else { cache.remove(dir: dir) }
+            }
+            pendingIngestCount -= 1
+            if !landed { onPromiseFailed() }
+        }
+        return !incoming.isEmpty
+    }
+
+    /// Adds one non-image value now (a promise starts receiving and counts as landed).
+    private static func add(_ value: PasteboardReader.Incoming, into store: ShelfStore,
+                            onPromiseFailed: @escaping () -> Void) -> Bool {
+        switch value {
+        case .file(let url): return store.add(ShelfItem(kind: .file(url)))
+        case .url(let url): return store.add(ShelfItem(kind: .url(url)))
+        case .text(let text): return store.add(ShelfItem(kind: .text(text)))
+        case .promise(let receiver):
+            receive(receiver, into: store, onFail: onPromiseFailed)
+            return true
+        case .image: return false
+        }
     }
 
     /// Receives a file promise into `root/<UUID>/` on a background queue, then adds the item on main.
@@ -122,15 +156,21 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
         store.cache.remove(dir: dir)
         return false
     }
+}
 
-    /// Writes PNG as-is (TIFF converted to PNG) to `root/<UUID>/Image <timestamp>.png`.
-    private static func writeImage(_ data: Data, type: UTType, cache: ItemCache) -> (URL, URL)? {
-        let png: Data? = type == .png ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
-        guard let png, let dir = try? cache.newItemDir() else { return nil }
-        let stamp = Date.now.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)).\(minute: .twoDigits).\(second: .twoDigits)",
-                                                 locale: .init(identifier: "en_US_POSIX"), timeZone: .current, calendar: .current))
-        let file = dir.appendingPathComponent("Image \(stamp).png")
-        do { try png.write(to: file) } catch { cache.remove(dir: dir); return nil }
-        return (file, dir)
-    }
+/// Off the main actor: PNG file in a new cache dir plus the SHA-256 of the original data.
+nonisolated private func prepareImage(_ data: Data, type: UTType, cache: ItemCache) -> (URL, URL, SHA256.Digest)? {
+    guard let (file, dir) = writeImage(data, type: type, cache: cache) else { return nil }
+    return (file, dir, SHA256.hash(data: data))
+}
+
+/// Writes PNG as-is (TIFF converted to PNG) to `root/<UUID>/Image <timestamp>.png`.
+nonisolated private func writeImage(_ data: Data, type: UTType, cache: ItemCache) -> (URL, URL)? {
+    let png: Data? = type == .png ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
+    guard let png, let dir = try? cache.newItemDir() else { return nil }
+    let stamp = Date.now.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)).\(minute: .twoDigits).\(second: .twoDigits)",
+                                             locale: .init(identifier: "en_US_POSIX"), timeZone: .current, calendar: .current))
+    let file = dir.appendingPathComponent("Image \(stamp).png")
+    do { try png.write(to: file) } catch { cache.remove(dir: dir); return nil }
+    return (file, dir)
 }

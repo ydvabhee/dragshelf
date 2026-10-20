@@ -73,15 +73,24 @@ private func png() throws -> Data {
     }
 }
 
-@Test func ingestCachesImageAndAddsOthers() throws {
+@Test func ingestCachesImageAndAddsOthers() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfTest-\(UUID())")
     defer { try? FileManager.default.removeItem(at: root) }
     let store = ShelfStore(cache: ItemCache(root: root))
+    let image = try png()
     let added = DropReceiver<EmptyView>.ingest(
-        [.image(try png(), .png), .url(URL(string: "https://a.com")!), .text("hi")], into: store)
+        [.image(image, .png), .url(URL(string: "https://a.com")!), .text("hi")], into: store)
     #expect(added)
-    #expect(store.items.count == 3)
-    guard case .file(let file) = store.items[0].kind else { Issue.record("not file"); return }
+    // Image hashing runs off main; a drop queued behind it keeps drop order (T-11 AC-7).
+    DropReceiver<EmptyView>.ingest([.text("later")], into: store)
+    await pendingIngest?.value
+    #expect(store.items.dropFirst().map(\.kind) == [.url(URL(string: "https://a.com")!), .text("hi"), .text("later")])
+    guard case .file(let file) = store.items.first?.kind else { Issue.record("not file"); return }
     #expect(store.items[0].isCached && file.pathExtension == "png" && FileManager.default.fileExists(atPath: file.path))
     #expect(file.path.hasPrefix(root.path))
+    // Same image again replaces the first one (moved to the end, old cache dir gone).
+    DropReceiver<EmptyView>.ingest([.image(image, .png)], into: store)
+    await pendingIngest?.value
+    #expect(store.items.count == 4 && store.items.last?.isCached == true)
+    #expect(!FileManager.default.fileExists(atPath: file.path))
 }

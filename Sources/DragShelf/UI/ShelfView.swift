@@ -45,6 +45,8 @@ struct ShelfView: View {
                 Button {} label: {
                     Label("Drag All", systemImage: "square.stack.3d.up")
                 }
+                .help("Drag all items")
+                .accessibilityHint("Drag into another app to drop every item")
                 .disabled(store.items.isEmpty)
                 .overlay { DragOutHandle(store: store) }
 
@@ -62,12 +64,14 @@ struct ShelfView: View {
                     Label("Clear Shelf", systemImage: "trash")
                 }
                 .help("Clear shelf")
+                .accessibilityHint("Removes every item and hides the shelf")
                 .disabled(store.items.isEmpty)
 
                 Button(action: onClose) {
                     Label("Close", systemImage: "xmark")
                 }
                 .help("Close")
+                .accessibilityHint("Hides the shelf; items stay")
             }
             .labelStyle(.iconOnly)
             .shelfButtonStyle()
@@ -179,7 +183,13 @@ final class WindowDragView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard let window, let start else { return }
         let p = NSEvent.mouseLocation
-        window.setFrameOrigin(NSPoint(x: start.origin.x + p.x - start.mouse.x, y: start.origin.y + p.y - start.mouse.y))
+        var frame = window.frame
+        frame.origin = NSPoint(x: start.origin.x + p.x - start.mouse.x, y: start.origin.y + p.y - start.mouse.y)
+        // Stay inside the visible frame of the screen under the pointer: never under the menu bar or off-screen (T-11 AC-9).
+        if let visible = (NSScreen.screens.first { NSMouseInRect(p, $0.frame, false) } ?? window.screen)?.visibleFrame {
+            frame = ShelfPanelController.clamp(frame, to: visible)
+        }
+        window.setFrameOrigin(frame.origin)
     }
 
     override func mouseUp(with event: NSEvent) {

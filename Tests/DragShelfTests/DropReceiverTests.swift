@@ -26,7 +26,7 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     func resetSpringLoading() {}
 }
 
-@Test func performDragOperationAddsFilesAndText() {
+@Test func performDragOperationAddsFilesAndText() async {
     let pb = NSPasteboard(name: .init("test-drop-\(UUID())"))
     defer { pb.releaseGlobally() }
     pb.clearContents()
@@ -40,6 +40,7 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(store.isDropTargeted)
     #expect(receiver.performDragOperation(info))
     #expect(!store.isDropTargeted)
+    await pendingIngest?.value  // queued behind a concurrent test's image drop, if any
     #expect(store.items.map(\.kind) == [.file(a), .file(b), .text("hello")])
 }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Cache dirs for materialized items. `root` is injectable so tests never touch ~/Library/Caches.
-struct ItemCache {
+nonisolated struct ItemCache: Sendable {
     let root: URL
 
     init(root: URL = ItemCache.defaultRoot) {

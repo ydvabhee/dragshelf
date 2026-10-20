@@ -88,21 +88,32 @@ final class ShelfPanelController {
         guard let screen = panel.screen else { return }
         let o = Self.offset(of: panel.frame, in: screen.visibleFrame)
         savedOffsets[Self.id(of: screen)] = [o.x, o.y]
+        updateMaxHeight(for: screen)
+    }
+
+    /// Height cap for `screen` (T-11 AC-8: also after a move to another screen). Set only on change: every set
+    /// re-renders the view.
+    private func updateMaxHeight(for screen: NSScreen) {
+        let h = min(ShelfView.maxContentHeight, (screen.visibleFrame.height * 0.5).rounded())
+        if h != maxHeight { maxHeight = h }
     }
 
     /// Menu item / header double-click: forget all saved spots, back to top center.
     func resetPosition() {
         UserDefaults.standard.removeObject(forKey: Self.offsetsKey)
         guard isShown, let screen = panel.screen else { return }
-        panel.setFrame(frame(size: panel.frame.size, on: screen), display: true, animate: true)
+        panel.setFrame(frame(size: panel.frame.size, on: screen), display: true,
+                       animate: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
     /// Resizes the shown panel to its content, top edge fixed (T-13 AC-1). Called async after a geometry change:
     /// `fittingSize` is 0 inside the callback.
     func fitToContent() {
-        guard isShown, let height = panel.contentView?.fittingSize.height, height > 0,
-              abs(height - panel.frame.height) >= 0.5, let visible = panel.screen?.visibleFrame else { return }
-        panel.setFrame(Self.fit(panel.frame, height: height, in: visible), display: true)
+        guard isShown, let screen = panel.screen else { return }
+        updateMaxHeight(for: screen)
+        guard let height = panel.contentView?.fittingSize.height, height > 0,
+              abs(height - panel.frame.height) >= 0.5 else { return }
+        panel.setFrame(Self.fit(panel.frame, height: height, in: screen.visibleFrame), display: true)
     }
 
     /// Visibility rule 2 (ARCHITECTURE §5): only an auto-shown, still-empty shelf that got no drop hides.
@@ -147,13 +158,15 @@ final class ShelfPanelController {
         else { return }
         self.reason = reason
         store.refreshMissing()
-        maxHeight = min(ShelfView.maxContentHeight, (screen.visibleFrame.height * 0.5).rounded())
+        updateMaxHeight(for: screen)
         let frame = self.frame(size: panel.contentView?.fittingSize ?? .zero, on: screen)
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // Slides down from just under the menu bar while fading in; Reduce Motion → fade only.
         panel.setFrame(reduceMotion ? frame : frame.offsetBy(dx: 0, dy: Self.slide), display: false)
         panel.alphaValue = 0
-        panel.orderFrontRegardless()
+        // Hotkey/menu: key panel so arrows, Space, Cmd-C, Esc work without the mouse (T-11 AC-4).
+        // Auto-show during a drag stays non-key. Neither activates the app.
+        if reason == .manual { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = true }
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = reduceMotion ? 0.2 : 0.35
@@ -170,6 +183,13 @@ final class ShelfPanelController {
     func quickLook(_ id: UUID) {
         store.selection = store.targetIDs(for: id)
         panel.openPreview()
+    }
+
+    /// VoiceOver: low-priority "Item added" when the shelf grows (T-11 AC-1).
+    func announceAdded(_ count: Int) {
+        let text = count == 1 ? "Item added" : "\(count) items added"
+        NSAccessibility.post(element: panel, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.low.rawValue])
     }
 
     func previewSourceChanged() {
@@ -207,6 +227,7 @@ private struct PanelRoot: View {
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }
+            .onChange(of: controller.store.items.count) { old, new in if new > old { controller.announceAdded(new - old) } }
             // Quick Look follows any selection/items change, not only keys.
             .onChange(of: controller.store.previewURLs) { controller.previewSourceChanged() }
             // Async: `fittingSize` read synchronously here is 0 and would collapse the panel.

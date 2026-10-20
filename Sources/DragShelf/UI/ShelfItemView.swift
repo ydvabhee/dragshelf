@@ -9,6 +9,8 @@ struct ShelfItemView: View {
     var onRemove: () -> Void = {}
     var onQuickLook: () -> Void = {}
 
+    @Environment(\.colorSchemeContrast) private var contrast
+
     var body: some View {
         VStack(spacing: 6) {
             thumbnail
@@ -33,9 +35,17 @@ struct ShelfItemView: View {
         .padding(4)
         .background(isSelected ? Color.accentColor.opacity(0.22) : .clear,
                     in: .rect(cornerRadius: 10, style: .continuous))
+        // Increase Contrast: the faint selection fill also gets a solid ring.
+        .overlay {
+            if isSelected && contrast == .increased {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 2)
+            }
+        }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isMissing ? "\(typeDescription), \(name), missing" : "\(typeDescription), \(name)")
+        .accessibilityLabel("\(typeDescription), \(name)")
+        .accessibilityValue(isMissing ? "Missing" : "")
+        .accessibilityHint(isMissing ? "The original file was moved or deleted" : "Drag into another app, or press Space for Quick Look")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Remove", onRemove)
         .accessibilityAction(named: "Quick Look", onQuickLook)
