@@ -35,7 +35,10 @@ final class ShelfStore {
 
     /// File paths compare after resolving `..`, trailing slash, and symlinks (/tmp vs /private/tmp).
     private static func dedupeKey(_ kind: ShelfItem.Kind) -> ShelfItem.Kind {
-        if case .file(let url) = kind { return .file(url.standardizedFileURL.resolvingSymlinksInPath()) }
+        if case .file(let url) = kind { let u = url.standardizedFileURL
+            // Resolve the parent so symlinks normalize even when the file itself is gone.
+            return .file(u.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(u.lastPathComponent))
+        }
         return kind
     }
 
