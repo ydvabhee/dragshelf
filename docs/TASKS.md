@@ -95,6 +95,7 @@ Milestone M2. Depends on: T-06.
 - AC-6 (carried from T-03 AC-6): Esc hides the panel even though it is non-activating (panel becomes key on click, or a local key monitor), without activating DragShelf.
 - AC-7 (carried from T-05 QA): a file promise that completes after Clear/quit adds no item and leaves no file (e.g. generation counter bumped in `clear()`, checked in `DropReceiver.finishPromise`). Unit test.
 - AC-8 (carried from T-06 QA): right-click context menu and hover `xmark` work on tiles despite the `DragOutHandleView` overlay (overlay below controls, or forward rightMouseDown/hover).
+- AC-9 (user, OQ-16): dropping the same image data again (same content hash, SHA-256 via CryptoKit) replaces the existing item: old item + its cache dir removed, new item appended. Unit test.
 
 ## T-08 Auto-show/hide on drag (DragMonitor)
 Milestone M3. Depends on: T-03, T-04.
