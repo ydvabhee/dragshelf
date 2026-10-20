@@ -15,7 +15,8 @@ final class ShelfStore {
     /// Caller owns any cache dir of a rejected duplicate.
     @discardableResult
     func add(_ item: ShelfItem) -> Bool {
-        guard !items.contains(where: { $0.kind == item.kind }) else { return false }
+        let key = Self.dedupeKey(item.kind)
+        guard !items.contains(where: { Self.dedupeKey($0.kind) == key }) else { return false }
         items.append(item)
         return true
     }
@@ -32,12 +33,18 @@ final class ShelfStore {
         selection.removeAll()
     }
 
+    /// File paths compare after resolving `..`, trailing slash, and symlinks (/tmp vs /private/tmp).
+    private static func dedupeKey(_ kind: ShelfItem.Kind) -> ShelfItem.Kind {
+        if case .file(let url) = kind { return .file(url.standardizedFileURL.resolvingSymlinksInPath()) }
+        return kind
+    }
+
     private func removeCacheDir(of item: ShelfItem) {
         guard item.isCached, case .file(let url) = item.kind else { return }
-        let dir = url.deletingLastPathComponent()
-        // Only ever delete a direct child of the cache root.
-        if dir.deletingLastPathComponent().standardizedFileURL == cache.root.standardizedFileURL {
-            cache.remove(dir: dir)
-        }
+        let root = cache.root.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        let parts = url.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        // Delete the direct child of root that contains the file (handles nested files).
+        guard parts.count > root.count + 1, Array(parts.prefix(root.count)) == root else { return }
+        cache.remove(dir: cache.root.appendingPathComponent(parts[root.count], isDirectory: true))
     }
 }

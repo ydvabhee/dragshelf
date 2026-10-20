@@ -47,3 +47,26 @@ private func cachedItem(_ cache: ItemCache) throws -> ShelfItem {
     #expect(store.items.isEmpty && store.selection.isEmpty)
     #expect(try FileManager.default.contentsOfDirectory(atPath: cache.root.path).isEmpty)
 }
+
+@Test func dedupeNormalizesFilePaths() {
+    let store = ShelfStore(cache: tempCache())
+    store.add(ShelfItem(kind: .file(URL(fileURLWithPath: "/tmp/x"))))
+    store.add(ShelfItem(kind: .file(URL(fileURLWithPath: "/private/tmp/x"))))
+    store.add(ShelfItem(kind: .file(URL(fileURLWithPath: "/tmp/a/../x"))))
+    #expect(store.items.count == 1)
+}
+
+@Test func removeNestedCachedFileDeletesItemDir() throws {
+    let cache = tempCache()
+    defer { cache.wipe(); cache.remove(dir: cache.root) }
+    let store = ShelfStore(cache: cache)
+    let dir = try cache.newItemDir()
+    let sub = dir.appendingPathComponent("sub", isDirectory: true)
+    try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+    let file = sub.appendingPathComponent("f")
+    try Data("x".utf8).write(to: file)
+    let item = ShelfItem(kind: .file(file), isCached: true)
+    store.add(item)
+    store.remove(ids: [item.id])
+    #expect(!FileManager.default.fileExists(atPath: dir.path))
+}
