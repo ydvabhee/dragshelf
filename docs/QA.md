@@ -192,12 +192,12 @@ Manual (user):
 7. Quit/relaunch: all three toggles keep their values.
 8. Move the shelf repeatedly while dragging a file in: no flicker, shelf stays.
 
-## T-15 Cmd-drag moves file items (1f6282a) - FAIL (1)
+## T-15 Cmd-drag moves file items (1f6282a, fix ad3d629) - PASS
 Auto: build, 41 tests, release build green. AC-1..5, AC-7 code OK (initial apply at launch fires since applied* start nil; `.move` removal + empty cache dir cleanup OK).
 
-FAIL AC-6: Cmd mask is `.move` only (DragOutSource.swift:61-63). Copy-only receivers (Mail compose, browser upload, Slack) return `.copy` from draggingEntered; intersect with `.move` = [] -> drop rejected. Fix: Cmd+allFiles -> `[.move, .copy]`, else `.copy`. Then `ended(.move)` still removes; `.copy` result keeps normal rule.
+Fixed in ad3d629 (re-verified: build, 41 tests, release green). Was AC-6: Cmd mask was `.move` only (DragOutSource.swift:61-63). Copy-only receivers (Mail compose, browser upload, Slack) return `.copy` from draggingEntered; intersect with `.move` = [] -> drop rejected. Fix: Cmd+allFiles -> `[.move, .copy]`, else `.copy`. Then `ended(.move)` still removes; `.copy` result keeps normal rule.
 
-Manual (after fix):
+Manual (user to run; Finder move with [.move,.copy] unverifiable without GUI):
 1. Finder file, plain drag to another folder (same volume): copied, shelf item removed (keep off).
 2. Same, hold Cmd: moved, original gone, badge updates live when toggling Cmd mid-drag.
 3. Cmd-drag to other volume: moved.
