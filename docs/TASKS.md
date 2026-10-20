@@ -22,7 +22,7 @@ Every task's implicit ACs (QA checks always):
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | DONE (2026-10-20) |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | DONE (2026-10-20) |
-| T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | QA |
+| T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | DONE (2026-10-20) |
 | T-12 | Developer ID signing + notarization | M5 | T-11 | — | BLOCKED (user: Developer ID cert + notary creds) |
 
 ---

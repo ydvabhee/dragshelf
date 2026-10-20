@@ -1,17 +1,25 @@
-# DragShelf — Status
+# DragShelf — Status (2026-10-20)
 
-## M0 Skeleton — DONE (tag `m0-skeleton`)
-- T-01 menu bar app, SwiftPM build (ADR-013: xcodebuild broken on this Mac).
+## v1: feature-complete, ship blocked on user (T-12)
+| Milestone | Tasks | Tag |
+|---|---|---|
+| M0 Skeleton | T-01 | `m0-skeleton` |
+| M1 Shelf | T-02..T-05 | `m1-shelf` |
+| M2 Manage | T-06, T-07 | `m2-manage` |
+| M3 Auto-show | T-08, T-09, T-13 | `m3-autoshow` |
+| M4 Polish | T-10, T-11, T-14, T-15 | `m4-polish` |
+| M5 Ship | T-12 | BLOCKED |
 
-## M1 Shelf — DONE (tag `m1-shelf`)
-- T-02 model + cache. T-03 floating Liquid Glass panel. T-04 drop in: files, folders, links, text, images. T-05 drop in: file promises (Mail, Photos, browsers).
-- 18 unit tests. Real drags not run (no GUI access for agents) → manual checks in `docs/QA.md` T-03..T-05.
+- 54 unit tests; debug + release builds clean, zero warnings. Idle: 0% CPU, ~19 MB footprint.
+- User-driven changes: top-center auto-show (T-08), responsive scroll + movable shelf + O(1) dedupe, no item limit (T-13), ⌘-drag move (T-15), remote promo line (T-14).
+- Notable catches: release-only compiler crash (fixed, release build now required in dev/QA), Quick Look out-of-range crash, ⌘-drag rejected by copy-only apps, stuck empty shelf after failed promise.
+
+## Blocked on user (T-12 ship)
+- Apple Developer ID Application cert + notarytool credentials.
+- OQ-26: promo feed URL + allowlisted host (placeholder `example.com`).
+
+## Manual QA still owed (agents have no GUI)
+- `docs/QA.md` manual steps per task: real drags (Finder, Safari/Chrome, Mail, Photos, Slack), Liquid Glass look light/dark, VoiceOver, multi-display, notch, idle memory with 50 items.
 
 ## Next
-- M2: T-06 drag out, T-07 manage items (+ carried: Esc hide, promise-after-Clear race).
-- M3: T-08 auto-show on drag, T-09 hotkey. M4: T-10 settings, T-11 a11y polish.
-- M5: T-12 BLOCKED on Developer ID.
-
-## Risks
-- Drag delivery into the non-activating panel verified only by code review + fake-NSDraggingInfo test.
-- Glass/vibrancy look not verifiable offscreen; user must eyeball light/dark.
+- v2 backlog (M6): V2-01 Zip, V2-02 Share/AirDrop, V2-03 Convert/resize images, V2-04 Rename.
