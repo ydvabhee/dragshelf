@@ -2,7 +2,7 @@
 
 ## ▶ Resume here
 1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent engineering-manager`), then say **"continue DragShelf from docs/STATUS.md"**.
-2. Check T-16 state in `docs/TASKS.md` (UI polish + resizable shelf). If its row is `QA`, run QA on it; if `DONE`, go to step 3.
+2. T-16 is DONE (QA PASS 0b36541). First ask the user how the UI looks now (outlines gone? scroll bar? resize). Open risk: if dragging the bottom/side edge makes the **top** edge drift, move `pinTop` from `ShelfPanel.setFrame` to a `windowWillResize`-style hook (QA manual step 3).
 3. Run the **architect docs sync**: ARCHITECTURE.md drifted from code (DragMonitor lives in `Panel/` not `Drag/`; max height is min(4.5 rows, 50% screen) not 70%; `ItemCache` is an injectable struct; `Preferences.position` no longer exists — positioning is drag-to-move + `panelOffsets`; DropReceiver subclasses NSHostingView; promo code in `Promos/`).
 4. Walk the user through the open questions below, then T-12 once they have a Developer ID.
 
@@ -19,13 +19,13 @@
 | M1 Shelf | T-02..T-05 | `m1-shelf` |
 | M2 Manage | T-06, T-07 | `m2-manage` |
 | M3 Auto-show | T-08, T-09, T-13 | `m3-autoshow` |
-| M4 Polish | T-10, T-11, T-14, T-15 done · **T-16 in progress at pause** | `m4-polish` (before T-16) |
+| M4 Polish | T-10, T-11, T-14, T-15, T-16 | `m4-polish`, `m4-ui-polish` |
 | M5 Ship | T-12 | BLOCKED on user |
 
-- 54+ unit tests, zero warnings, idle 0% CPU / ~19 MB.
+- 59 unit tests, zero warnings (debug + release), idle 0% CPU / ~19 MB.
 - User-driven changes so far: top-center auto-show (T-08), responsive scroll + movable shelf + O(1) dedupe + no item limit (T-13), ⌘-drag move (T-15), remote promo line (T-14), UI polish + resizable shelf (T-16).
 
-## T-16 (in progress at pause) — user report
+## T-16 (done at pause) — user report
 "Outline appears when clicking the shelf; a stray outline on screen; scroll bar looks bad; want drag-to-resize (bottom/right edges)." Scroll bar should sit inset *inside* the rounded shelf. User couldn't screenshot (scroll bar auto-hides; tip: System Settings → Appearance → Show scroll bars: Always). After T-16: ask the user to re-check the look in light + dark.
 
 ## Open questions for the user (defaults already applied)
