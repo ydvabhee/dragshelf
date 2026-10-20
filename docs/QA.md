@@ -109,7 +109,7 @@ Matrix rows for T-06: all targets x drag out; item removal = removed on success,
 
 ## T-08 Auto-show/hide on drag, top-center placement (manual)
 Auto: `AutoShowTests` (start rule: pasteboard written since mouse-down + >= 10 pt; top-center frame math; hide rule). Real drags are manual only. `swift build` + `swift test` green (27 tests). `scripts/build-app.sh` not run by QA (user's instance was running).
-Design notes: baseline `changeCount` taken at every mouse-down; poll timer (0.1 s) exists only during an active drag; hide = 300 ms grace + 0.2 s fade (AC-3 "500 ms" is borderline).
+Design notes: baseline `changeCount` taken at every mouse-down; poll timer (0.1 s) exists only during an active drag; hide = 250 ms grace + 0.2 s fade (< AC-3 500 ms).
 Findings (see verdict): failed promise drop leaves empty panel open; notch + full-screen placement unverified; second drag ending within 300 ms of the first shortens grace.
 1. Fresh install: `tccutil reset All com.abhishekyadav.DragShelf`, launch. No Accessibility/Input Monitoring prompt ever (AC-7).
 2. Finder: drag 1 file >= 10 pt -> panel appears top center, <= 300 ms. Repeat: Safari/Chrome image, link, selected text (AC-1, AC-9).
@@ -123,7 +123,7 @@ Findings (see verdict): failed promise drop leaves empty panel open; notch + ful
 10. Notch Mac / menu bar autohide: panel not under notch in normal and full-screen app; with autohide menu bar, panel not covered. Report result.
 11. Quick re-drag: drag, release (no drop), start a new drag within 300 ms -> panel stays during second drag.
 12. CPU: Activity Monitor, idle 60 s, DragShelf ~0%. Move/click a lot without dragging -> still ~0%.
-13. Promise failure: drop a Mail attachment that is not downloaded (offline) -> expect panel hides; currently stays empty (known finding).
+13. Promise failure: drop a Mail attachment that is not downloaded (offline) onto the shelf -> no tile, panel hides (empty, auto-shown). With other items already on shelf -> stays.
 14. Other apps: drag from Mail attachment, Photos, Desktop; test lazy writers (Chrome/Electron): does panel show within 300 ms?
 15. AC-8: no UI until T-10; code check only (`stop()` removes monitor + timer).
 Matrix rows for T-08: all sources x "shelf appears on drag start".
