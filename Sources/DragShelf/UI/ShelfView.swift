@@ -6,10 +6,14 @@ struct ShelfView: View {
     /// Whole-panel height cap; the grid scrolls beyond it.
     var maxHeight: CGFloat = 600
     var onClose: () -> Void = {}
+    var onQuickLook: (UUID) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
+    @State private var hovered: UUID?
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: 3)
+    static let columnCount = 3
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: columnCount)
     /// ponytail: fixed header allowance; measure it if the header grows.
     private let headerHeight: CGFloat = 52
 
@@ -85,12 +89,37 @@ struct ShelfView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Finder/Dock-style remove badge on the thumbnail's top-leading corner.
+    private func removeBadge(_ id: UUID) -> some View {
+        Button { store.remove(ids: [id]) } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 17))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .black.opacity(0.6))
+                .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
+        }
+        .buttonStyle(.plain)
+        .help("Remove")
+        .accessibilityLabel("Remove")
+        .offset(x: -32)
+        .transition(.opacity)
+    }
+
     private var grid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(store.items) { item in
-                    ShelfItemView(item: item, isSelected: store.selection.contains(item.id))
-                        .overlay { DragOutHandle(store: store, id: item.id) }
+                    ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
+                                  isMissing: store.missing(id: item.id),
+                                  onRemove: { store.remove(ids: [item.id]) },
+                                  onQuickLook: { onQuickLook(item.id) })
+                        .overlay {
+                            DragOutHandle(store: store, id: item.id, onHover: { inside in
+                                if inside { hovered = item.id } else if hovered == item.id { hovered = nil }
+                            }, onQuickLook: onQuickLook)
+                        }
+                        // Above the handle so it gets the click.
+                        .overlay(alignment: .top) { if hovered == item.id { removeBadge(item.id) } }
                         .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                 }
             }

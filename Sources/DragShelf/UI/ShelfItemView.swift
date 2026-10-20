@@ -1,20 +1,33 @@
 import AppKit
 import SwiftUI
 
-/// One shelf tile: 64 pt thumbnail + 2-line caption.
+/// One shelf tile: 64 pt thumbnail + 2-line caption. A missing file is dimmed with a "Missing" line.
 struct ShelfItemView: View {
     let item: ShelfItem
     var isSelected = false
+    var isMissing = false
+    var onRemove: () -> Void = {}
+    var onQuickLook: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 6) {
             thumbnail
                 .frame(width: 64, height: 64)
-            Text(name)
-                .font(.caption)
-                .lineLimit(2, reservesSpace: true)
-                .truncationMode(.middle)
-                .multilineTextAlignment(.center)
+                .opacity(isMissing ? 0.4 : 1)
+            VStack(spacing: 1) {
+                Text(name)
+                    .font(.caption)
+                    .lineLimit(isMissing ? 1 : 2, reservesSpace: !isMissing)
+                    .truncationMode(.middle)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(isMissing ? .secondary : .primary)
+                if isMissing {
+                    Label("Missing", systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(4)
@@ -22,8 +35,10 @@ struct ShelfItemView: View {
                     in: .rect(cornerRadius: 10, style: .continuous))
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(typeDescription), \(name)")
+        .accessibilityLabel(isMissing ? "\(typeDescription), \(name), missing" : "\(typeDescription), \(name)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: "Remove", onRemove)
+        .accessibilityAction(named: "Quick Look", onQuickLook)
     }
 
     @ViewBuilder private var thumbnail: some View {

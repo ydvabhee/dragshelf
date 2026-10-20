@@ -9,6 +9,10 @@ final class ShelfStore {
     @ObservationIgnored private var anchor: UUID?
     /// True while a drag hovers the panel (set by `DropReceiver`).
     var isDropTargeted = false
+    /// File items whose file was gone at the last `refreshMissing()` (panel show).
+    private(set) var missingIDs: Set<UUID> = []
+    /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
+    @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
 
     init(cache: ItemCache = ItemCache()) {
@@ -16,12 +20,17 @@ final class ShelfStore {
     }
 
     /// Appends in drop order. Same file path, URL, or exact text keeps one item; returns false on duplicate.
+    /// Same `contentHash` replaces the old item (its cache dir deleted) and appends the new one.
     /// Caller owns any cache dir of a rejected duplicate.
     @discardableResult
     func add(_ item: ShelfItem) -> Bool {
         let key = Self.dedupeKey(item.kind)
         guard !items.contains(where: { Self.dedupeKey($0.kind) == key }) else { return false }
-        items.append(item)
+        let stale = item.contentHash == nil ? [] : items.filter { $0.contentHash == item.contentHash }
+        stale.forEach(removeCacheDir(of:))
+        selection.subtract(stale.map(\.id))
+        // One assignment: the shelf never looks empty mid-replace (empty → panel hides).
+        items = items.filter { !stale.contains($0) } + [item]
         return true
     }
 
@@ -45,15 +54,52 @@ final class ShelfStore {
         anchor = id
     }
 
-    /// Dragging a selected tile drags the whole selection; an unselected tile drags alone.
-    func dragItems(for id: UUID) -> [ShelfItem] {
-        selection.contains(id) ? selectedItems : items.filter { $0.id == id }
+    /// Arrow keys: selects the tile `delta` away (±1 left/right, ±columns up/down); none selected → first.
+    /// Down onto a shorter last row lands on the last item; any other move off the grid is ignored.
+    func moveSelection(by delta: Int) {
+        guard !items.isEmpty else { return }
+        let current = selection.isEmpty ? nil
+            : items.firstIndex { $0.id == anchor && selection.contains($0.id) } ?? items.lastIndex { selection.contains($0.id) }
+        guard let current else { return select(items[0].id, command: false, shift: false) }
+        var next = current + delta
+        if delta > 1, next >= items.count, current / delta < (items.count - 1) / delta { next = items.count - 1 }
+        guard items.indices.contains(next) else { return }
+        select(items[next].id, command: false, shift: false)
+    }
+
+    /// Ids a tile action (Remove, Quick Look) applies to: the selection if the tile is in it, else the tile.
+    func targetIDs(for id: UUID) -> Set<UUID> {
+        selection.contains(id) ? selection : [id]
+    }
+
+    /// Dragging a selected tile drags the whole selection; an unselected tile drags alone; `nil` = all.
+    /// Missing files never drag.
+    func dragItems(for id: UUID?) -> [ShelfItem] {
+        let ids = id.map(targetIDs(for:))
+        return items.filter { (ids?.contains($0.id) ?? true) && !missing(id: $0.id) }
+    }
+
+    /// Selected, present files: what Quick Look shows.
+    var previewURLs: [URL] {
+        selectedItems.compactMap { if case .file(let url) = $0.kind, !missing(id: $0.id) { url } else { nil } }
+    }
+
+    func missing(id: UUID) -> Bool { missingIDs.contains(id) }
+
+    /// Marks file items whose file no longer exists. Runs each time the panel shows.
+    func refreshMissing() {
+        let gone = Set(items.filter {
+            if case .file(let url) = $0.kind { !FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) } else { false }
+        }.map(\.id))
+        if gone != missingIDs { missingIDs = gone }
     }
 
     func clear() {
+        generation += 1
         cache.wipe()
         items.removeAll()
         selection.removeAll()
+        missingIDs.removeAll()
     }
 
     /// File paths compare after resolving `..`, trailing slash, and symlinks (/tmp vs /private/tmp).

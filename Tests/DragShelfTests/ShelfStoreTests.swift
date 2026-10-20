@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import DragShelf
@@ -7,10 +8,10 @@ private func tempCache() -> ItemCache {
         .appendingPathComponent("DragShelfTests-\(UUID().uuidString)", isDirectory: true))
 }
 
-private func cachedItem(_ cache: ItemCache) throws -> ShelfItem {
+private func cachedItem(_ cache: ItemCache, hash: SHA256.Digest? = nil) throws -> ShelfItem {
     let file = try cache.newItemDir().appendingPathComponent("a.txt")
     try Data("x".utf8).write(to: file)
-    return ShelfItem(kind: .file(file), isCached: true)
+    return ShelfItem(kind: .file(file), isCached: true, contentHash: hash)
 }
 
 @Test func addKeepsOrderAndDedupes() {
@@ -69,4 +70,73 @@ private func cachedItem(_ cache: ItemCache) throws -> ShelfItem {
     store.add(item)
     store.remove(ids: [item.id])
     #expect(!FileManager.default.fileExists(atPath: dir.path))
+}
+
+@Test func sameImageHashReplacesOldItemAndCacheDir() throws {
+    let cache = tempCache()
+    defer { cache.wipe(); cache.remove(dir: cache.root) }
+    let store = ShelfStore(cache: cache)
+    let hash = SHA256.hash(data: Data("png".utf8))
+    let first = try cachedItem(cache, hash: hash)
+    let other = ShelfItem(kind: .text("t"))
+    store.add(first); store.add(other)
+    store.selection = [first.id]
+    let second = try cachedItem(cache, hash: hash)
+    #expect(store.add(second))
+    #expect(store.items == [other, second])
+    #expect(store.selection.isEmpty)
+    guard case .file(let old) = first.kind, case .file(let new) = second.kind else { return }
+    #expect(!FileManager.default.fileExists(atPath: old.deletingLastPathComponent().path))
+    #expect(FileManager.default.fileExists(atPath: new.path))
+    // Different content is a separate item.
+    #expect(store.add(try cachedItem(cache, hash: SHA256.hash(data: Data("other".utf8)))))
+    #expect(store.items.count == 3)
+}
+
+@Test func missingFilesDetectedAndNeverDraggedOrPreviewed() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfMissing-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let present = dir.appendingPathComponent("a.txt"), gone = dir.appendingPathComponent("b.txt")
+    try Data("a".utf8).write(to: present)
+    try Data("b".utf8).write(to: gone)
+    let store = ShelfStore(cache: tempCache())
+    let a = ShelfItem(kind: .file(present)), b = ShelfItem(kind: .file(gone)), t = ShelfItem(kind: .text("t"))
+    [a, b, t].forEach { store.add($0) }
+    store.refreshMissing()
+    #expect(store.missingIDs.isEmpty)
+    try FileManager.default.removeItem(at: gone)
+    store.refreshMissing()
+    #expect(store.missingIDs == [b.id])
+    #expect(store.dragItems(for: nil).map(\.id) == [a.id, t.id])
+    store.selection = [a.id, b.id, t.id]
+    #expect(store.dragItems(for: b.id).map(\.id) == [a.id, t.id])
+    #expect(store.previewURLs == [present])
+    store.selection = [b.id]
+    #expect(store.dragItems(for: b.id).isEmpty && store.previewURLs.isEmpty)
+    // Restored file is no longer missing at the next show.
+    try Data("b".utf8).write(to: gone)
+    store.refreshMissing()
+    #expect(!store.missing(id: b.id))
+}
+
+@Test func arrowKeysMoveSelectionInGrid() {
+    let store = ShelfStore(cache: tempCache())
+    let ids = (0..<5).map { i in let item = ShelfItem(kind: .text("\(i)")); store.add(item); return item.id }
+    store.moveSelection(by: 1)
+    #expect(store.selection == [ids[0]])  // none selected → first
+    store.moveSelection(by: -1)
+    #expect(store.selection == [ids[0]])  // off the grid → ignored
+    store.moveSelection(by: 1)
+    store.moveSelection(by: 1)
+    #expect(store.selection == [ids[2]])
+    store.moveSelection(by: 3)
+    #expect(store.selection == [ids[4]])  // down onto shorter last row → last item
+    store.moveSelection(by: 3)
+    #expect(store.selection == [ids[4]])
+    store.moveSelection(by: -3)
+    #expect(store.selection == [ids[1]])
+    store.selection = [ids[0], ids[3]]
+    store.moveSelection(by: 1)
+    #expect(store.selection == [ids[4]])  // from the last selected when the anchor is not selected
 }

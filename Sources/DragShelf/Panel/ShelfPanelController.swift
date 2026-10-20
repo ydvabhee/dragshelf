@@ -28,6 +28,7 @@ final class ShelfPanelController {
         receiver.onDrop = { [weak self] in self?.droppedOnShelf = true }
         receiver.onPromiseFailed = { [weak self] in self?.promiseFailed() }
         panel.contentView = receiver
+        panel.store = store
         panel.onCancel = { [weak self] in self?.hide() }
     }
 
@@ -79,6 +80,7 @@ final class ShelfPanelController {
               let screen = NSScreen.screens.first(where: { NSMouseInRect(point, $0.frame, false) }) ?? NSScreen.main
         else { return }
         self.reason = reason
+        store.refreshMissing()
         let visible = screen.visibleFrame
         maxHeight = visible.height * 0.7
         let frame = Self.topCenterFrame(size: panel.contentView?.fittingSize ?? .zero, in: visible,
@@ -100,9 +102,16 @@ final class ShelfPanelController {
         })
     }
 
+    /// Quick Look on one tile (context menu, VoiceOver): acts on the selection if the tile is in it.
+    func quickLook(_ id: UUID) {
+        store.selection = store.targetIDs(for: id)
+        panel.openPreview()
+    }
+
     func hide() {
         guard isShown else { return }
         reason = nil
+        panel.closePreview()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = false }
         NSAnimationContext.runAnimationGroup({ context in
@@ -124,7 +133,8 @@ private struct PanelRoot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ShelfView(store: controller.store, maxHeight: controller.maxHeight, onClose: controller.hide)
+        ShelfView(store: controller.store, maxHeight: controller.maxHeight, onClose: controller.hide,
+                  onQuickLook: controller.quickLook)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }

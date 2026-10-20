@@ -81,15 +81,20 @@ final class DragOutSource: NSObject, NSDraggingSource {
 
 /// Transparent AppKit layer over a tile (`id`) or the drag-all button (`id == nil`).
 /// AppKit mouse handling, not a SwiftUI gesture, so the first click in the inactive panel starts a drag.
+/// Being the hit view, it also owns the tile's hover tracking and context menu (T-07 AC-8).
 struct DragOutHandle: NSViewRepresentable {
     let store: ShelfStore
     var id: UUID?
+    var onHover: (Bool) -> Void = { _ in }
+    var onQuickLook: (UUID) -> Void = { _ in }
 
     func makeNSView(context: Context) -> DragOutHandleView { DragOutHandleView() }
 
     func updateNSView(_ view: DragOutHandleView, context: Context) {
         view.store = store
         view.id = id
+        view.onHover = onHover
+        view.onQuickLook = onQuickLook
         view.toolTip = id == nil ? "Drag all items" : nil
     }
 }
@@ -97,13 +102,43 @@ struct DragOutHandle: NSViewRepresentable {
 final class DragOutHandleView: NSView {
     var store: ShelfStore?
     var id: UUID?
+    var onHover: (Bool) -> Void = { _ in }
+    var onQuickLook: (UUID) -> Void = { _ in }
     private var mouseDown: NSEvent?
     /// Plain click on an already-selected tile keeps the selection for a multi-drag; collapses on mouse up.
     private var collapseOnUp = false
 
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        // `.activeAlways`: the app is never active.
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self))
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     /// Panel turns key (not active) so Cmd-C reaches it.
     override var needsPanelToBecomeKey: Bool { true }
+
+    override func mouseEntered(with event: NSEvent) { onHover(true) }
+    override func mouseExited(with event: NSEvent) { onHover(false) }
+
+    /// Finder-style: right-click on an unselected tile selects it; actions apply to the selection.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let store, let id else { return nil }
+        if !store.selection.contains(id) { store.select(id, command: false, shift: false) }
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Quick Look", action: #selector(previewSelection), keyEquivalent: "").isEnabled = !store.previewURLs.isEmpty
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Remove", action: #selector(removeSelection), keyEquivalent: "")
+        menu.items.forEach { $0.target = self }
+        menu.autoenablesItems = false
+        return menu
+    }
+
+    @objc private func previewSelection() { id.map(onQuickLook) }
+    @objc private func removeSelection() { store.map { $0.remove(ids: $0.selection) } }
 
     override func mouseDown(with event: NSEvent) {
         mouseDown = event
@@ -119,7 +154,7 @@ final class DragOutHandleView: NSView {
         guard hypot(b.x - a.x, b.y - a.y) >= 3 else { return }
         mouseDown = nil
         collapseOnUp = false
-        DragOutSource.begin(items: id.map(store.dragItems(for:)) ?? store.items, event: start, view: self, store: store)
+        DragOutSource.begin(items: store.dragItems(for: id), event: start, view: self, store: store)
     }
 
     override func mouseUp(with event: NSEvent) {

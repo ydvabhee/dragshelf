@@ -6,7 +6,7 @@ import Testing
 nonisolated private let snapshotDir = ProcessInfo.processInfo.environment["DRAGSHELF_SNAPSHOT_DIR"]
 
 /// Review aid, not an assertion: `DRAGSHELF_SNAPSHOT_DIR=/path swift test --filter shelfSnapshots`
-/// writes ShelfView PNGs (empty / 3 items × light / dark, 2x). Glass does not render offscreen.
+/// writes ShelfView PNGs (empty / 4 items incl. a missing file × light / dark, 2x). Glass does not render offscreen.
 /// Uses NSHostingView.cacheDisplay: ImageRenderer drops everything inside `glassEffect` and ScrollView.
 @Test(.enabled(if: snapshotDir != nil))
 func shelfSnapshots() throws {
@@ -22,6 +22,8 @@ func shelfSnapshots() throws {
     items.add(ShelfItem(kind: .file(pdf)))
     items.add(ShelfItem(kind: .url(URL(string: "https://developer.apple.com/design/human-interface-guidelines")!)))
     items.add(ShelfItem(kind: .text("Meeting notes for Thursday\nSecond line")))
+    items.add(ShelfItem(kind: .file(tmp.appendingPathComponent("Deleted Since.key"))))
+    items.refreshMissing()
     let empty = ShelfStore(cache: ItemCache(root: tmp.appendingPathComponent("cache")))
 
     for (name, store) in [("empty", empty), ("items", items)] {

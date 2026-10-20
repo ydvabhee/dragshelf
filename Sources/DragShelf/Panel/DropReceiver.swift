@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import UniformTypeIdentifiers
 import SwiftUI
 import os
@@ -24,6 +25,8 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     /// The app is never active, so the first click on the panel must reach SwiftUI controls.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    /// Any click turns the panel key (never activates the app) so Esc/Space/Delete/arrows reach it.
+    override var needsPanelToBecomeKey: Bool { true }
 
     /// Cmd-C copies the selection (panel is key after a tile click). `copy(_:)` covers a menu-routed Cmd-C.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -87,7 +90,8 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
                 added = true
             case .image(let data, let type):
                 guard let (file, dir) = writeImage(data, type: type, cache: store.cache) else { continue }
-                if store.add(ShelfItem(kind: .file(file), isCached: true)) { added = true } else { store.cache.remove(dir: dir) }
+                let item = ShelfItem(kind: .file(file), isCached: true, contentHash: SHA256.hash(data: data))
+                if store.add(item) { added = true } else { store.cache.remove(dir: dir) }
             }
         }
         return added
@@ -95,20 +99,21 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     /// Receives a file promise into `root/<UUID>/` on a background queue, then adds the item on main.
     private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore, onFail: @escaping () -> Void) {
-        let cache = store.cache
+        let cache = store.cache, generation = store.generation
         guard let dir = try? cache.newItemDir() else { log.error("promise: cannot create cache dir"); onFail(); return }
         receiver.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: promiseQueue) { url, error in
             Task { @MainActor in
-                if !finishPromise(url: error == nil ? url : nil, error: error, dir: dir, store: store) { onFail() }
+                if !finishPromise(url: error == nil ? url : nil, error: error, dir: dir, store: store,
+                                  generation: generation) { onFail() }
             }
         }
     }
 
-    /// Adds the received file as a cached item; on failure or duplicate removes the (now empty) dir.
-    /// Returns false when no item landed.
+    /// Adds the received file as a cached item; on failure, duplicate, or a Clear since the drop
+    /// (`generation` changed) removes the dir and anything written into it. Returns false when no item landed.
     @discardableResult
-    static func finishPromise(url: URL?, error: (any Error)? = nil, dir: URL, store: ShelfStore) -> Bool {
-        if let url, store.add(ShelfItem(kind: .file(url), isCached: true)) { return true }
+    static func finishPromise(url: URL?, error: (any Error)? = nil, dir: URL, store: ShelfStore, generation: Int) -> Bool {
+        if let url, generation == store.generation, store.add(ShelfItem(kind: .file(url), isCached: true)) { return true }
         if let error { log.error("promise failed: \(error.localizedDescription, privacy: .public)") }
         store.cache.remove(dir: dir)
         return false

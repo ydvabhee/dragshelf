@@ -49,7 +49,7 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     let dir = try cache.newItemDir()
     let file = dir.appendingPathComponent("a.pdf")
     try Data("x".utf8).write(to: file)
-    #expect(DropReceiver<EmptyView>.finishPromise(url: file, dir: dir, store: store))
+    #expect(DropReceiver<EmptyView>.finishPromise(url: file, dir: dir, store: store, generation: store.generation))
     #expect(store.items.count == 1)
     #expect(store.items[0].kind == .file(file))
     #expect(store.items[0].isCached)
@@ -60,7 +60,7 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
     let store = ShelfStore(cache: cache)
     let dir = try cache.newItemDir()
-    #expect(!DropReceiver<EmptyView>.finishPromise(url: nil, error: CocoaError(.fileReadUnknown), dir: dir, store: store))
+    #expect(!DropReceiver<EmptyView>.finishPromise(url: nil, error: CocoaError(.fileReadUnknown), dir: dir, store: store, generation: 0))
     #expect(store.items.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: dir.path))
     cache.wipe()
@@ -92,4 +92,20 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(!store.isDropTargeted)
     #expect(!receiver.performDragOperation(info))
     #expect(store.items.isEmpty)
+}
+
+@Test func promiseFinishingAfterClearAddsNothingAndLeavesNoFile() throws {
+    let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
+    defer { cache.remove(dir: cache.root) }
+    let store = ShelfStore(cache: cache)
+    let generation = store.generation
+    let dir = try cache.newItemDir()
+    store.clear()
+    // The promise writes its file after Clear (recreating the wiped dir), then completes.
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent("late.pdf")
+    try Data("x".utf8).write(to: file)
+    #expect(!DropReceiver<EmptyView>.finishPromise(url: file, dir: dir, store: store, generation: generation))
+    #expect(store.items.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: dir.path))
 }
