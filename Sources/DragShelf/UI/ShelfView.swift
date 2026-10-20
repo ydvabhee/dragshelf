@@ -3,6 +3,8 @@ import SwiftUI
 /// Shelf content: header, item grid, empty state.
 struct ShelfView: View {
     let store: ShelfStore
+    /// Panel width (user-resizable, T-16); columns follow it.
+    var width: CGFloat = ShelfView.defaultWidth
     /// Whole-panel height cap; the grid scrolls beyond it.
     var maxHeight: CGFloat = 600
     var onClose: () -> Void = {}
@@ -17,14 +19,23 @@ struct ShelfView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
     @State private var hovered: UUID?
+    /// Promo row height, measured: the grid cap leaves room for it so the panel never exceeds `maxHeight`.
+    @State private var footerHeight: CGFloat = 0
 
-    static let columnCount = 3
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: columnCount)
+    static let defaultWidth: CGFloat = 288
+    private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
     /// ponytail: fixed header and tile heights; `tileHeightMatchesLayout` test catches drift.
     private static let headerHeight: CGFloat = 52
     static let tileHeight: CGFloat = 103
     /// Panel height for 4.5 tile rows: the half row hints there is more (T-13 AC-2).
     static let maxContentHeight = headerHeight + 4 * (tileHeight + 12) + tileHeight / 2
+    /// User-resize floor: header + one tile column and row (T-16 AC-5).
+    static let minSize = NSSize(width: 176, height: headerHeight + tileHeight + 14)
+
+    /// Adaptive columns: as many `minTileWidth` tiles as fit (T-16 AC-5). Arrow keys use it too.
+    static func columnCount(width: CGFloat) -> Int {
+        max(1, Int((width - 2 * gridPadding + columnSpacing) / (minTileWidth + columnSpacing)))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,6 +50,7 @@ struct ShelfView: View {
             if let promo {
                 let dragging = store.isDragging || store.isDropTargeted
                 PromoFooter(promo: promo, onDismiss: { onDismissPromo(promo.id) })
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0 }
                     .opacity(dragging ? 0 : 1)
                     .allowsHitTesting(!dragging)
                     .accessibilityHidden(dragging)
@@ -46,9 +58,11 @@ struct ShelfView: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: 288)
+        .frame(width: width)
         .frame(minHeight: 160, alignment: .top)
         .shelfBackground(isTargeted: store.isDropTargeted)
+        // Clicks make the panel key; never draw the system focus ring (T-16 AC-1). Selection is the tile's own style.
+        .focusEffectDisabled()
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.15),
                    value: store.items)
     }
@@ -134,7 +148,8 @@ struct ShelfView: View {
     private var grid: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.columnSpacing, alignment: .top),
+                                         count: Self.columnCount(width: width)), spacing: 12) {
                     ForEach(store.items) { item in
                         ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
                                       isMissing: store.missing(id: item.id),
@@ -150,13 +165,18 @@ struct ShelfView: View {
                             .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Self.gridPadding)
                 .padding(.bottom, 14)
+                .background { OverlayScroller() }
             }
+            // Scroll bar inside the rounded shelf: off the right edge, clear of the bottom corners (T-16 AC-3).
+            .contentMargins(.top, 4, for: .scrollIndicators)
+            .contentMargins(.bottom, shelfCornerRadius, for: .scrollIndicators)
+            .contentMargins(.trailing, 4, for: .scrollIndicators)
             // Click on empty space deselects.
             .background { Color.clear.contentShape(.rect).onTapGesture { store.selection = [] } }
             // Hug content until the cap, then scroll.
-            .frame(maxHeight: maxHeight - Self.headerHeight)
+            .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (promo == nil ? 0 : footerHeight)))
             .fixedSize(horizontal: false, vertical: true)
             .flashScrollIndicators(trigger: store.items.count)
             // Reveal what was just added (appended at the end) (T-13 AC-3).
@@ -166,6 +186,27 @@ struct ShelfView: View {
             }
         }
     }
+}
+
+/// Forces the thin, auto-hiding overlay scroller (T-16 AC-3) even when the system prefers legacy scrollers
+/// (mouse attached, "Always show"). AppKit resets the style when that preference changes, so re-apply after it.
+private struct OverlayScroller: NSViewRepresentable {
+    func makeNSView(context: Context) -> OverlayScrollerView { OverlayScrollerView() }
+    func updateNSView(_ view: OverlayScrollerView, context: Context) {}
+}
+
+final class OverlayScrollerView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.removeObserver(self)
+        guard window != nil else { return }
+        NotificationCenter.default.addObserver(self, selector: #selector(preferenceChanged),
+                                               name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil)
+        apply()
+    }
+
+    @objc private func preferenceChanged() { DispatchQueue.main.async { [weak self] in self?.apply() } }
+    private func apply() { enclosingScrollView?.scrollerStyle = .overlay }
 }
 
 /// Moves the window by dragging; AppKit so the first click in the inactive, non-activating panel works.

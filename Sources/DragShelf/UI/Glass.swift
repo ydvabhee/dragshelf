@@ -3,6 +3,9 @@ import SwiftUI
 
 // The only file that checks OS availability for styling and view behavior (ARCHITECTURE §6).
 
+/// Shelf corner radius: glass on macOS 26, material on 14–15. The panel's content view clips to it too (T-16 AC-2).
+let shelfCornerRadius: CGFloat = if #available(macOS 26, *) { 22 } else { 16 }
+
 extension View {
     /// Panel background: Liquid Glass on macOS 26, vibrant material on 14–15, solid with Reduce Transparency.
     func shelfBackground(isTargeted: Bool) -> some View {
@@ -45,15 +48,15 @@ private struct ShelfBackground: ViewModifier {
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
-        let glass: Bool = if #available(macOS 26, *) { true } else { false }
-        let shape = RoundedRectangle(cornerRadius: glass ? 22 : 16, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: shelfCornerRadius, style: .continuous)
         let tint = Color.accentColor.opacity(0.25)
         styled(content, shape: shape, tint: tint)
             .overlay {
                 if isTargeted {
                     shape.strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 2)
                 } else if contrast == .increased {
-                    shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                    // Inset 1 pt: sits inside the glass rim, same rounded corners (T-16 AC-2).
+                    shape.inset(by: 1).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                 }
             }
     }

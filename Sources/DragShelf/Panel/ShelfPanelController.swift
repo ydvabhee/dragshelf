@@ -9,7 +9,8 @@ final class ShelfPanelController {
     enum ShowReason { case manual, hotkey, autoDrag }
 
     private(set) var isShown = false
-    /// Panel height cap: min(4.5 tile rows, 50% of the screen's visible height) (T-13 AC-2).
+    /// Panel width and height cap: the user's resized size on this screen, else defaults (T-13 AC-2, T-16 AC-6).
+    fileprivate var width: CGFloat = ShelfView.defaultWidth
     fileprivate var maxHeight: CGFloat = 600
 
     @ObservationIgnored let store: ShelfStore
@@ -25,6 +26,8 @@ final class ShelfPanelController {
     private static let slide: CGFloat = 10
     /// UserDefaults key: [screen id: [dx, dy]], panel top-center offset from the visibleFrame's top center (T-13 AC-5).
     static let offsetsKey = "panelOffsets"
+    /// UserDefaults key: [screen id: [width, height]], the user's resized panel size (T-16 AC-7).
+    static let sizesKey = "panelSizes"
 
     init(store: ShelfStore, promos: PromoLoader) {
         self.store = store
@@ -36,6 +39,8 @@ final class ShelfPanelController {
         panel.contentView = receiver
         panel.store = store
         panel.onCancel = { [weak self] in self?.hide() }
+        panel.onUserResize = { [weak self] ended in ended ? self?.userResized() : self?.liveResized() }
+        panel.minSize = ShelfView.minSize
     }
 
     /// Top center of `visible`, top edge fixed so content growth extends downward (AC-9).
@@ -55,9 +60,36 @@ final class ShelfPanelController {
         CGPoint(x: frame.midX - visible.midX, y: visible.maxY - frame.maxY)
     }
 
-    /// New height with the top edge fixed; near the screen bottom it shifts up to stay inside `visible`.
-    static func fit(_ frame: NSRect, height: CGFloat, in visible: NSRect) -> NSRect {
-        clamp(NSRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height), to: visible)
+    /// New size with the top center fixed; near the screen bottom it shifts up to stay inside `visible`.
+    static func fit(_ frame: NSRect, size: NSSize, in visible: NSRect) -> NSRect {
+        clamp(NSRect(x: (frame.midX - size.width / 2).rounded(), y: frame.maxY - size.height,
+                     width: size.width, height: size.height), to: visible)
+    }
+
+    /// Width and height cap on `visible`: the user's size there (its height is the max, content still fits below it,
+    /// T-16 AC-6), else the default width and min(4.5 rows, 50% of the visible height) (T-13 AC-2).
+    /// Clamped to `ShelfView.minSize` … `visible` (T-16 AC-5).
+    static func limits(saved: NSSize?, in visible: NSRect) -> (width: CGFloat, maxHeight: CGFloat) {
+        let w = saved?.width ?? ShelfView.defaultWidth
+        let h = saved?.height ?? min(ShelfView.maxContentHeight, (visible.height * 0.5).rounded())
+        return (max(ShelfView.minSize.width, min(w, visible.width)), max(ShelfView.minSize.height, min(h, visible.height)))
+    }
+
+    /// Per-screen pair saved under `key` (offsets, sizes).
+    static func saved(_ key: String, screen: String, in defaults: UserDefaults = .standard) -> [Double]? {
+        guard let pair = (defaults.dictionary(forKey: key) as? [String: [Double]])?[screen], pair.count == 2 else { return nil }
+        return pair
+    }
+
+    static func save(_ pair: [Double], as key: String, screen: String, in defaults: UserDefaults = .standard) {
+        var all = defaults.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+        all[screen] = pair
+        defaults.set(all, forKey: key)
+    }
+
+    /// Reset: forget every saved spot and size (T-16 AC-7).
+    static func forgetPlacement(in defaults: UserDefaults = .standard) {
+        for key in [offsetsKey, sizesKey] { defaults.removeObject(forKey: key) }
     }
 
     static func clamp(_ f: NSRect, to v: NSRect) -> NSRect {
@@ -73,15 +105,10 @@ final class ShelfPanelController {
         return string as String
     }
 
-    private var savedOffsets: [String: [Double]] {
-        get { UserDefaults.standard.dictionary(forKey: Self.offsetsKey) as? [String: [Double]] ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: Self.offsetsKey) }
-    }
-
     /// Frame on `screen` for content `size`: saved spot if any, else top center (T-08 AC-9).
     private func frame(size: NSSize, on screen: NSScreen) -> NSRect {
         let visible = screen.visibleFrame
-        if let o = savedOffsets[Self.id(of: screen)], o.count == 2 {
+        if let o = Self.saved(Self.offsetsKey, screen: Self.id(of: screen)) {
             return Self.frame(size: size, offset: CGPoint(x: o[0], y: o[1]), in: visible)
         }
         return Self.topCenterFrame(size: size, in: visible, safeTop: screen.frame.maxY - screen.safeAreaInsets.top)
@@ -91,33 +118,55 @@ final class ShelfPanelController {
     func userMoved() {
         guard let screen = panel.screen else { return }
         let o = Self.offset(of: panel.frame, in: screen.visibleFrame)
-        savedOffsets[Self.id(of: screen)] = [o.x, o.y]
-        updateMaxHeight(for: screen)
+        Self.save([o.x, o.y], as: Self.offsetsKey, screen: Self.id(of: screen))
+        updateLimits(for: screen)
     }
 
-    /// Height cap for `screen` (T-11 AC-8: also after a move to another screen). Set only on change: every set
-    /// re-renders the view.
-    private func updateMaxHeight(for screen: NSScreen) {
-        let h = min(ShelfView.maxContentHeight, (screen.visibleFrame.height * 0.5).rounded())
-        if h != maxHeight { maxHeight = h }
+    /// Edge drag in progress: tiles reflow to the new width, the grid cap follows the height. Auto-fit is paused.
+    private func liveResized() {
+        let size = panel.frame.size
+        if size.width != width { width = size.width }
+        if size.height != maxHeight { maxHeight = size.height }
     }
 
-    /// Menu item / header double-click: forget all saved spots, back to top center.
+    /// Edge drag ended: the size becomes this screen's width and max height; content fits below it (T-16 AC-6/7).
+    private func userResized() {
+        guard let screen = panel.screen else { return }
+        Self.save([panel.frame.width, panel.frame.height], as: Self.sizesKey, screen: Self.id(of: screen))
+        userMoved() // A left-edge drag moved the top center too.
+        Task { @MainActor in
+            fitToContent()
+            panel.invalidateShadow()
+        }
+    }
+
+    /// Width and height cap for `screen` (T-11 AC-8: also after a move to another screen). Set only on change:
+    /// every set re-renders the view.
+    private func updateLimits(for screen: NSScreen) {
+        let saved = Self.saved(Self.sizesKey, screen: Self.id(of: screen)).map { NSSize(width: $0[0], height: $0[1]) }
+        let limits = Self.limits(saved: saved, in: screen.visibleFrame)
+        if limits.width != width { width = limits.width }
+        if limits.maxHeight != maxHeight { maxHeight = limits.maxHeight }
+        panel.maxSize = screen.visibleFrame.size
+    }
+
+    /// Menu item / Settings / header double-click: forget all saved spots and sizes, back to top center.
     func resetPosition() {
-        UserDefaults.standard.removeObject(forKey: Self.offsetsKey)
+        Self.forgetPlacement()
         guard isShown, let screen = panel.screen else { return }
-        panel.setFrame(frame(size: panel.frame.size, on: screen), display: true,
+        updateLimits(for: screen)
+        panel.setFrame(frame(size: NSSize(width: width, height: panel.frame.height), on: screen), display: true,
                        animate: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
-    /// Resizes the shown panel to its content, top edge fixed (T-13 AC-1). Called async after a geometry change:
-    /// `fittingSize` is 0 inside the callback.
+    /// Resizes the shown panel to its content, top center fixed (T-13 AC-1). Called async after a geometry change:
+    /// `fittingSize` is 0 inside the callback. Paused while the user drags an edge (T-16 AC-6).
     func fitToContent() {
-        guard isShown, let screen = panel.screen else { return }
-        updateMaxHeight(for: screen)
-        guard let height = panel.contentView?.fittingSize.height, height > 0,
-              abs(height - panel.frame.height) >= 0.5 else { return }
-        panel.setFrame(Self.fit(panel.frame, height: height, in: screen.visibleFrame), display: true)
+        guard isShown, !panel.inLiveResize, let screen = panel.screen else { return }
+        updateLimits(for: screen)
+        guard let size = panel.contentView?.fittingSize, size.height > 0,
+              abs(size.height - panel.frame.height) >= 0.5 || abs(size.width - panel.frame.width) >= 0.5 else { return }
+        panel.setFrame(Self.fit(panel.frame, size: size, in: screen.visibleFrame), display: true)
     }
 
     /// Visibility rule 2 (ARCHITECTURE §5): only an auto-shown, still-empty shelf that got no drop hides.
@@ -166,8 +215,9 @@ final class ShelfPanelController {
         store.refreshMissing()
         // Not during an auto-drag show: a first feed landing mid-drag would add the footer row and grow the panel.
         if reason != .autoDrag { Task { await promos.refreshIfStale() } }
-        updateMaxHeight(for: screen)
-        let frame = self.frame(size: panel.contentView?.fittingSize ?? .zero, on: screen)
+        updateLimits(for: screen)
+        // Width from the limits: `fittingSize` may still reflect the previous width; height is re-fit async.
+        let frame = self.frame(size: NSSize(width: width, height: panel.contentView?.fittingSize.height ?? 0), on: screen)
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // Slides down from just under the menu bar while fading in; Reduce Motion → fade only.
         panel.setFrame(reduceMotion ? frame : frame.offsetBy(dx: 0, dy: Self.slide), display: false)
@@ -175,7 +225,9 @@ final class ShelfPanelController {
         // Hotkey: key panel so arrows, Space, Cmd-C, Esc work without the mouse (T-11 AC-4).
         // Menu and auto-show stay non-key (T-14 AC-X). None activates the app.
         if reason == .hotkey { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
-        withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = true }
+        // Shadow again once the 0.96→1 scale settles: one taken mid-spring is smaller than the glass (T-16 AC-2).
+        withAnimation(.spring(duration: 0.35, bounce: 0.15), completionCriteria: .removed) { isShown = true }
+            completion: { [weak self] in self?.panel.invalidateShadow() }
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = reduceMotion ? 0.2 : 0.35
             // Critically damped spring-like ease-out (no overshoot on a window frame).
@@ -231,7 +283,8 @@ private struct PanelRoot: View {
 
     var body: some View {
         // Re-evaluated on every show (reads `isShown`), so the daily rotation advances.
-        ShelfView(store: controller.store, maxHeight: controller.maxHeight, onClose: controller.hide,
+        ShelfView(store: controller.store, width: controller.width, maxHeight: controller.maxHeight,
+                  onClose: controller.hide,
                   onQuickLook: controller.quickLook, onMoved: controller.userMoved,
                   onResetPosition: controller.resetPosition,
                   promo: showPromos ? controller.promos.footerPromo : nil,
@@ -243,8 +296,11 @@ private struct PanelRoot: View {
             // Quick Look follows any selection/items change, not only keys.
             .onChange(of: controller.store.previewURLs) { controller.previewSourceChanged() }
             // Async: `fittingSize` read synchronously here is 0 and would collapse the panel.
-            .onGeometryChange(for: CGFloat.self, of: \.size.height) { _ in
+            .onGeometryChange(for: CGSize.self, of: \.size) { _ in
                 Task { @MainActor in controller.fitToContent() }
             }
+            // Top-pinned in the window: while an edge drag makes the window taller than the content, or before an
+            // async fit lands, the header stays put (T-16 AC-4).
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

@@ -23,6 +23,20 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     required init(rootView: Content) {
         super.init(rootView: rootView)
         registerForDraggedTypes(PasteboardReader.types)
+        // The controller sizes the panel from `fittingSize`; content must not pin the window size, or edge
+        // resizing is blocked (T-16 AC-4). Low priorities: below the window's resize/stay-put priorities.
+        sizingOptions = [.intrinsicContentSize]
+        for axis in [NSLayoutConstraint.Orientation.horizontal, .vertical] {
+            setContentHuggingPriority(.defaultLow, for: axis)
+            setContentCompressionResistancePriority(.defaultLow, for: axis)
+        }
+        // No focus ring when the panel turns key; clip to the shelf's rounded shape so nothing square
+        // (window shadow included) shows past the corners (T-16 AC-1, AC-2).
+        focusRingType = .none
+        wantsLayer = true
+        layer?.cornerRadius = shelfCornerRadius
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }

@@ -8,11 +8,14 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     var store: ShelfStore?
     /// Esc with Quick Look closed.
     var onCancel: (() -> Void)?
+    /// User edge-drag resize: each step (`ended == false`) and the end (T-16 AC-4).
+    var onUserResize: ((_ ended: Bool) -> Void)?
 
     init() {
         super.init(
             contentRect: .zero,
-            styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
+            // `.resizable` on a borderless panel: edge and corner resize with system cursors, no frame drawn (T-16 AC-4).
+            styleMask: [.nonactivatingPanel, .borderless, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: true
         )
@@ -25,7 +28,25 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
         becomesKeyOnlyIfNeeded = true
         isReleasedWhenClosed = false
         animationBehavior = .none
+        NotificationCenter.default.addObserver(self, selector: #selector(liveResizeEnded),
+                                               name: NSWindow.didEndLiveResizeNotification, object: self)
     }
+
+    /// Top edge is the header move area, so a live resize never moves it (T-16 AC-4). The shadow is recomputed
+    /// on every frame change: a stale one shows as a stray outline at the old size (T-16 AC-2).
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        super.setFrame(inLiveResize ? Self.pinTop(frameRect, current: frame) : frameRect, display: flag)
+        invalidateShadow()
+        if inLiveResize { onUserResize?(false) }
+    }
+
+    /// A resize that moved the top edge keeps the current vertical span; width changes still apply.
+    static func pinTop(_ proposed: NSRect, current: NSRect) -> NSRect {
+        abs(proposed.maxY - current.maxY) < 0.5 ? proposed
+            : NSRect(x: proposed.minX, y: current.minY, width: proposed.width, height: current.height)
+    }
+
+    @objc private func liveResizeEnded() { onUserResize?(true) }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -49,8 +70,8 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
         case kVK_Delete, kVK_ForwardDelete: store.remove(ids: store.selection)
         case kVK_LeftArrow: store.moveSelection(by: -1)
         case kVK_RightArrow: store.moveSelection(by: 1)
-        case kVK_UpArrow: store.moveSelection(by: -ShelfView.columnCount)
-        case kVK_DownArrow: store.moveSelection(by: ShelfView.columnCount)
+        case kVK_UpArrow: store.moveSelection(by: -ShelfView.columnCount(width: frame.width))
+        case kVK_DownArrow: store.moveSelection(by: ShelfView.columnCount(width: frame.width))
         default: return false
         }
         return true

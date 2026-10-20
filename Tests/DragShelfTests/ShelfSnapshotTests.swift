@@ -6,7 +6,8 @@ import Testing
 nonisolated private let snapshotDir = ProcessInfo.processInfo.environment["DRAGSHELF_SNAPSHOT_DIR"]
 
 /// Review aid, not an assertion: `DRAGSHELF_SNAPSHOT_DIR=/path swift test --filter shelfSnapshots`
-/// writes ShelfView PNGs (empty / 4 items incl. a missing file × light / dark, 2x). Glass does not render offscreen.
+/// writes ShelfView PNGs (empty / 4 items incl. a missing file / 12 items scrolling with a selected tile at the default
+/// and a resized width × light / dark, 2x). Glass does not render offscreen.
 /// Uses NSHostingView.cacheDisplay: ImageRenderer drops everything inside `glassEffect` and ScrollView.
 @Test(.enabled(if: snapshotDir != nil))
 func shelfSnapshots() throws {
@@ -25,10 +26,15 @@ func shelfSnapshots() throws {
     items.add(ShelfItem(kind: .file(tmp.appendingPathComponent("Deleted Since.key"))))
     items.refreshMissing()
     let empty = ShelfStore(cache: ItemCache(root: tmp.appendingPathComponent("cache")))
+    let many = ShelfStore(cache: ItemCache(root: tmp.appendingPathComponent("cache")))
+    for i in 1...12 { many.add(ShelfItem(kind: .text("Snippet \(i)"))) }
+    many.selection = [many.items[4].id]
 
-    for (name, store) in [("empty", empty), ("items", items)] {
+    let cases: [(String, ShelfStore, CGFloat)] = [("empty", empty, ShelfView.defaultWidth), ("items", items, ShelfView.defaultWidth),
+                                                  ("scroll", many, ShelfView.defaultWidth), ("scroll-wide", many, 400)]
+    for (name, store, width) in cases {
         for (scheme, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            let view = NSHostingView(rootView: ShelfView(store: store)
+            let view = NSHostingView(rootView: ShelfView(store: store, width: width, maxHeight: 420)
                 .padding(32)
                 .background(Color(nsColor: .underPageBackgroundColor)))
             view.appearance = NSAppearance(named: appearance)

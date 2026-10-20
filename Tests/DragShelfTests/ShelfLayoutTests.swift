@@ -8,13 +8,84 @@ private let visible = NSRect(x: 0, y: 0, width: 1512, height: 945)
 
 @Test func fitKeepsTopEdgeAndClampsAtScreenBottom() {
     let f = NSRect(x: 600, y: 600, width: 288, height: 160)
-    let grown = ShelfPanelController.fit(f, height: 400, in: visible)
+    let grown = ShelfPanelController.fit(f, size: NSSize(width: 288, height: 400), in: visible)
     #expect(grown.maxY == f.maxY && grown.height == 400 && grown.minX == f.minX)
-    #expect(ShelfPanelController.fit(grown, height: 160, in: visible) == f)
+    #expect(ShelfPanelController.fit(grown, size: f.size, in: visible) == f)
     // Near the bottom: grows past visible.minY → shifted up, never outside.
     let low = NSRect(x: 600, y: 20, width: 288, height: 160)
-    let g = ShelfPanelController.fit(low, height: 400, in: visible)
+    let g = ShelfPanelController.fit(low, size: NSSize(width: 288, height: 400), in: visible)
     #expect(g.minY == visible.minY && g.height == 400)
+    // Width change (reset, other screen) keeps the top center.
+    let wide = ShelfPanelController.fit(f, size: NSSize(width: 400, height: 160), in: visible)
+    #expect(wide.midX == f.midX && wide.maxY == f.maxY)
+}
+
+/// T-16 AC-5, AC-6: defaults when never resized; user size is the cap, clamped to min size … visibleFrame.
+@Test func sizeLimitsClampToMinAndVisible() {
+    let d = ShelfPanelController.limits(saved: nil, in: visible)
+    #expect(d.width == ShelfView.defaultWidth && d.maxHeight == min(ShelfView.maxContentHeight, (visible.height / 2).rounded()))
+    let user = ShelfPanelController.limits(saved: NSSize(width: 420, height: 700), in: visible)
+    #expect(user.width == 420 && user.maxHeight == 700)
+    let tiny = ShelfPanelController.limits(saved: NSSize(width: 10, height: 10), in: visible)
+    #expect(tiny.width == ShelfView.minSize.width && tiny.maxHeight == ShelfView.minSize.height)
+    let huge = ShelfPanelController.limits(saved: NSSize(width: 9000, height: 9000), in: visible)
+    #expect(huge.width == visible.width && huge.maxHeight == visible.height)
+}
+
+@Test func columnsFollowWidth() {
+    #expect(ShelfView.columnCount(width: ShelfView.minSize.width) == 1)
+    #expect(ShelfView.columnCount(width: ShelfView.defaultWidth) == 3)
+    #expect(ShelfView.columnCount(width: 368) == 4)
+    #expect(ShelfView.columnCount(width: 0) == 1)
+    #expect(ShelfView.columnCount(width: visible.width) > 4)
+}
+
+/// T-16 AC-4: an edge drag never moves the top edge (header move area); bottom/side drags pass through.
+@Test func liveResizeKeepsTopEdge() {
+    let f = NSRect(x: 100, y: 300, width: 288, height: 300)
+    let bottom = NSRect(x: 100, y: 200, width: 288, height: 400)
+    #expect(ShelfPanel.pinTop(bottom, current: f) == bottom)
+    let left = NSRect(x: 60, y: 300, width: 328, height: 300)
+    #expect(ShelfPanel.pinTop(left, current: f) == left)
+    let top = NSRect(x: 80, y: 300, width: 308, height: 350)
+    #expect(ShelfPanel.pinTop(top, current: f) == NSRect(x: 80, y: 300, width: 308, height: 300))
+}
+
+/// T-16 AC-7: size saved per screen next to the offset; reset forgets both.
+@Test func savedSizePerScreenAndReset() throws {
+    let suite = "DragShelfTests-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    typealias C = ShelfPanelController
+    C.save([400, 500], as: C.sizesKey, screen: "A", in: defaults)
+    C.save([10, 20], as: C.offsetsKey, screen: "A", in: defaults)
+    C.save([300, 350], as: C.sizesKey, screen: "B", in: defaults)
+    #expect(C.saved(C.sizesKey, screen: "A", in: defaults) == [400, 500])
+    #expect(C.saved(C.sizesKey, screen: "B", in: defaults) == [300, 350])
+    #expect(C.saved(C.sizesKey, screen: "C", in: defaults) == nil)
+    C.forgetPlacement(in: defaults)
+    #expect(C.saved(C.sizesKey, screen: "A", in: defaults) == nil)
+    #expect(C.saved(C.offsetsKey, screen: "A", in: defaults) == nil)
+}
+
+private func scrollViews(in view: NSView) -> [NSScrollView] {
+    ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap { scrollViews(in: $0) }
+}
+
+/// T-16 AC-3: overlay scroller, inset off the right edge and clear of the rounded bottom corner.
+@Test func scrollerIsOverlayAndInset() throws {
+    let store = ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory
+        .appendingPathComponent("DragShelfTests-\(UUID().uuidString)")))
+    for i in 0..<12 { store.add(ShelfItem(kind: .text("item \(i)"))) }
+    let view = NSHostingView(rootView: ShelfView(store: store, maxHeight: 400))
+    let window = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
+    window.contentView = view
+    view.setFrameSize(view.fittingSize)
+    view.layoutSubtreeIfNeeded()
+    let scroll = try #require(scrollViews(in: view).first)
+    #expect(scroll.scrollerStyle == .overlay)
+    #expect(scroll.scrollerInsets.right >= 4 && scroll.scrollerInsets.bottom >= shelfCornerRadius)
+    #expect(view.fittingSize.height <= 400)
 }
 
 @Test func savedOffsetRoundTripsPerScreenAndClampsOffScreen() {
