@@ -260,3 +260,20 @@ Manual (user runs; serve `backend/promos.json` or point a debug build at a test 
 8. Next day (or change the date): footer shows a different promo when 2+ are eligible.
 9. VoiceOver: line reads "<title>, <subtitle>. Opens in browser"; ✕ reads "Hide this suggestion".
 10. AC-X: hotkey show → arrows/Esc work in the shelf. Menu "Show Shelf" and drag auto-show → typing still goes to the frontmost app.
+
+## T-16 UI polish: focus ring, outline, scroll bar, resize (89275f0) - PASS
+Auto: build, 59 tests, release build green. Size math (clamps, columns, per-screen save, reset) covered by ShelfLayoutTests.
+Review notes (no blockers):
+- `ShelfPanel.setFrame` override (pinTop) only intercepts live resize if AppKit routes edge drags through it; verify step 3. Programmatic/animated frames bypass it, so header move, fitToContent and show/hide are unaffected.
+- `invalidateShadow()` per setFrame: cheap, only fires on manual frame sets and live-resize steps.
+- `masksToBounds` on the hosting layer clips only in-view content; Quick Look, drag image and window shadow are outside it. Verify step 6.
+- `OverlayScrollerView` uses a selector observer, removed on window change; no leak.
+
+Manual (user runs):
+1. Show shelf (hotkey). Click tiles, header, empty area, footer: no focus ring or outline anywhere. Arrow keys: only the tile's own selection style shows.
+2. Check shadow/edge in: shown, key, non-key, drop-target (drag a file over), Reduce Transparency, Increase Contrast. Shadow follows the rounded corners, no square border or stale outline. Increase Contrast line sits inside the edge.
+3. Hover bottom edge, left/right edges, bottom corners: resize cursors. Top edge: no resize, header still moves the panel. Drag each: top edge does not move, panel never takes focus from the frontmost app.
+4. Narrow/widen with 10+ items: columns reflow (min 1 column, max screen visible width). Cannot shrink below header + 1 row.
+5. Drag bottom edge to ~300 pt with 10+ items: grid scrolls above that height. Remove items: panel shrinks to fit below the max. Add a few: grows to the max again. Never resized: defaults as before (4.5 rows).
+6. Scroll bar: thin, auto-hides, away from right edge and rounded corners, only with overflow. Attach a mouse / set "Always show scroll bars": still overlay. Quick Look (Space) preview, dragging a tile out (drag image), and the glass shadow are not clipped.
+7. Resize, quit, relaunch, show: same size and position. Move to a second display: its own size. "Reset Shelf Position" (menu, Settings, header double-click) resets size and position on both. Regression pass: drag in, drag out, auto-hide, promo footer, Quick Look.
