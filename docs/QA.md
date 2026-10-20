@@ -191,3 +191,18 @@ Manual (user):
 6. "Reset Shelf Position" button moves a dragged shelf back to top center.
 7. Quit/relaunch: all three toggles keep their values.
 8. Move the shelf repeatedly while dragging a file in: no flicker, shelf stays.
+
+## T-15 Cmd-drag moves file items (1f6282a) - FAIL (1)
+Auto: build, 41 tests, release build green. AC-1..5, AC-7 code OK (initial apply at launch fires since applied* start nil; `.move` removal + empty cache dir cleanup OK).
+
+FAIL AC-6: Cmd mask is `.move` only (DragOutSource.swift:61-63). Copy-only receivers (Mail compose, browser upload, Slack) return `.copy` from draggingEntered; intersect with `.move` = [] -> drop rejected. Fix: Cmd+allFiles -> `[.move, .copy]`, else `.copy`. Then `ended(.move)` still removes; `.copy` result keeps normal rule.
+
+Manual (after fix):
+1. Finder file, plain drag to another folder (same volume): copied, shelf item removed (keep off).
+2. Same, hold Cmd: moved, original gone, badge updates live when toggling Cmd mid-drag.
+3. Cmd-drag to other volume: moved.
+4. Cmd-drag file into Mail compose / browser upload / Slack: drop accepted (copy fallback), item behaves per copy rule.
+5. Cmd-drag link or text: copies. Mixed selection + Cmd: whole drag copies.
+6. Cmd-drag a cached image (Safari) to Finder: moved, no empty dir in cache after.
+7. Esc mid-drag: items stay. Drop on shelf itself: no-op.
+8. Move shelf repeatedly: log shows no repeated hotkey register errors.
