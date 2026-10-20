@@ -42,6 +42,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
         }
         let source = DragOutSource(store: store, ids: Set(items.map(\.id)))
         current = source
+        store.isDragging = true
         let session = view.beginDraggingSession(with: dragItems, event: event, source: source)
         session.draggingFormation = items.count > 1 ? .stack : .none
     }
@@ -72,6 +73,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
     func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { false }
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        store.isDragging = false
         ended(operation: operation)
         Self.current = nil
     }

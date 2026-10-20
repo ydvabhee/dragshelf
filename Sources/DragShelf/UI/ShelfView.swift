@@ -10,6 +10,9 @@ struct ShelfView: View {
     /// Header drag moved the panel / header double-clicked (T-13 AC-4, AC-6).
     var onMoved: () -> Void = {}
     var onResetPosition: () -> Void = {}
+    /// Footer promo (nil when promos are off or none is eligible) and its ✕ (T-14).
+    var promo: Promo?
+    var onDismissPromo: (String) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
@@ -30,6 +33,17 @@ struct ShelfView: View {
                 emptyState
             } else {
                 grid
+            }
+            // Own row under the grid: never over tiles. Hidden during any drag; the row keeps its height so the
+            // panel does not resize under the pointer (a hover at the bottom edge would otherwise flicker).
+            if let promo {
+                let dragging = store.isDragging || store.isDropTargeted
+                PromoFooter(promo: promo, onDismiss: { onDismissPromo(promo.id) })
+                    .opacity(dragging ? 0 : 1)
+                    .allowsHitTesting(!dragging)
+                    .accessibilityHidden(dragging)
+                    .animation(.easeInOut(duration: 0.15), value: dragging)
+                    .transition(.opacity)
             }
         }
         .frame(width: 288)

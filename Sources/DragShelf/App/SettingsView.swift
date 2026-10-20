@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(Preferences.autoShow) private var autoShow = true
     @AppStorage(Preferences.hotKeyEnabled) private var hotKeyEnabled = true
     @AppStorage(Preferences.keepAfterDragOut) private var keepAfterDragOut = false
+    @AppStorage(Preferences.showPromos) private var showPromos = true
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
 
@@ -43,6 +44,14 @@ struct SettingsView: View {
                 Text("Shelf")
             } footer: {
                 Text("Off: items leave the shelf once dropped elsewhere. Drag the shelf header to move it.")
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Show other apps from the developer", isOn: $showPromos)
+            } header: {
+                Text("More Apps")
+            } footer: {
+                Text("A one-line suggestion under the shelf and a More Apps menu. The list is downloaded once a day; nothing about you is sent.")
                     .foregroundStyle(.secondary)
             }
         }

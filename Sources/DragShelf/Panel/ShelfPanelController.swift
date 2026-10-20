@@ -4,13 +4,16 @@ import SwiftUI
 /// Shows, hides, and positions the shelf panel. Never activates the app (ARCHITECTURE §5 rule 6).
 @Observable
 final class ShelfPanelController {
-    enum ShowReason { case manual, autoDrag }
+    /// `.hotkey` is the only reason that makes the panel key (T-14 AC-X): menu and auto-show leave keyboard
+    /// focus with the frontmost app.
+    enum ShowReason { case manual, hotkey, autoDrag }
 
     private(set) var isShown = false
     /// Panel height cap: min(4.5 tile rows, 50% of the screen's visible height) (T-13 AC-2).
     fileprivate var maxHeight: CGFloat = 600
 
     @ObservationIgnored let store: ShelfStore
+    @ObservationIgnored let promos: PromoLoader
     @ObservationIgnored private let panel = ShelfPanel()
     @ObservationIgnored private(set) var reason: ShowReason?
     @ObservationIgnored private var droppedOnShelf = false
@@ -23,8 +26,9 @@ final class ShelfPanelController {
     /// UserDefaults key: [screen id: [dx, dy]], panel top-center offset from the visibleFrame's top center (T-13 AC-5).
     static let offsetsKey = "panelOffsets"
 
-    init(store: ShelfStore) {
+    init(store: ShelfStore, promos: PromoLoader) {
         self.store = store
+        self.promos = promos
         let receiver = DropReceiver(rootView: PanelRoot(controller: self))
         receiver.store = store
         receiver.onDrop = { [weak self] in self?.droppedOnShelf = true }
@@ -121,13 +125,14 @@ final class ShelfPanelController {
         reason == .autoDrag && !droppedOnShelf && isEmpty && !dragActive
     }
 
-    func toggle() {
-        isShown ? hide() : show()
+    func toggle(reason: ShowReason = .manual) {
+        isShown ? hide() : show(reason: reason)
     }
 
     func dragStarted(at point: NSPoint) {
         hideTask?.cancel()
         dragActive = true
+        store.isDragging = true
         droppedOnShelf = false
         show(reason: .autoDrag, at: point)
     }
@@ -135,6 +140,7 @@ final class ShelfPanelController {
     /// 250 ms grace lets an in-flight drop land first (+0.2 s fade stays under AC-3's 500 ms).
     func dragEnded() {
         dragActive = false
+        store.isDragging = false
         hideTask?.cancel()
         hideTask = Task {
             guard (try? await Task.sleep(for: .milliseconds(250))) != nil else { return }
@@ -158,15 +164,16 @@ final class ShelfPanelController {
         else { return }
         self.reason = reason
         store.refreshMissing()
+        Task { await promos.refreshIfStale() }
         updateMaxHeight(for: screen)
         let frame = self.frame(size: panel.contentView?.fittingSize ?? .zero, on: screen)
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // Slides down from just under the menu bar while fading in; Reduce Motion → fade only.
         panel.setFrame(reduceMotion ? frame : frame.offsetBy(dx: 0, dy: Self.slide), display: false)
         panel.alphaValue = 0
-        // Hotkey/menu: key panel so arrows, Space, Cmd-C, Esc work without the mouse (T-11 AC-4).
-        // Auto-show during a drag stays non-key. Neither activates the app.
-        if reason == .manual { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
+        // Hotkey: key panel so arrows, Space, Cmd-C, Esc work without the mouse (T-11 AC-4).
+        // Menu and auto-show stay non-key (T-14 AC-X). None activates the app.
+        if reason == .hotkey { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = true }
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = reduceMotion ? 0.2 : 0.35
@@ -219,11 +226,15 @@ final class ShelfPanelController {
 private struct PanelRoot: View {
     let controller: ShelfPanelController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(Preferences.showPromos) private var showPromos = true
 
     var body: some View {
+        // Re-evaluated on every show (reads `isShown`), so the daily rotation advances.
         ShelfView(store: controller.store, maxHeight: controller.maxHeight, onClose: controller.hide,
                   onQuickLook: controller.quickLook, onMoved: controller.userMoved,
-                  onResetPosition: controller.resetPosition)
+                  onResetPosition: controller.resetPosition,
+                  promo: showPromos ? controller.promos.footerPromo : nil,
+                  onDismissPromo: controller.promos.dismiss)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }

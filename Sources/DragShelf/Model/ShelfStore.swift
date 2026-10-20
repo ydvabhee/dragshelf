@@ -10,6 +10,8 @@ final class ShelfStore {
     @ObservationIgnored private var anchor: UUID?
     /// True while a drag hovers the panel (set by `DropReceiver`).
     var isDropTargeted = false
+    /// True while a system drag (auto-show) or a drag out runs; hides the promo footer (T-14).
+    var isDragging = false
     /// File items whose file was gone at the last `refreshMissing()` (panel show).
     private(set) var missingIDs: Set<UUID> = []
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.

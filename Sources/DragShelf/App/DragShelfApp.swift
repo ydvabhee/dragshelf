@@ -4,6 +4,7 @@ import SwiftUI
 struct DragShelfApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.openSettings) private var openSettings
+    @AppStorage(Preferences.showPromos) private var showPromos = true
 
     var body: some Scene {
         MenuBarExtra("DragShelf", systemImage: "tray.and.arrow.down") {
@@ -12,6 +13,14 @@ struct DragShelfApp: App {
             }
             .keyboardShortcut("d", modifiers: [.control, .option, .command])
             Button("Reset Shelf Position") { appDelegate.panelController.resetPosition() }
+            let promos = showPromos ? appDelegate.promos.menuPromos : []
+            if !promos.isEmpty {
+                Menu("More Apps") {
+                    ForEach(promos) { promo in
+                        Button(promo.title) { PromoLoader.open(promo) }
+                    }
+                }
+            }
             Button("Settings…") {
                 NSApp.activate()
                 openSettings()
