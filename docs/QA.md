@@ -206,3 +206,28 @@ Manual (user to run; Finder move with [.move,.copy] unverifiable without GUI):
 6. Cmd-drag a cached image (Safari) to Finder: moved, no empty dir in cache after.
 7. Esc mid-drag: items stay. Drop on shelf itself: no-op.
 8. Move shelf repeatedly: log shows no repeated hotkey register errors.
+
+## T-11 Accessibility and motion polish (0f21cd4) - PASS
+Auto: build, 43 tests x3 (stable, ~1 s), release build green, no warnings. AC-6..10 code OK.
+
+Code review:
+- AC-7: ingest chains each async drop behind `pendingIngest` (linear Task chain, no cycles, no deadlock). Hash/PNG/cache write in `Task.detached`; Data/UTType/ItemCache are Sendable. Clear bumps `generation`; late items are dropped and their cache dir removed. A hung disk write would stall later drops (accepted). Non-image drops wait only while an image drop is in flight (keeps order, accepted).
+- AC-8: `updateMaxHeight` sets only on change; 0.5 pt height guard in `fitToContent` intact, no loop.
+- AC-9: clamps to `visibleFrame` of screen under pointer (fallback `window.screen` in the gap). Crossing screens snaps the panel into the new screen; no oscillation.
+- AC-1: announcement from `onChange(items.count)`, so 50 sync adds give one "50 items added". Async image adds announce per image (low priority).
+- AC-10: keys/items invariant test + 5 ms bound. Shared global `pendingIngest` across parallel tests: a sync-ingest test could be diverted if an image test is mid-flight; DropReceiverTests awaits it. Watch for flake.
+
+Findings (non-blocking):
+1. ShelfPanelController.swift:169: menu "Show Shelf" also makes panel key, so typing goes to shelf (Esc hides it) not the frontmost app. Hotkey = keyboard intent, menu = mouse. Make key only for hotkey (add ShowReason.hotkey).
+2. DropReceiver.swift:119-121: all-duplicate image drop returns true (no reject bounce) and calls `onPromiseFailed`; effect only auto-hide check, harmless. Low.
+
+Manual (user runs):
+1. VoiceOver on: tab through header buttons, tiles; hints read; Remove and Quick Look actions work; missing file tile reads value "Missing".
+2. Drop 50 Finder files at once: one "50 items added". Drop 3 Safari images: items appear in drop order.
+3. Large image (50 MB+) drop: UI stays responsive; item appears after. Drop text right after: lands after image.
+4. Drop image, press Clear immediately: shelf stays empty, nothing left in cache dir.
+5. Reduce Motion on: drop highlight fades (no spring); Reset Position jumps without animation.
+6. Increase Contrast on: selected tile has solid accent ring. Also test Reduce Transparency, light/dark, accent change without relaunch.
+7. Hotkey, arrows, Space, Cmd-C, Esc without mouse. Then Show Shelf from menu: note whether typing reaches the frontmost app (finding 1).
+8. Two displays: drag header across screens; panel stays below menu bar and inside screen, no flicker. Max height follows screen after move.
+9. Activity Monitor with 50 items idle: CPU ~0%, memory < 60 MB.
