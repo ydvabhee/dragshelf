@@ -108,6 +108,10 @@ final class ShelfPanelController {
         panel.openPreview()
     }
 
+    func previewSourceChanged() {
+        panel.syncPreview()
+    }
+
     func hide() {
         guard isShown else { return }
         reason = nil
@@ -138,5 +142,7 @@ private struct PanelRoot: View {
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }
+            // Quick Look follows any selection/items change, not only keys.
+            .onChange(of: controller.store.previewURLs) { controller.previewSourceChanged() }
     }
 }

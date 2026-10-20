@@ -39,7 +39,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     @objc func copy(_ sender: Any?) {
         guard let store else { return }
-        DragOutSource.copy(store.selectedItems)
+        DragOutSource.copy(store.selectedItems.filter { !store.missing(id: $0.id) })
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {

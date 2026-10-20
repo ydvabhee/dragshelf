@@ -112,6 +112,8 @@ private func cachedItem(_ cache: ItemCache, hash: SHA256.Digest? = nil) throws -
     store.selection = [a.id, b.id, t.id]
     #expect(store.dragItems(for: b.id).map(\.id) == [a.id, t.id])
     #expect(store.previewURLs == [present])
+    #expect(store.previewURL(at: 0) == present)
+    #expect(store.previewURL(at: 1) == nil && store.previewURL(at: -1) == nil)
     store.selection = [b.id]
     #expect(store.dragItems(for: b.id).isEmpty && store.previewURLs.isEmpty)
     // Restored file is no longer missing at the next show.

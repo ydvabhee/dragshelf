@@ -53,7 +53,6 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
         case kVK_DownArrow: store.moveSelection(by: ShelfView.columnCount)
         default: return false
         }
-        if isPreviewVisible { store.previewURLs.isEmpty ? closePreview() : QLPreviewPanel.shared().reloadData() }
         return true
     }
 
@@ -71,6 +70,12 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
         if preview.dataSource == nil { beginPreviewPanelControl(preview) }
         preview.reloadData()
         preview.orderFront(nil)
+    }
+
+    /// Called whenever the previewable selection changes (keys, clicks, remove, missing).
+    func syncPreview() {
+        guard isPreviewVisible else { return }
+        store?.previewURLs.isEmpty != false ? closePreview() : QLPreviewPanel.shared().reloadData()
     }
 
     func closePreview() {
@@ -101,7 +106,7 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     }
 
     func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
-        store?.previewURLs[index] as NSURL?
+        store?.previewURL(at: index) as NSURL?
     }
 
     /// Keys pressed while the preview itself is key (user clicked it) still drive the shelf.

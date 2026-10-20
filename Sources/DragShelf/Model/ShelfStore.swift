@@ -84,6 +84,12 @@ final class ShelfStore {
         selectedItems.compactMap { if case .file(let url) = $0.kind, !missing(id: $0.id) { url } else { nil } }
     }
 
+    /// Bounds-safe: Quick Look may ask with an index from before the last change.
+    func previewURL(at index: Int) -> URL? {
+        let urls = previewURLs
+        return urls.indices.contains(index) ? urls[index] : nil
+    }
+
     func missing(id: UUID) -> Bool { missingIDs.contains(id) }
 
     /// Marks file items whose file no longer exists. Runs each time the panel shows.
