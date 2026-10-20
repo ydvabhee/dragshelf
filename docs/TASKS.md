@@ -18,7 +18,7 @@ Every task's implicit ACs (QA checks always):
 | T-07 | Manage items: remove, clear, missing files, Quick Look, keyboard | M2 | T-06 | US-6, US-7 | DONE (2026-10-20) |
 | T-08 | Auto-show/hide on drag (DragMonitor) | M3 | T-03, T-04 | US-1 | DONE (2026-10-20) |
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
-| T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | QA |
+| T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
@@ -148,6 +148,10 @@ Milestone M4. Depends on: T-07, T-10.
 - AC-4: Full keyboard path: hotkey → arrows → Space → Cmd-C → Esc works without the mouse.
 - AC-5: Idle CPU ~0% and memory < 60 MB with 50 items (Activity Monitor).
 - AC-6 (carried from T-04 QA): drop-target highlight animation in `DropReceiver` is gated on Reduce Motion (no spring when on).
+- AC-7 (carried from T-07 QA): SHA-256 of dropped image data computed off MainActor (no UI hitch for 50 MB+ images); item added on MainActor after.
+- AC-8 (carried from T-13 QA): max height recomputed for the panel's current screen in `fitToContent()`/after a user move (not only in `show()`).
+- AC-9 (carried from T-13 QA): header drag clamps the panel inside the screen's `visibleFrame` while moving (never under the menu bar or off-screen).
+- AC-10 (carried from T-13 QA): unit test that `ShelfStore.keys` stays consistent with `items` after image replace / remove / clear; perf test per-add bound loosened to 5 ms (avoid CI flake).
 
 ## T-14 Remote "More apps" promo line
 Milestone M4. Depends on: T-10. v1: users who never update must still get new promos, so this ships in the first release.
