@@ -9,7 +9,7 @@ Every task's implicit ACs (QA checks always):
 
 | ID | Title | Milestone | Depends on | Stories | Status |
 |---|---|---|---|---|---|
-| T-01 | Project skeleton + menu bar item + CLI build/test green | M0 | — | US-8 (part) | TODO |
+| T-01 | Project skeleton + menu bar item + CLI build/test green | M0 | — | US-8 (part) | QA |
 | T-02 | Shelf model: ShelfItem, ShelfStore, ItemCache | M1 | T-01 | US-2, US-6 (model) | TODO |
 | T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | TODO |
 | T-04 | Drop in: files, folders, links, text, image data | M1 | T-03 | US-2 | TODO |
