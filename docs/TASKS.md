@@ -11,7 +11,7 @@ Every task's implicit ACs (QA checks always):
 |---|---|---|---|---|---|
 | T-01 | Project skeleton + menu bar item + CLI build/test green | M0 | — | US-8 (part) | DONE (2026-10-20) |
 | T-02 | Shelf model: ShelfItem, ShelfStore, ItemCache | M1 | T-01 | US-2, US-6 (model) | DONE (2026-10-20) |
-| T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | QA |
+| T-03 | Floating ShelfPanel with Liquid Glass UI shell | M1 | T-02 | US-3, US-10 | DONE (2026-10-20) |
 | T-04 | Drop in: files, folders, links, text, image data | M1 | T-03 | US-2 | TODO |
 | T-05 | Drop in: file promises | M1 | T-04 | US-2 | TODO |
 | T-06 | Drag out: single, multi-select, drag all, Cmd-C | M2 | T-04 | US-4, US-5 | TODO |
@@ -91,6 +91,7 @@ Milestone M2. Depends on: T-06.
 - AC-3: A file item whose file was deleted from disk shows dimmed with "Missing" and cannot be dragged or Quick Looked; check runs each time the panel shows.
 - AC-4: Space opens Quick Look for selected file items; Space/Esc closes it; arrow keys move selection and preview follows. DragShelf does not become the active app.
 - AC-5: Tiles expose VoiceOver actions "Remove" and "Quick Look".
+- AC-6 (carried from T-03 AC-6): Esc hides the panel even though it is non-activating (panel becomes key on click, or a local key monitor), without activating DragShelf.
 
 ## T-08 Auto-show/hide on drag (DragMonitor)
 Milestone M3. Depends on: T-03, T-04.
