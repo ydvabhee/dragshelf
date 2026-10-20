@@ -66,3 +66,16 @@ private let web = URL(string: "https://example.com/x")!
     #expect(store.dragItems(for: ids[1]).map(\.id) == Array(ids[0...2]))
     #expect(store.dragItems(for: ids[3]).map(\.id) == [ids[3]])
 }
+
+@Test func removalHonorsKeepAfterDragOut() {
+    #expect(DragOutSource.shouldRemove(operation: .copy, keepAfterDragOut: false))
+    #expect(!DragOutSource.shouldRemove(operation: .copy, keepAfterDragOut: true))
+    #expect(!DragOutSource.shouldRemove(operation: [], keepAfterDragOut: false))
+}
+
+@Test func preferencesDefaults() {
+    let d = UserDefaults(suiteName: "prefs-\(UUID())")!
+    #expect(Preferences.autoShowEnabled(d) && Preferences.hotKeyOn(d) && !Preferences.keepAfterDrag(d))
+    d.set(false, forKey: Preferences.autoShow)
+    #expect(!Preferences.autoShowEnabled(d))
+}

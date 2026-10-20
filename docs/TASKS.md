@@ -20,7 +20,7 @@ Every task's implicit ACs (QA checks always):
 | T-09 | Global hotkey ⌃⌥⌘D | M3 | T-03 | US-8 | DONE (2026-10-20) |
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | TODO |
-| T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | TODO |
+| T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | QA |
 | T-11 | Accessibility and motion polish pass | M4 | T-07, T-10 | US-10 | TODO |
 | T-14 | Remote "More apps" promo line | M4 | T-10 | US-15 | TODO |
 | T-12 | Developer ID signing + notarization | M5 | T-11 | — | BLOCKED (user: Developer ID cert + notary creds) |

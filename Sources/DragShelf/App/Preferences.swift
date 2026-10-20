@@ -1,0 +1,12 @@
+import Foundation
+
+/// UserDefaults keys + defaults (ARCHITECTURE §4). Launch at login is never stored: read from `SMAppService`.
+enum Preferences {
+    static let autoShow = "autoShow"
+    static let hotKeyEnabled = "hotKeyEnabled"
+    static let keepAfterDragOut = "keepAfterDragOut"
+
+    static func autoShowEnabled(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: autoShow) as? Bool ?? true }
+    static func hotKeyOn(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: hotKeyEnabled) as? Bool ?? true }
+    static func keepAfterDrag(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: keepAfterDragOut) as? Bool ?? false }
+}

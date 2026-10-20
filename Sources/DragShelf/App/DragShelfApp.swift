@@ -21,8 +21,7 @@ struct DragShelfApp: App {
                 .keyboardShortcut("q")
         }
         Settings {
-            Text("Settings")
-                .frame(width: 360, height: 200)
+            SettingsView(onResetPosition: { appDelegate.panelController.resetPosition() })
         }
     }
 }

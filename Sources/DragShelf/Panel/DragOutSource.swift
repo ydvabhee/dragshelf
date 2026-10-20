@@ -71,10 +71,15 @@ final class DragOutSource: NSObject, NSDraggingSource {
         Self.current = nil
     }
 
-    /// `[]` = cancelled (Esc / dropped on nothing) → keep. Otherwise remove the dragged items.
+    /// Pure rule: `[]` = cancelled (Esc / dropped on nothing) → keep; `keepAfterDragOut` → keep.
+    static func shouldRemove(operation: NSDragOperation, keepAfterDragOut: Bool) -> Bool {
+        operation != [] && !keepAfterDragOut
+    }
+
+    /// Removes the dragged items unless `shouldRemove` says keep.
     /// Cache dirs stay until clear/quit: targets (Finder copy, browser upload, Slack) read the file after the drop.
     func ended(operation: NSDragOperation) {
-        guard operation != [] else { return }
+        guard Self.shouldRemove(operation: operation, keepAfterDragOut: Preferences.keepAfterDrag()) else { return }
         store.remove(ids: ids, deletingCache: false)
     }
 }

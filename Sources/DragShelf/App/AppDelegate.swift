@@ -10,11 +10,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.cache.wipe()
         dragMonitor.onDragStart = { [weak self] point in self?.panelController.dragStarted(at: point) }
         dragMonitor.onDragEnd = { [weak self] in self?.panelController.dragEnded() }
-        // `autoShow` key per ARCHITECTURE §4; T-10 adds the UI and live start/stop.
-        if UserDefaults.standard.object(forKey: "autoShow") as? Bool != false { dragMonitor.start() }
         hotKey.onPress = { [weak self] in self?.panelController.toggle() }
-        // `hotKeyEnabled` per ARCHITECTURE §4 (default on); T-10 calls hotKey.register()/unregister() live.
-        if UserDefaults.standard.object(forKey: "hotKeyEnabled") as? Bool != false { hotKey.register() }
+        applyPreferences()
+        // Settings toggles apply immediately; both calls are idempotent.
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyPreferences() }
+        }
+    }
+
+    private func applyPreferences() {
+        if Preferences.autoShowEnabled() { dragMonitor.start() } else { dragMonitor.stop() }
+        if Preferences.hotKeyOn() { hotKey.register() } else { hotKey.unregister() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
