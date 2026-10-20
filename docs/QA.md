@@ -171,3 +171,23 @@ Manual:
 6. Two displays: move on each, spots remembered per display. Unplug one / change resolution: shelf comes back inside the visible area.
 7. Double-click header, and menu "Reset Shelf Position": back to top center.
 8. Regression: auto-hide of empty shelf, Quick Look sync, drag out, Esc/arrows keys.
+
+## T-10 Settings window + launch at login (27cbb2b) - PASS
+Auto: `swift build`, `swift test` (40 pass, incl. `removalHonorsKeepAfterDragOut`, `preferencesDefaults`), `swift build -c release` green.
+Code review:
+- `applyPreferences` runs on every `UserDefaults.didChangeNotification` (incl. `panelOffsets` writes). `DragMonitor.start()` guards `monitor == nil`; `stop()` with no drag is a no-op. No monitor churn, no mid-drag restart. Observer uses `queue: .main`, so `assumeIsolated` is safe.
+- Low: `HotKey.register()` retries every notification when the shortcut is taken, so the error log repeats on each defaults write. Fix: only call register/unregister when the pref value changed.
+- `SMAppService` status re-read after each toggle and on appear; errors caught and shown. Ad-hoc signing: expect register to throw or `.notFound`, shown inline, no crash.
+- No `register(defaults:)`, but `Preferences` and `@AppStorage` defaults match (on, on, off).
+- `DragOutSource.shouldRemove` is pure and tested. T-15 can add an `isMove` param that always removes.
+- App stays LSUIElement (accessory); only the menu "Settings..." calls `NSApp.activate()`. No policy switching, so no Dock icon after closing Settings.
+
+Manual (user):
+1. Settings... from menu: window opens in front. Close it: no Dock icon.
+2. Toggle "Show shelf when dragging" off, drag a file: no shelf. On: shelf appears (no relaunch).
+3. Toggle shortcut off: ⌃⌥⌘D does nothing. On: works.
+4. Keep items after drag out on: drag item to Finder, item stays. Off: item removed. Esc-cancel keeps in both.
+5. Launch at login on, check System Settings > Login Items; quit, relaunch, toggle reflects status. With ad-hoc build an error line may show; app must not crash.
+6. "Reset Shelf Position" button moves a dragged shelf back to top center.
+7. Quit/relaunch: all three toggles keep their values.
+8. Move the shelf repeatedly while dragging a file in: no flicker, shelf stays.
