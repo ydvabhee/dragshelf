@@ -135,7 +135,7 @@ Root cause: panel frame set only once in `ShelfPanelController.show()`; auto-sho
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
 - AC-1: Launch at login toggle calls `SMAppService.mainApp.register/unregister`; toggle reflects real status after relaunch.
 - AC-2: Auto-show on drag toggle (default on) starts/stops `DragMonitor` immediately.
-- AC-3: Shelf position picker: Right edge (default), Left edge, Near cursor; next show uses it.
+- AC-3: Shelf position: **no picker** (superseded by T-13 drag-to-move + remembered position). Settings shows a "Reset Shelf Position" button calling the existing `resetPosition()`.
 - AC-4: Keep items after drag out toggle (default off) changes T-06 AC-5 behavior.
 - AC-5: Global hotkey toggle (default on) registers/unregisters immediately.
 - AC-6: All values persist across relaunch (UserDefaults). Settings opens in front (app activates only for Settings).
