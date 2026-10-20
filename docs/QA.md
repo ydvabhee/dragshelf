@@ -156,3 +156,18 @@ Code review: Carbon app-target handler is dispatched on the main thread, so `Mai
 6. Conflict: have another app (e.g. Raycast, BetterTouchTool) own ⌃⌥⌘D, launch -> app runs, menu works, Console (subsystem co.trippl.DragShelf, category HotKey) logs "RegisterEventHotKey failed" (AC-4).
 7. Quit with Cmd-Q -> hotkey released; ⌃⌥⌘D does nothing.
 8. Hotkey while a drag is in progress and while preview is open: no crash, no stuck panel.
+
+## T-13 Fit-to-content, movable shelf, O(1) dedupe (auto + manual)
+Verdict: PASS (code review + swift build/test/release build green; GUI items need the user).
+Auto: `swift test` 38 pass (~1 s incl. 5000-file perf test, temp dir cleaned). Covered: fit keeps top edge and clamps at bottom, offset round-trip + off-screen clamp, tile height, dedupe keys, remove/clear drop keys, 5000 adds < 1 s and 1 add < 1 ms.
+Notes: no test for image-replace keeping `keys` consistent; perf 1 ms assert may flake on a loaded CI. `maxHeight` is set only in `show()`, so moving the shelf to another display keeps the old cap until next show. Drag has no clamp while moving (clamped on next show). ARCHITECTURE §6 line 168 still says 70%, code uses min(4.5 rows, 50%).
+
+Manual:
+1. Auto-show with empty shelf, drop 1 file: panel grows, top edge stays put. Drop 12 files: grows to ~4.5 rows, half row visible, scrolls with trackpad over tiles and gaps; new item scrolled into view, indicators flash.
+2. Remove items one by one: panel shrinks, top edge fixed.
+3. Move shelf near screen bottom, add many items: panel shifts up, never below Dock/visibleFrame.
+4. Drag header empty area: panel follows the cursor smoothly, app does not activate (menu bar stays on previous app). Tiles still drag out, X / Quick Look / close buttons still click, drop onto shelf still works.
+5. Move, hide, show (hotkey, menu, auto-show drag): same spot. Quit and relaunch: same spot.
+6. Two displays: move on each, spots remembered per display. Unplug one / change resolution: shelf comes back inside the visible area.
+7. Double-click header, and menu "Reset Shelf Position": back to top center.
+8. Regression: auto-hide of empty shelf, Quick Look sync, drag out, Esc/arrows keys.
