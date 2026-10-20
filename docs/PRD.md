@@ -124,7 +124,7 @@ As a user, I drop files, images, links, or text on the shelf and they stay there
 ### US-9 Settings (M4)
 - AC-1: Launch at login toggle registers/unregisters the app; state survives relaunch.
 - AC-2: Auto-show on drag toggle (default on).
-- AC-3: Shelf position: Right edge (default), Left edge, Near cursor.
+- AC-3: Shelf position: Top center (default), Right edge, Left edge.
 - AC-4: Keep items after drag out toggle (default off).
 - AC-5: Global hotkey toggle (default on).
 - AC-6: All settings persist across relaunch.

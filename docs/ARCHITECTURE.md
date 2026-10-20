@@ -100,7 +100,7 @@ open build/DragShelf.app         # run; never run the bare binary
 | `ShelfItem` | `struct`, `Identifiable, Hashable` | `id: UUID`, `kind: Kind`, `isCached: Bool`. `enum Kind { case file(URL), url(URL), text(String) }`. Images and promises are materialized to cache files → `.file` with `isCached = true` (ADR-012) |
 | `ShelfStore` | `@Observable final class` | `items`, `selection: Set<UUID>`, `add(_:)` (dedupe by file path / URL / text), `remove(ids:)`, `clear()`, `missing(id:)`. Deletes cache dir of cached items on remove/clear |
 | `ItemCache` | `enum` (static funcs) | `root` = `~/Library/Caches/<bundle id>/Shelf/`; `newItemDir() -> URL` = `root/<UUID>/`; `remove(dir:)`; `wipe()` |
-| `Preferences` | `enum` keys + defaults | `autoShow` (true), `position` (`.rightEdge`), `keepAfterDragOut` (false), `hotKeyEnabled` (true). Launch at login is read from `SMAppService.mainApp.status`, never stored |
+| `Preferences` | `enum` keys + defaults | `autoShow` (true), `position` (`.topCenter`), `keepAfterDragOut` (false), `hotKeyEnabled` (true). Launch at login is read from `SMAppService.mainApp.status`, never stored |
 | `ShelfPanel` | `NSPanel` subclass | styleMask `[.nonactivatingPanel, .borderless, .fullSizeContentView]`, `level = .floating`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]`, `hidesOnDeactivate = false`, `isOpaque = false`, `backgroundColor = .clear`, `hasShadow = true`, `becomesKeyOnlyIfNeeded = true`, `canBecomeKey` → true (Space/Delete/Esc/arrows), `canBecomeMain` → false |
 | `ShelfPanelController` | `final class` | `show(reason:)`, `hide()`, `toggle()`. Positions on screen with cursor per `Preferences.position`. Visibility rules below. Fade/scale animation honoring Reduce Motion |
 | `DropReceiver` | `NSView` | Panel `contentView`; hosts `NSHostingView(rootView: ShelfView)` filling it. `registerForDraggedTypes([.fileURL, .URL, .string, .png, .tiff] + NSFilePromiseReceiver.readableDraggedTypes)`. Highlight state → store flag `isDropTargeted`. Uses `PasteboardReader` |
@@ -162,7 +162,7 @@ open build/DragShelf.app         # run; never run the bare binary
 
 ## 6. UI design (Apple HIG)
 - Panel: ~288 pt wide, height fits content from 160 pt up to 70% of screen visible height, then scrolls.
-  Positioned 12 pt from chosen edge, vertically centered on the cursor's screen (or at cursor for "Near cursor").
+  Default top center: horizontally centered, 12 pt below `visibleFrame.maxY` (clears menu bar / notch) on the cursor's screen, anchored by its top edge so it grows downward. Right/Left edge: 12 pt from edge, vertically centered.
 - Layout: header row (drag-all handle `square.stack.3d.up`, item count, Clear `trash`, Close `xmark`),
   then `LazyVGrid` of 3 tiles: 64 pt thumbnail + 2-line caption (`.caption`, middle truncation).
   Empty state: `tray.and.arrow.down` symbol + "Drop here".

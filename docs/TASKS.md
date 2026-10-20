@@ -1,6 +1,6 @@
 # DragShelf — Tasks
 
-Ordered. One task per developer run. Each task leaves build + tests green and is committed alone.
+Ordered. One task per developer run. **Priority override (user, 2026-10-20): T-08 runs before T-07.** Each task leaves build + tests green and is committed alone.
 Status: `TODO` → `IN PROGRESS` → `QA` → `DONE` (or `BLOCKED`). Stories: `docs/PRD.md`. Design: `docs/ARCHITECTURE.md`.
 
 Every task's implicit ACs (QA checks always):
@@ -106,6 +106,7 @@ Milestone M3. Depends on: T-03, T-04.
 - AC-6: Drags out of DragShelf itself do not re-trigger show/hide logic.
 - AC-7: No permission prompt (Accessibility/Input Monitoring) on fresh install (`tccutil reset All com.abhishekyadav.DragShelf` first).
 - AC-8: Monitors removed when auto-show is disabled (API ready for T-10; QA checks via a debug toggle or T-10).
+- AC-9 (user request 2026-10-20): panel shows at **top center** of the cursor's screen (centered horizontally, 12 pt below `visibleFrame.maxY`, top-anchored so adding items grows it downward), for both auto-show and menu "Show Shelf". Replaces T-03 AC-1 right-edge placement.
 
 ## T-09 Global hotkey ⌃⌥⌘D
 Milestone M3. Depends on: T-03.
