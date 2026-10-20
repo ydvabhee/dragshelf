@@ -8,19 +8,19 @@ Status: draft v1 (2026-10-20). Scope: `docs/PRD.md`. Tasks: `docs/TASKS.md`.
 - SwiftUI: shelf content, menu bar menu (`MenuBarExtra`), Settings window.
 - Frameworks only from the SDK: AppKit, SwiftUI, QuickLookUI, QuickLookThumbnailing,
   UniformTypeIdentifiers, ServiceManagement, Carbon (hotkey only). **No third-party deps.**
-- Toolchain on dev machine: macOS 26.5, Xcode 26.6, SDK macOS 26.5. No xcodegen/tuist.
+- Toolchain on dev machine: macOS 26.5, Xcode 26.6, SDK macOS 26.5, Swift 6.3.3. Build with SwiftPM (ADR-013);
+  `xcodebuild` is broken on this machine (OQ-15). No xcodegen/tuist.
 - Deployment target: **macOS 14.0** (ADR-002).
 
 ## 2. Project layout
-Hand-written `DragShelf.xcodeproj`, `objectVersion = 77`, folder-synchronized groups
-(`PBXFileSystemSynchronizedRootGroup`). Any file added under `DragShelf/` or `DragShelfTests/`
-joins its target automatically. Never add files to the pbxproj by hand.
+SwiftPM package (ADR-013). No `.xcodeproj`. Any file added under `Sources/DragShelf/` or
+`Tests/DragShelfTests/` joins its target automatically. Open `Package.swift` in Xcode once Xcode works (OQ-15).
 
 ```
-DragShelf.xcodeproj/
-  project.pbxproj
-  xcshareddata/xcschemes/DragShelf.xcscheme   # shared; Test action runs DragShelfTests
-DragShelf/                                    # synced root group → target DragShelf
+Package.swift                                 # tools 6.2, .macOS(.v14), no dependencies
+scripts/
+  build-app.sh                                # swift build + assemble/sign build/DragShelf.app
+Sources/DragShelf/                            # executableTarget DragShelf
   App/
     DragShelfApp.swift        # @main SwiftUI App: MenuBarExtra + Settings scenes, AppDelegate adaptor
     AppDelegate.swift         # owns ShelfStore, ShelfPanelController, DragMonitor, HotKey; cache wipe
@@ -45,40 +45,52 @@ DragShelf/                                    # synced root group → target Dra
     Thumbnail.swift           # QLThumbnailGenerator + NSWorkspace icon fallback
     QuickLook.swift           # QLPreviewPanel data source for selected file items
     SettingsView.swift        # Form with the 5 settings
-DragShelfTests/                               # synced root group → target DragShelfTests
+Tests/DragShelfTests/                         # testTarget DragShelfTests (Swift Testing)
   ShelfStoreTests.swift
   ItemCacheTests.swift
   PasteboardReaderTests.swift
   DragOutSourceTests.swift
 ```
-No `Info.plist`, no asset catalog in MVP (menu bar icon = SF Symbol; app icon: OQ-06).
+- No `main.swift` (it conflicts with `@main`). No resources, no asset catalog in MVP (menu bar icon = SF Symbol; app icon: OQ-06).
+- `.gitignore` must contain `.build/`, `.swiftpm/`, `build/`.
 
-## 3. Targets and build settings
-| Setting | DragShelf (app) | DragShelfTests |
-|---|---|---|
-| Product type | `com.apple.product-type.application` | `com.apple.product-type.bundle.unit-test` |
-| `PRODUCT_BUNDLE_IDENTIFIER` | `com.abhishekyadav.DragShelf` (OQ-02) | `com.abhishekyadav.DragShelfTests` |
-| `MACOSX_DEPLOYMENT_TARGET` | 14.0 | 14.0 |
-| `SWIFT_VERSION` | 6.0 | 6.0 |
-| `SWIFT_DEFAULT_ACTOR_ISOLATION` | `MainActor` | `MainActor` |
-| `SWIFT_TREAT_WARNINGS_AS_ERRORS` | YES | YES |
-| `GENERATE_INFOPLIST_FILE` | YES | YES |
-| `INFOPLIST_KEY_LSUIElement` | YES | — |
-| `INFOPLIST_KEY_NSHumanReadableCopyright` | set | — |
-| `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` | 0.1 / 1 | — |
-| `CODE_SIGN_STYLE` / `CODE_SIGN_IDENTITY` | Manual / `-` (ad-hoc) | Manual / `-` |
-| `ENABLE_HARDENED_RUNTIME` | YES | NO |
-| `ENABLE_APP_SANDBOX` | NO | NO |
-| `TEST_HOST` / `BUNDLE_LOADER` | — | `$(BUILT_PRODUCTS_DIR)/DragShelf.app/Contents/MacOS/DragShelf` / `$(TEST_HOST)` |
+## 3. Package, app bundle, and build settings
+`Package.swift`:
+- `// swift-tools-version: 6.2` (toolchain is Swift 6.3.3; 6.2 is the first manifest with `.defaultIsolation`).
+- `platforms: [.macOS(.v14)]`; `executableTarget(name: "DragShelf")`; `testTarget(name: "DragShelfTests", dependencies: ["DragShelf"])`.
+- Both targets: `swiftSettings: [.defaultIsolation(MainActor.self), .treatAllWarnings(as: .error)]`.
+  Swift 6 language mode is the default for tools ≥ 6.0. If a setting fails to compile, fall back to
+  explicit `@MainActor` / `-Xswiftc -warnings-as-errors` in the script, and note it in the task report.
+- Tests: Swift Testing (`import Testing`, `@Test`, `#expect`), `@testable import DragShelf`. Not hosted in the app:
+  tests cover pure logic only and must not need a running `NSApplication`.
 
-Test target depends on app target (`PBXTargetDependency`). Tests use `@testable import DragShelf`
-(`ENABLE_TESTABILITY = YES` in Debug). Unit test framework: XCTest or Swift Testing, dev's choice, one per file.
+`scripts/build-app.sh [debug|release]` (default `debug`). `set -euo pipefail`. Steps:
+1. `swift build -c <config>`.
+2. Recreate `build/DragShelf.app/Contents/MacOS/`, copy `.build/<config>/DragShelf` binary into it.
+3. Write `build/DragShelf.app/Contents/Info.plist` (heredoc), keys below.
+4. `codesign --force --sign - --options runtime build/DragShelf.app` (ad-hoc, hardened runtime; no entitlements, no sandbox).
+5. Print the app path. M5 adds the Developer ID identity, timestamp, `notarytool`, and stapler to this same script.
 
-CLI (must stay green on every commit):
+| Info.plist key | Value |
+|---|---|
+| `CFBundleIdentifier` | `com.abhishekyadav.DragShelf` (OQ-02) |
+| `CFBundleName` / `CFBundleExecutable` | `DragShelf` |
+| `CFBundlePackageType` | `APPL` |
+| `CFBundleShortVersionString` / `CFBundleVersion` | `0.1` / `1` |
+| `LSMinimumSystemVersion` | `14.0` |
+| `LSUIElement` | `true` |
+| `NSHumanReadableCopyright` | `© 2026 Abhishek Yadav` |
+
+Commands (must stay green on every commit):
 ```
-xcodebuild -project DragShelf.xcodeproj -scheme DragShelf -configuration Debug -derivedDataPath build build
-xcodebuild -project DragShelf.xcodeproj -scheme DragShelf -derivedDataPath build -destination 'platform=macOS' test
+swift build                      # compile, zero warnings
+swift test                       # all Swift Testing tests pass
+scripts/build-app.sh             # assemble + ad-hoc sign build/DragShelf.app
+open build/DragShelf.app         # run; never run the bare binary
 ```
+- Always run the bundled app: `SMAppService`, `LSUIElement`, and the bundle id only work inside `DragShelf.app`.
+- `ItemCache` uses the constant bundle id string, not `Bundle.main.bundleIdentifier` (nil under `swift test`).
+- Build is native arm64 only. Universal binary is an M5 concern (OQ-15).
 
 ## 4. Key types
 | Type | Kind | Responsibility |
@@ -179,9 +191,9 @@ xcodebuild -project DragShelf.xcodeproj -scheme DragShelf -derivedDataPath build
 - Drag out offers `.copy` only, so targets can never move or delete the user's originals.
 
 ## 8. Distribution
-- Dev: ad-hoc signed (`CODE_SIGN_IDENTITY = "-"`), runs locally. Hardened runtime on now so M5 needs no code change.
+- Dev: `scripts/build-app.sh` ad-hoc signs (`codesign -s - --options runtime`). Hardened runtime on now so M5 needs no code change.
 - M5 (**BLOCKED on user**): Developer ID Application cert (none on this machine), `notarytool` credentials,
-  archive → sign → notarize → staple → zip/DMG. App Store/sandbox: future ADR.
+  `scripts/build-app.sh release` → Developer ID sign → notarize → staple → zip/DMG. App Store/sandbox: future ADR.
 - `SMAppService.mainApp` (launch at login) works best when the app lives in `/Applications`; QA tests it from there.
 
 ## 9. Risks
@@ -193,12 +205,13 @@ xcodebuild -project DragShelf.xcodeproj -scheme DragShelf -derivedDataPath build
 | Material looks inactive in non-key panel (14–15) | `NSVisualEffectView.state = .active` |
 | Quick Look needs panel key without activating app | `canBecomeKey = true` on non-activating panel; verified in T-07 |
 | File promise senders that are slow/large | Receive on background `OperationQueue`; add item when written; 300 ms hide grace |
+| `xcodebuild` broken (stale DVTDownloads framework, exit 70) | SwiftPM build (ADR-013); user may run `sudo xcodebuild -runFirstLaunch` (OQ-15) |
 | Hotkey ⌃⌥⌘D conflicts with a user's shortcut | Registration failure → setting shows "Unavailable"; custom recorder later (OQ-04) |
 
 ## 10. ADRs
 - **ADR-001: Native Swift 6 + AppKit/SwiftUI, no third-party deps.** Why: small app, all needed APIs are in the SDK, native look. Rejected: Electron/Catalyst (non-native drag plumbing), SPM packages for hotkeys/launch-at-login (SDK covers both).
 - **ADR-002: Deployment target macOS 14.0; Liquid Glass on macOS 26 via `#available`.** Why: macOS 14 gives `@Observable`, `SettingsLink`, `MenuBarExtra`, `SMAppService`, and covers most active Macs; one availability branch in `Glass.swift` gives the macOS 26 look. Rejected: macOS 26-only (drops many users for one styling branch), macOS 13 (loses `@Observable`, more boilerplate).
-- **ADR-003: Hand-written `DragShelf.xcodeproj`, objectVersion 77, synchronized folders, shared scheme.** Why: no xcodegen/tuist on machine and no new tools; synced folders mean new files need no pbxproj edits. Rejected: SPM executable (no app bundle/Info.plist keys/test host), installing xcodegen (new dependency).
+- **ADR-003 (SUPERSEDED by ADR-013): Hand-written `DragShelf.xcodeproj`, objectVersion 77, synchronized folders, shared scheme.** Why: no xcodegen/tuist on machine and no new tools; synced folders mean new files need no pbxproj edits. Rejected: SPM executable (no app bundle/Info.plist keys/test host), installing xcodegen (new dependency).
 - **ADR-004: No sandbox; Developer ID + notarization; ad-hoc signing in dev; hardened runtime on.** Why: sandbox needs security-scoped bookmarks and complicates promises/global monitors. Rejected: Mac App Store for MVP.
 - **ADR-005: SwiftUI `App` lifecycle with `MenuBarExtra` + `Settings`; shelf is an AppKit `NSPanel`.** Why: least code for menu bar + settings; `NSPanel` is required for non-activating floating behavior. Rejected: `NSStatusItem` + manual settings window (more code), SwiftUI `Window` scene for shelf (no non-activating panel control).
 - **ADR-006: Drop destination in AppKit (`DropReceiver: NSView`), not SwiftUI `onDrop`/`dropDestination`.** Why: needs `NSFilePromiseReceiver` and full pasteboard access. Rejected: SwiftUI drop APIs (weak promise support).
@@ -208,3 +221,4 @@ xcodebuild -project DragShelf.xcodeproj -scheme DragShelf -derivedDataPath build
 - **ADR-010: Items live in memory only; cache wiped on launch/clear/quit.** Why: history/persistence is a non-goal; nothing stale on disk. Rejected: persisting items with bookmarks (later, if asked; OQ-03).
 - **ADR-011: Swift 6 mode, default actor isolation `MainActor`, warnings as errors.** Why: app is UI-bound; fewer annotations; zero-warning rule enforced by the compiler. Off-main work (promise receive, thumbnails) uses explicit `nonisolated`/`Task.detached` and hops back to main.
 - **ADR-012: Images and promised files are materialized to cache files; `ShelfItem.Kind` = file/url/text.** Why: one drag-out path for files, real files work in every target. Rejected: separate image kind with in-memory `NSImage` (two drag-out paths, fails in Finder/upload fields).
+- **ADR-013: SwiftPM package + `scripts/build-app.sh` instead of an `.xcodeproj` (supersedes ADR-003).** Why: `xcodebuild` (even `-list`) exits 70 on this machine (missing IDESimulatorFoundation symbol from stale `/Library/Developer/PrivateFrameworks/DVTDownloads`); the fix needs `sudo`, which only the user can run. `swift build`/`swift test` work, compile `.glassEffect` behind `#available(macOS 26, *)`, and run Swift Testing. A 30-line script gives the app bundle, Info.plist, and signing that Xcode would. Xcode can still open `Package.swift` later. Rejected: keep xcodeproj (cannot build or test), wait for the user (blocks all work), `swift build` xcbuild backend / universal `--arch` flags (route through the broken Xcode build system).

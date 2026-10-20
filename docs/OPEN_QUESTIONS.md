@@ -19,3 +19,4 @@ product-architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-12 | Distribution channel and who signs? | Developer ID + notarization by user (T-12 BLOCKED); no App Store | App Store needs sandbox + bookmarks: new ADR, rework of drop/promise/cache code |
 | OQ-13 | Text items: drag out as text only, or also as a `.txt` file? | Text only (`NSString`); Finder makes a text clipping | Adding a file representation = small change in `DragOutSource.writer` |
 | OQ-14 | Localization? | English only, but all UI strings via `String(localized:)` | Adding languages later = string catalog only |
+| OQ-15 | Xcode broken (`xcodebuild` exits 70: stale `/Library/Developer/PrivateFrameworks/DVTDownloads`). Run `sudo xcodebuild -runFirstLaunch`? | SwiftPM build (ADR-013), unaffected; no xcodeproj | After the fix: open `Package.swift` in Xcode for debugging/Instruments; universal (arm64+x86_64) release build becomes possible for M5. No architecture change needed |

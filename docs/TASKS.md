@@ -4,7 +4,7 @@ Ordered. One task per developer run. Each task leaves build + tests green and is
 Status: `TODO` → `IN PROGRESS` → `QA` → `DONE` (or `BLOCKED`). Stories: `docs/PRD.md`. Design: `docs/ARCHITECTURE.md`.
 
 Every task's implicit ACs (QA checks always):
-- `xcodebuild ... build` and `xcodebuild ... test` (ARCHITECTURE §3) succeed with zero warnings.
+- `swift build` (zero warnings), `swift test`, and `scripts/build-app.sh` (ARCHITECTURE §3) all succeed; manual checks run `open build/DragShelf.app`.
 - No permission prompt appears. No new dependency. New UI uses SF Symbols, system fonts, VoiceOver labels.
 
 | ID | Title | Milestone | Depends on | Stories | Status |
@@ -26,14 +26,16 @@ Every task's implicit ACs (QA checks always):
 
 ## T-01 Project skeleton + menu bar item + CLI build/test green
 Milestone M0. Depends on: —.
-Create `DragShelf.xcodeproj` by hand exactly per ARCHITECTURE §2–3 (objectVersion 77, synced root groups,
-shared scheme), `DragShelf/App/DragShelfApp.swift`, `AppDelegate.swift`, one test file.
-- AC-1: `xcodebuild -project DragShelf.xcodeproj -scheme DragShelf -configuration Debug -derivedDataPath build build` succeeds, zero warnings.
-- AC-2: `xcodebuild ... -destination 'platform=macOS' test` runs ≥ 1 passing test in `DragShelfTests` (hosted in app).
-- AC-3: Launching `build/Build/Products/Debug/DragShelf.app` shows a menu bar icon (SF Symbol `tray.and.arrow.down`), no Dock icon, no app menu.
-- AC-4: Menu has "Show Shelf" (disabled placeholder), "Settings…" (opens empty Settings window, app activates), "Quit DragShelf" (⌘Q, quits).
-- AC-5: A new `.swift` file dropped into `DragShelf/` compiles without editing `project.pbxproj` (synced groups work).
-- AC-6: Build settings match ARCHITECTURE §3 table (LSUIElement, ad-hoc signing, no sandbox, hardened runtime, Swift 6, MainActor default, macOS 14.0).
+SwiftPM per ARCHITECTURE §2–3 (ADR-013): `Package.swift`, `scripts/build-app.sh`,
+`Sources/DragShelf/App/DragShelfApp.swift`, `AppDelegate.swift`, one test file in `Tests/DragShelfTests/`.
+Migrate the uncommitted xcodeproj-era files, then delete `DragShelf.xcodeproj/`, `DragShelf/`, `DragShelfTests/`.
+- AC-1: `swift build` succeeds with zero warnings.
+- AC-2: `swift test` runs ≥ 1 passing Swift Testing test (`@Test`) using `@testable import DragShelf`.
+- AC-3: `scripts/build-app.sh` (and `scripts/build-app.sh release`) produces `build/DragShelf.app`; `codesign -dv --verbose=2 build/DragShelf.app` shows ad-hoc signature with `runtime` flag; `plutil -p build/DragShelf.app/Contents/Info.plist` shows the keys in ARCHITECTURE §3.
+- AC-4: `open build/DragShelf.app` shows a menu bar icon (SF Symbol `tray.and.arrow.down`), no Dock icon, no app menu.
+- AC-5: Menu has "Show Shelf" (disabled placeholder), "Settings…" (opens empty Settings window, app activates), "Quit DragShelf" (⌘Q, quits).
+- AC-6: `Package.swift` matches ARCHITECTURE §3: tools 6.2, `.macOS(.v14)`, no dependencies, MainActor default isolation, warnings as errors (or documented fallback).
+- AC-7: `.gitignore` has `.build/`, `.swiftpm/`, `build/`; no `.xcodeproj` in the repo.
 
 ## T-02 Shelf model: ShelfItem, ShelfStore, ItemCache
 Milestone M1. Depends on: T-01. Pure logic, no UI.
@@ -127,7 +129,7 @@ Milestone M4. Depends on: T-07, T-10.
 
 ## T-12 Developer ID signing + notarization — BLOCKED
 Milestone M5. Depends on: T-11. **Blocked on user:** needs a Developer ID Application certificate in the keychain and `notarytool` credentials (Apple ID app-specific password or API key).
-- AC-1: Release archive signed with Developer ID, hardened runtime, timestamp.
+- AC-1: `scripts/build-app.sh release` signs with the Developer ID identity, hardened runtime, `--timestamp`.
 - AC-2: `xcrun notarytool submit --wait` returns Accepted; `xcrun stapler staple` succeeds.
 - AC-3: `spctl -a -vv DragShelf.app` reports `source=Notarized Developer ID`.
 - AC-4: Zipped app opens on a second Mac without Gatekeeper warnings.
