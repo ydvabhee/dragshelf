@@ -144,3 +144,15 @@ Findings: Quick Look crash risk and Cmd-C of missing files fixed in 24f5874 (bou
 11. Drop same image twice (Safari) -> one tile, old cache dir gone (AC-9). Drop a 50 MB+ image: no UI hitch (hash on main).
 12. Drop Mail/Photos promise, hit Clear before it finishes -> no tile, no leftover dir (AC-7).
 13. Scroll with 5+ tiles using trackpad over tiles and over gaps (T-13).
+
+## T-09 Global hotkey ⌃⌥⌘D (manual)
+Auto: `swift build` clean, `swift test` 32 pass. `build-app.sh` not run by QA (user's instance running).
+Code review: Carbon app-target handler is dispatched on the main thread, so `MainActor.assumeIsolated` is safe. Hotkey ref and handler ref are released in `unregister`, which is idempotent. `register` is idempotent and unregisters on partial failure. Signature 'DSHF' id 1 is fine. Handler does not check hotkey id (only one hotkey exists; add check if T-10 adds more). Registered Carbon hotkeys are consumed before menu key equivalents, so no double toggle with the menu `.keyboardShortcut`. Shortcut only fires from the menu while the menu is open.
+1. Finder frontmost, press ⌃⌥⌘D -> shelf shows. Press again -> hides (AC-1).
+2. Repeat with Safari, TextEdit frontmost, and a full-screen app (own Space) -> shelf appears over it (AC-1).
+3. First launch: no Accessibility / Input Monitoring prompt (AC-2).
+4. Open menu bar item: "Show Shelf" / "Hide Shelf" shows ⌃⌥⌘D (AC-3). With the menu open press ⌃⌥⌘D: expect one toggle only (menu closes, panel flips once). Report if it flips twice.
+5. Click menu item -> toggles; label flips.
+6. Conflict: have another app (e.g. Raycast, BetterTouchTool) own ⌃⌥⌘D, launch -> app runs, menu works, Console (subsystem co.trippl.DragShelf, category HotKey) logs "RegisterEventHotKey failed" (AC-4).
+7. Quit with Cmd-Q -> hotkey released; ⌃⌥⌘D does nothing.
+8. Hotkey while a drag is in progress and while preview is open: no crash, no stuck panel.
