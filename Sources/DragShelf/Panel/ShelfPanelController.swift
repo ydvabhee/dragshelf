@@ -67,5 +67,7 @@ private struct PanelRoot: View {
     var body: some View {
         ShelfView(store: controller.store, maxHeight: controller.maxHeight, onClose: controller.hide)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96)
+            // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
+            .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }
     }
 }

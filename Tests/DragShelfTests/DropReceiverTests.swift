@@ -12,7 +12,8 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     var draggedImageLocation: NSPoint { .zero }
     var draggedImage: NSImage? { nil }
     var draggingPasteboard: NSPasteboard { pb }
-    var draggingSource: Any? { nil }
+    var source: Any?
+    var draggingSource: Any? { source }
     var draggingSequenceNumber: Int { 0 }
     var draggingFormation: NSDraggingFormation = .default
     var animatesToDestination = false
@@ -75,4 +76,20 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(receiver.draggingUpdated(info) == [])
     pb.writeObjects(["hi" as NSString])
     #expect(receiver.draggingUpdated(info) == .copy)
+}
+
+@Test func ownDragOutIsRejected() {
+    let pb = NSPasteboard(name: .init("test-drop-\(UUID())"))
+    defer { pb.releaseGlobally() }
+    pb.clearContents()
+    pb.writeObjects(["hi" as NSString])
+    let store = ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())")))
+    let receiver = DropReceiver(rootView: EmptyView())
+    receiver.store = store
+    let info = FakeDraggingInfo(pb)
+    info.source = DragOutSource(store: store, ids: [])
+    #expect(receiver.draggingEntered(info) == [])
+    #expect(!store.isDropTargeted)
+    #expect(!receiver.performDragOperation(info))
+    #expect(store.items.isEmpty)
 }

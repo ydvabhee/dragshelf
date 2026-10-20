@@ -35,8 +35,8 @@ struct ShelfView: View {
                 Button {} label: {
                     Label("Drag All", systemImage: "square.stack.3d.up")
                 }
-                .help("Drag all items")
                 .disabled(store.items.isEmpty)
+                .overlay { DragOutHandle(store: store) }
 
                 Text(store.items.isEmpty ? "Shelf" : "^[\(store.items.count) Item](inflect: true)")
                     .font(.headline)
@@ -89,13 +89,16 @@ struct ShelfView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(store.items) { item in
-                    ShelfItemView(item: item)
+                    ShelfItemView(item: item, isSelected: store.selection.contains(item.id))
+                        .overlay { DragOutHandle(store: store, id: item.id) }
                         .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                 }
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 14)
         }
+        // Click on empty space deselects.
+        .background { Color.clear.contentShape(.rect).onTapGesture { store.selection = [] } }
         // Hug content until the cap, then scroll.
         .frame(maxHeight: maxHeight - headerHeight)
         .fixedSize(horizontal: false, vertical: true)

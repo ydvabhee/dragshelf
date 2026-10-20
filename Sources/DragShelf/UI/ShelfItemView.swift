@@ -4,6 +4,7 @@ import SwiftUI
 /// One shelf tile: 64 pt thumbnail + 2-line caption.
 struct ShelfItemView: View {
     let item: ShelfItem
+    var isSelected = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -16,9 +17,13 @@ struct ShelfItemView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
+        .padding(4)
+        .background(isSelected ? Color.accentColor.opacity(0.22) : .clear,
+                    in: .rect(cornerRadius: 10, style: .continuous))
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(typeDescription), \(name)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder private var thumbnail: some View {

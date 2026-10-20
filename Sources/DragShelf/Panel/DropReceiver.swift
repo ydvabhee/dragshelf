@@ -21,21 +21,40 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     /// The app is never active, so the first click on the panel must reach SwiftUI controls.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Cmd-C copies the selection (panel is key after a tile click). `copy(_:)` covers a menu-routed Cmd-C.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+              event.charactersIgnoringModifiers == "c", store?.selection.isEmpty == false
+        else { return super.performKeyEquivalent(with: event) }
+        copy(nil)
+        return true
+    }
+
+    @objc func copy(_ sender: Any?) {
+        guard let store else { return }
+        DragOutSource.copy(store.selectedItems)
+    }
+
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard PasteboardReader.canAccept(sender.draggingPasteboard) else { return [] }
+        guard accepts(sender) else { return [] }
         setTargeted(true)
         return .copy
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        PasteboardReader.canAccept(sender.draggingPasteboard) ? .copy : []
+        accepts(sender) ? .copy : []
+    }
+
+    /// Our own drag-outs are rejected: dropping back on the shelf is a no-op.
+    private func accepts(_ sender: any NSDraggingInfo) -> Bool {
+        !(sender.draggingSource is DragOutSource) && PasteboardReader.canAccept(sender.draggingPasteboard)
     }
     override func draggingExited(_ sender: (any NSDraggingInfo)?) { setTargeted(false) }
     override func draggingEnded(_ sender: any NSDraggingInfo) { setTargeted(false) }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         setTargeted(false)
-        guard let store else { return false }
+        guard let store, accepts(sender) else { return false }
         return Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store)
     }
 
