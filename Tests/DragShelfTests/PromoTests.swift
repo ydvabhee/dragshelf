@@ -54,11 +54,13 @@ private nonisolated func entry(_ id: String, _ extra: [String: Any] = [:]) -> [S
     ["url": "https://evil.com/x"],
     ["url": "https://example.com.evil.com/x"],
     ["url": "https://user:pw@example.com/x"],
+    ["url": "https://example.com:8443/x"],
     ["url": "https://example.com/" + String(repeating: "a", count: 2048)],
     ["title": String(repeating: "t", count: 61)],
     ["title": ""],
     ["title": "Two\nlines"],
     ["title": "Evil \u{202E}gpj.exe"],
+    ["title": "Z" + String(repeating: "\u{0301}", count: 130)],
     ["subtitle": String(repeating: "s", count: 81)],
     ["subtitle": "tab\there"],
     ["id": "Bad_ID"],
@@ -125,7 +127,9 @@ func invalidEntryDroppedNeighborsKept(bad: [String: any Sendable]) throws {
 // MARK: PromoLoader (AC-4, AC-5): stub URLProtocol, never the network
 
 nonisolated final class StubProtocol: URLProtocol {
-    struct Reply { var status = 200; var headers: [String: String] = [:]; var body = Data(); var redirect: URL? }
+    struct Reply {
+        var status = 200; var headers: [String: String] = [:]; var body = Data(); var redirect: URL?; var error: URLError.Code?
+    }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var _reply = Reply()
     nonisolated(unsafe) private static var _requests: [URLRequest] = []
@@ -143,6 +147,7 @@ nonisolated final class StubProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.withLock { Self._requests.append(request) }
         let r = Self.reply
+        if let code = r.error { return client!.urlProtocol(self, didFailWithError: URLError(code)) }
         if let to = r.redirect, request.url != to {
             let resp = HTTPURLResponse(url: request.url!, statusCode: 302, httpVersion: nil, headerFields: ["Location": to.absoluteString])!
             client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: to), redirectResponse: resp)
@@ -188,6 +193,7 @@ nonisolated final class StubProtocol: URLProtocol {
         let req = try #require(StubProtocol.requests.first)
         #expect(req.value(forHTTPHeaderField: "User-Agent") == "DragShelf/\(PromoLoader.appVersion)")
         #expect(req.value(forHTTPHeaderField: "Cookie") == nil)
+        #expect(req.value(forHTTPHeaderField: "Accept-Language") == "en")
         #expect(req.value(forHTTPHeaderField: "If-None-Match") == nil)
         #expect(req.url == PromoConfig.feedURL)
 
@@ -223,6 +229,18 @@ nonisolated final class StubProtocol: URLProtocol {
         #expect(PromoFeed.decode(try Data(contentsOf: cacheURL))?.promos.map(\.id) == ["old"])
         // Redirect target never loaded.
         #expect(StubProtocol.requests.allSatisfy { $0.url == PromoConfig.feedURL })
+    }
+
+    @Test func networkErrorRetriesAfter3hServerErrorAfter24h() async {
+        StubProtocol.reply = .init(error: .notConnectedToInternet)
+        await loader(at: t0).refreshIfStale()
+        await loader(at: t0.addingTimeInterval(2 * 3600)).refreshIfStale()
+        #expect(StubProtocol.requests.count == 1)
+        StubProtocol.reply = .init(status: 500)
+        await loader(at: t0.addingTimeInterval(3 * 3600 + 1)).refreshIfStale()
+        #expect(StubProtocol.requests.count == 2)
+        await loader(at: t0.addingTimeInterval(23 * 3600)).refreshIfStale()
+        #expect(StubProtocol.requests.count == 2)
     }
 
     @Test func offMakesNoRequest() async {

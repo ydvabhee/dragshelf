@@ -17,6 +17,8 @@ final class PromoLoader {
     static let etagKey = "promoETag"
     static let lastFetchKey = "promoLastFetch"
     static let interval: TimeInterval = 24 * 3600
+    /// Network errors (offline, timeout) retry sooner than server/feed errors.
+    static let networkRetry: TimeInterval = 3 * 3600
     private static let log = Logger(subsystem: PromoConfig.selfBundleID, category: "promos")
 
     static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
@@ -89,6 +91,8 @@ final class PromoLoader {
         var request = URLRequest(url: PromoConfig.feedURL)
         request.httpShouldHandleCookies = false
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        // Fixed, so the system locale is not sent.
+        request.setValue("en", forHTTPHeaderField: "Accept-Language")
         if feed != nil, let etag = defaults.string(forKey: Self.etagKey) {
             request.setValue(etag, forHTTPHeaderField: "If-None-Match")
         }
@@ -108,6 +112,10 @@ final class PromoLoader {
             defaults.set(http.value(forHTTPHeaderField: "ETag"), forKey: Self.etagKey)
             feed = decoded
         } catch {
+            // Offline/timeout: retry in 3 h. Server and feed errors (and a refused redirect) wait the full day.
+            if let e = error as? URLError, e.code != .cancelled {
+                defaults.set(now().addingTimeInterval(Self.networkRetry - Self.interval), forKey: Self.lastFetchKey)
+            }
             Self.log.error("Promo feed fetch failed: \(String(describing: error), privacy: .public)")
         }
     }

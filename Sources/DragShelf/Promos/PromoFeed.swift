@@ -12,7 +12,7 @@ nonisolated enum PromoConfig {
     /// The only URLs the app fetches from or opens: `https`, host exactly on the allowlist, no credentials.
     static func isAllowed(_ url: URL?) -> Bool {
         guard let url, url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
-        return allowedHosts.contains(host) && url.user == nil && url.password == nil
+        return allowedHosts.contains(host) && url.port == nil && url.user == nil && url.password == nil
     }
 }
 
@@ -54,9 +54,10 @@ nonisolated struct Promo: Equatable, Identifiable, Sendable {
         excludeBundleIds = e.excludeBundleIds ?? []
     }
 
-    /// ≤ `max` characters, no control/format/line-separator scalars (blocks `\n` and bidi overrides).
+    /// ≤ `max` characters and ≤ 2×`max` scalars (no Zalgo stacks of combining marks), no control/format/
+    /// line-separator scalars (blocks `\n` and bidi overrides).
     static func isCleanText(_ s: String, max: Int) -> Bool {
-        s.count <= max && !s.unicodeScalars.contains {
+        s.count <= max && s.unicodeScalars.count <= 2 * max && !s.unicodeScalars.contains {
             [.control, .format, .lineSeparator, .paragraphSeparator].contains($0.properties.generalCategory)
         }
     }

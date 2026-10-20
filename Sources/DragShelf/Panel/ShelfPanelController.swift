@@ -164,7 +164,8 @@ final class ShelfPanelController {
         else { return }
         self.reason = reason
         store.refreshMissing()
-        Task { await promos.refreshIfStale() }
+        // Not during an auto-drag show: a first feed landing mid-drag would add the footer row and grow the panel.
+        if reason != .autoDrag { Task { await promos.refreshIfStale() } }
         updateMaxHeight(for: screen)
         let frame = self.frame(size: panel.contentView?.fittingSize ?? .zero, on: screen)
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
