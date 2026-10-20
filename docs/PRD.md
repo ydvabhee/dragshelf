@@ -48,7 +48,7 @@ looks and behaves like part of macOS.
 - Multiple shelves, shelf stacking, named shelves.
 - Shake-to-show gesture.
 - Custom hotkey recorder (fixed default hotkey, on/off only).
-- File actions (rename, convert, compress, AirDrop).
+- File actions (rename, convert, compress, AirDrop). Planned for v2, see §10.
 - iOS/iPadOS, Mac App Store build, sandbox.
 - Drag via VoiceOver (we provide Copy as the keyboard alternative instead).
 
@@ -61,6 +61,7 @@ looks and behaves like part of macOS.
 | M3 | Auto-show on drag, global hotkey |
 | M4 | Settings, accessibility and motion polish |
 | M5 | Developer ID signing + notarization (**BLOCKED**: needs user's Developer ID cert) |
+| M6 | v2: Shelf Actions (BACKLOG, starts after v1 ships; §10) |
 
 ## 8. User stories and acceptance criteria
 AC wording is for QA. "Shelf" = the DragShelf floating panel.
@@ -139,3 +140,65 @@ As a user, I drop files, images, links, or text on the shelf and they stay there
 ## 9. Success metrics (manual, MVP)
 - Drag from Finder into a hidden app via shelf in ≤ 2 gestures, no lost drops in the QA matrix.
 - Zero permission prompts. Idle CPU ~0%, memory < 60 MB with 50 items.
+
+## 10. v2: Shelf Actions (next version, BACKLOG)
+Not part of v1. v1 scope and T-01..T-12 do not change. User picked 4 actions (2026-10-20):
+Zip all, Rename, AirDrop / Share, Convert or resize images.
+
+Principle: an action never changes the user's original files. Each output is a **new cached shelf item**
+(except Share, which hands items to another service). The user drags the output out as usual.
+
+Where actions live:
+- Tile context menu: actions that apply to the clicked item, or to the selection if the clicked item is selected.
+- Header "Actions" menu (`ellipsis.circle`): applies to the selection, or to all items when nothing is selected.
+- Keyboard: Return renames the single selected file item (Finder parity).
+
+### US-11 Zip items (M6)
+As a user, I zip shelf items into one archive and drag the zip into an email or upload field.
+- AC-1: "Compress" on 1 file/folder item adds `<name>.zip`; on 2+ items adds `Archive.zip` (Finder naming).
+- AC-2: The zip opens in Archive Utility and contains exactly the zipped files/folders with original names and contents (byte-equal).
+- AC-3: Link and text items in the selection are skipped; the panel says how many were skipped (OQ-18).
+- AC-4: Source items stay on the shelf; the zip is added at the end and selected.
+- AC-5: Progress shows while zipping; Cancel stops it within 1 s and leaves no partial file in the cache.
+- AC-6: Originals are unchanged (same path, name, mtime).
+
+### US-12 Rename (M6)
+As a user, I rename a file on the shelf before dragging it out, so the target gets the right name.
+- AC-1: Context menu "Rename" or Return on one selected file item turns the caption into a text field with the base name selected.
+- AC-2: Return commits, Esc cancels, clicking elsewhere commits.
+- AC-3: Empty names, names with `/` or `:`, and names starting with `.` are rejected with an inline message; the old name stays.
+- AC-4: The tile shows the new name; dragging it out delivers a file with the new name and the same contents.
+- AC-5: The original file on disk keeps its name (OQ-17). The renamed item keeps its position on the shelf.
+- AC-6: Rename is unavailable for link, text, and missing items.
+
+### US-13 Share and AirDrop (M6)
+As a user, I send shelf items with AirDrop or any macOS share service without opening Finder.
+- AC-1: "Share…" shows the system share picker for the target items (files, links, and text).
+- AC-2: "AirDrop" opens the system AirDrop sheet with the target items; it is disabled when AirDrop cannot handle them (`canPerform`).
+- AC-3: A completed AirDrop to a nearby Mac or iPhone delivers the files with their names.
+- AC-4: Items stay on the shelf after sharing (OQ-25).
+- AC-5: The shelf stays visible while the picker or sheet is open, and does not hide behind it.
+
+### US-14 Convert or resize images (M6)
+As a user, I convert an image to another format or make it smaller before I upload it.
+- AC-1: "Convert To ▸" offers HEIC, JPEG, PNG, TIFF for image items (any format ImageIO can read, including WebP input).
+- AC-2: "Resize ▸" offers longest edge 512, 1024, 2048, 3840 px, never upscaling; the output keeps the source format (OQ-23).
+- AC-3: Each output is a new item named `<base>.<ext>` or `<base> (<N>px).<ext>`; source items stay.
+- AC-4: Output pixel size and format match the choice (`sips -g pixelWidth -g pixelHeight -g format`); orientation is upright.
+- AC-5: A transparent PNG converted to JPEG has a white background, not black.
+- AC-6: GPS location and other metadata are stripped; the color profile is kept (OQ-21).
+- AC-7: Batch over 20 selected images shows "n of 20" progress; Cancel stops after the current image, and finished outputs stay.
+- AC-8: Non-image items in the selection are skipped; with no image items the menu entries are disabled.
+
+### Common ACs for every action (M6)
+- AC-C1: The UI stays responsive (scrolling, dragging other items) while an action runs.
+- AC-C2: One action at a time; action menu entries are disabled while one runs.
+- AC-C3: A failure shows a short inline message in the panel and leaves no partial output.
+- AC-C4: Clear or quit during an action cancels it; nothing is left in the cache.
+- AC-C5: Every menu entry, progress, and error message has a VoiceOver label; start and finish are announced.
+- AC-C6: No permission prompt and no network access, except for what the user's chosen share service does.
+
+### v2 non-goals
+WebP or AVIF output, custom pixel sizes, quality slider, batch rename patterns, unzip, PDF actions,
+cloud upload, renaming originals in place (unless OQ-17 changes).
+

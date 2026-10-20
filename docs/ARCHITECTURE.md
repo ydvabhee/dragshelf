@@ -222,3 +222,40 @@ open build/DragShelf.app         # run; never run the bare binary
 - **ADR-011: Swift 6 mode, default actor isolation `MainActor`, warnings as errors.** Why: app is UI-bound; fewer annotations; zero-warning rule enforced by the compiler. Off-main work (promise receive, thumbnails) uses explicit `nonisolated`/`Task.detached` and hops back to main.
 - **ADR-012: Images and promised files are materialized to cache files; `ShelfItem.Kind` = file/url/text.** Why: one drag-out path for files, real files work in every target. Rejected: separate image kind with in-memory `NSImage` (two drag-out paths, fails in Finder/upload fields).
 - **ADR-013: SwiftPM package + `scripts/build-app.sh` instead of an `.xcodeproj` (supersedes ADR-003).** Why: `xcodebuild` (even `-list`) exits 70 on this machine (missing IDESimulatorFoundation symbol from stale `/Library/Developer/PrivateFrameworks/DVTDownloads`); the fix needs `sudo`, which only the user can run. `swift build`/`swift test` work, compile `.glassEffect` behind `#available(macOS 26, *)`, and run Swift Testing. A 30-line script gives the app bundle, Info.plist, and signing that Xcode would. Xcode can still open `Package.swift` later. Rejected: keep xcodeproj (cannot build or test), wait for the user (blocks all work), `swift build` xcbuild backend / universal `--arch` flags (route through the broken Xcode build system).
+- **ADR-014 (v2): Shelf Actions use native tools only and produce new cached items.** Zip = `/usr/bin/ditto` via `Process`; Share/AirDrop = SwiftUI `ShareLink` (wraps `NSSharingServicePicker`) + `NSSharingService(named: .sendViaAirDrop)`; Convert/Resize = ImageIO; Rename = rename the shelf copy (APFS clone into the cache), never the original. Work runs off `MainActor`, one job at a time, cancellable. Why: no deps (ADR-001), originals never touched (same rule as ADR-007), outputs reuse the existing cached-file drag-out path (ADR-012). Rejected: `NSFileCoordinator` `.forUploading` (zips only a single directory, returns a plain file unchanged, no cancel), ZIPFoundation/libarchive (deps), Apple Archive (`.aar`, not zip), `NSImage`/Core Image resize (more memory, loses orientation/metadata control), libwebp for WebP output (dep; ImageIO cannot write WebP), renaming originals in place (touches user data; OQ-17).
+
+## 11. v2: Shelf Actions design (BACKLOG)
+Scope: `docs/PRD.md` §10 (US-11..US-14). Tasks: `docs/TASKS.md` v2 backlog. Not built in v1.
+
+New files (all under `Sources/DragShelf/Actions/` unless noted):
+| Type | Kind | Responsibility |
+|---|---|---|
+| `ActionRunner` | `@Observable final class` (MainActor) | Holds the single running job: `title`, `progress: Double?` (nil = indeterminate), `error: String?`. `run(_ title:, work: @Sendable (ProgressReporter) async throws -> [URL])` starts a `Task`, adds each returned URL to `ShelfStore` as `.file` with `isCached = true`, selects the outputs. `cancel()` cancels the task. Drops results if `store.generation` changed (Clear during a job) |
+| `Zipper` | `enum`, `nonisolated` static funcs | `zip(_ urls: [URL], into dir: URL) async throws -> URL`. 1 source: `ditto -c -k --sequesterRsrc --keepParent <src> <dir>/<name>.zip`. 2+ sources: clone each into `<dir>/stage/` (`FileManager.copyItem`, APFS clone on the same volume), then `ditto -c -k --sequesterRsrc <dir>/stage <dir>/Archive.zip` (contents at top level), then delete `stage/`. `Process` args as an array, never a shell string. Cancel → `withTaskCancellationHandler { process.terminate() }` |
+| `ImageConverter` | `enum`, `nonisolated` static funcs | `convert(_ src: URL, to type: UTType, maxPixel: Int?, into dir: URL) throws -> URL`. `CGImageSourceCreateWithURL` → `CGImageSourceCreateThumbnailAtIndex` with `kCGImageSourceCreateThumbnailFromImageAlways`, `kCGImageSourceCreateThumbnailWithTransform` (upright), `kCGImageSourceThumbnailMaxPixelSize` = `min(maxPixel, source longest edge)` (no upscale) → `CGImageDestinationCreateWithURL` + `kCGImageDestinationLossyCompressionQuality = 0.85` for JPEG/HEIC. No source properties copied (strips GPS/EXIF); the color space stays with the `CGImage`. Alpha → JPEG: draw onto white in a `CGContext` first. `writableTypes` = `[.heic, .jpeg, .png, .tiff]` ∩ `CGImageDestinationCopyTypeIdentifiers()` |
+| `Renamer` | `enum`, `nonisolated` static funcs | `validate(_ name:) -> String?` (error text or nil). `rename(_ item:, to name:, cache:) throws -> ShelfItem`. Cached item: `moveItem` inside its own item dir. Original: `newItemDir()` + `copyItem` (clone) to `<dir>/<name>`, result `isCached = true`. Same `id` so position and selection stay |
+| `ActionsMenu` | SwiftUI view (`UI/ActionsMenu.swift`) | Menu content used by both the header "Actions" menu and the tile context menu: Compress, Rename…, Share… (`ShareLink`), AirDrop, Convert To ▸, Resize ▸. Target = selection if non-empty (or clicked item for context menu), else all |
+
+`ShelfStore` gets one new method: `replace(id:with:)` (Rename; keeps index and selection).
+
+Data flow: menu → `ActionRunner.run` → `Task.detached` work writes into `ItemCache.newItemDir()` →
+returns output URLs → back on `MainActor` → `store.add(ShelfItem(kind: .file(url), isCached: true))` → user drags it out.
+On failure or cancel, the job deletes its own item dir before returning.
+
+Rules:
+- Files produced by actions live in `ItemCache` and follow its lifecycle: removed with the item, wiped on clear/quit.
+- Actions never write outside `ItemCache`; sources are only read.
+- Progress: zip is indeterminate (ditto reports none); convert reports `done/total`; rename is indeterminate and shown only if it takes > 300 ms.
+- UI: while a job runs, the header shows a small `ProgressView`, the job title, and a Cancel (`xmark.circle`) button. Errors show as a one-line caption under the header until the next action or Close. VoiceOver announces start/finish via `AccessibilityNotification.Announcement`.
+- Rename edits text, so the panel must become key (it can: `canBecomeKey` is true). It must not activate the app.
+- Share/AirDrop: the picker and AirDrop sheet are owned by our app. If they do not appear in front from a non-activating panel, call `NSApp.activate()` only for this action (the same exception as Settings, ADR-005 rule 6). While the sheet is open, auto-hide rules must not hide the panel.
+
+v2 risks:
+| Risk | Mitigation |
+|---|---|
+| AirDrop sheet or share picker appears behind other apps from a non-activating panel | Spike first in V2-02; fallback: activate the app for this action only |
+| Renaming a large original across volumes is a full copy (slow, uses disk) | Runs as a cancellable job with progress; same-volume copies are APFS clones (instant, no extra space) |
+| Zipping 2+ items cross-volume copies them into `stage/` first | Same as above; ponytail ceiling documented in `Zipper`; upgrade = `ditto` per item into a shared archive if it matters |
+| ImageIO writers differ by OS (HEIC encode needs hardware support on some Macs) | Menu lists only `writableTypes` computed at runtime |
+| Text field inside a SwiftUI grid in an `NSPanel` loses focus on drag-out handle views | Rename task verifies keyboard focus with the T-07/T-13 overlay views in place |
+

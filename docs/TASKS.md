@@ -140,3 +140,59 @@ Milestone M5. Depends on: T-11. **Blocked on user:** needs a Developer ID Applic
 - AC-2: `xcrun notarytool submit --wait` returns Accepted; `xcrun stapler staple` succeeds.
 - AC-3: `spctl -a -vv DragShelf.app` reports `source=Notarized Developer ID`.
 - AC-4: Zipped app opens on a second Mac without Gatekeeper warnings.
+
+---
+
+# v2 backlog: Shelf Actions (M6)
+Next version only. Starts after v1 ships (T-11 DONE; T-12 may still be BLOCKED). Stories: PRD §10 (US-11..US-14).
+Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-C1..AC-C6 and the implicit ACs above.
+
+| ID | Title | Milestone | Depends on | Stories | Status |
+|---|---|---|---|---|---|
+| V2-01 | Zip + ActionRunner + Actions menus | M6 | T-11 | US-11, common | BACKLOG |
+| V2-02 | Share and AirDrop | M6 | V2-01 | US-13 | BACKLOG |
+| V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | BACKLOG |
+| V2-04 | Rename shelf items | M6 | V2-01 | US-12 | BACKLOG |
+
+Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
+V2-02 is the riskiest UI (AirDrop from a non-activating panel), so it goes early. V2-04 last: text editing in the panel touches focus.
+
+## V2-01 Zip + ActionRunner + Actions menus
+Milestone M6. Depends on: T-11. `Actions/ActionRunner.swift`, `Actions/Zipper.swift`, `UI/ActionsMenu.swift`.
+- AC-1: Header "Actions" menu (`ellipsis.circle`, glass on macOS 26) and tile context menu both show "Compress"; target = selection, else all (header) / clicked item (context).
+- AC-2: 1 item → `<name>.zip`; 2+ items → `Archive.zip`; zip added at end and selected; sources stay (PRD US-11 AC-1, AC-4).
+- AC-3: Unit test: zip 2 temp files + 1 folder, extract with `ditto -x -k` into a temp dir, contents byte-equal and names equal.
+- AC-4: Link/text items skipped; panel caption says "Skipped n items" (US-11 AC-3).
+- AC-5: Header shows progress + Cancel while running; Cancel terminates `ditto` within 1 s; unit test: cancelled job leaves no files under the test cache root.
+- AC-6: Second action while one runs is disabled; Clear during a job cancels it and adds nothing (unit test with `generation`).
+- AC-7: Failure (e.g. source deleted mid-job) shows a one-line error and leaves no partial zip.
+- AC-8: Originals unchanged (path, name, mtime) after zipping.
+
+## V2-02 Share and AirDrop
+Milestone M6. Depends on: V2-01. Additions to `UI/ActionsMenu.swift` only.
+- AC-1: "Share…" (`ShareLink`) shows the system share picker with file, link, and text items (US-13 AC-1).
+- AC-2: "AirDrop" calls `NSSharingService(named: .sendViaAirDrop)`; disabled when `canPerform(withItems:)` is false.
+- AC-3: Manual: AirDrop 2 files to a nearby device delivers both with names (US-13 AC-3).
+- AC-4: Picker/sheet appears in front of other apps; panel stays visible while it is open. If `NSApp.activate()` is needed, it is called only for this action (documented in the code).
+- AC-5: Items stay on the shelf after sharing.
+
+## V2-03 Convert and resize images (ImageIO)
+Milestone M6. Depends on: V2-01. `Actions/ImageConverter.swift`, menu entries.
+- AC-1: "Convert To ▸" lists HEIC, JPEG, PNG, TIFF filtered by `CGImageDestinationCopyTypeIdentifiers()`; "Resize ▸" lists 512/1024/2048/3840 px. Both disabled when the target has no image items.
+- AC-2: Unit test: a generated 4000×3000 image → each format; read back with `CGImageSource`: type matches, longest edge matches preset, 300×200 source is not upscaled.
+- AC-3: Unit test: transparent PNG → JPEG; corner pixel is white.
+- AC-4: Unit test: source with GPS EXIF → output has no `{GPS}` properties; source with orientation 6 → output upright (width/height swapped, orientation 1 or absent).
+- AC-5: Output names per US-14 AC-3; outputs added and selected; sources stay.
+- AC-6: Batch of 20 shows "n of 20"; Cancel stops after the current image and keeps finished outputs.
+- AC-7: WebP input converts; no WebP/AVIF output offered (OQ-22).
+
+## V2-04 Rename shelf items
+Milestone M6. Depends on: V2-01. `Actions/Renamer.swift`, `ShelfStore.replace(id:with:)`, tile caption edit.
+- AC-1: Context menu "Rename" and Return on one selected file item open an inline text field with the base name selected; panel becomes key without activating the app.
+- AC-2: Return/click-away commits, Esc cancels (Esc does not also hide the panel while editing).
+- AC-3: Unit test `Renamer.validate`: rejects empty, `/`, `:`, leading `.`, names > 255 UTF-8 bytes; accepts Unicode and spaces.
+- AC-4: Unit test: cached item renamed in place (same item dir, old name gone); original item → new cached clone with the new name, original path still exists with the old name.
+- AC-5: Renamed item keeps its id, index, and selection (unit test on `replace(id:with:)`).
+- AC-6: Drag out of a renamed item delivers the new name with identical contents (manual, Finder).
+- AC-7: Rename disabled for link, text, and missing items.
+
