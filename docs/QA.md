@@ -231,3 +231,30 @@ Manual (user runs):
 7. Hotkey, arrows, Space, Cmd-C, Esc without mouse. Then Show Shelf from menu: note whether typing reaches the frontmost app (finding 1).
 8. Two displays: drag header across screens; panel stays below menu bar and inside screen, no flicker. Max height follows screen after move.
 9. Activity Monitor with 50 items idle: CPU ~0%, memory < 60 MB.
+
+## T-14 Remote "More apps" promo line (bb0dddb) - PASS
+Auto: build, 53 tests, release build green, no warnings. No real network (stub `URLProtocol`). Mutation check: disabling `RedirectGuard` + final-URL check makes the `http:`/`evil.com` redirect cases fail, so the tests bite.
+
+Security review (trust boundary):
+- Host check: exact `Set.contains` on lowercased `url.host`, no suffix match. Probed on this OS: `evil-example.com`, `example.com.evil.com`, `example.com.` (trailing dot), `evil.com\@example.com`, `example.com%2F@evil.com`, `@example.com`, `:@example.com`, `https:example.com`, IDN homograph (→ `xn--…`), `%00` in host: all denied. `%65xample.com` allowed (browser decodes to the same host). Non-default port allowed (same host, info).
+- Checked at decode, each redirect (`willPerformHTTPRedirection`, task delegate), final `response.url`, and click (`PromoLoader.open`). `https` only.
+- Size: `expectedContentLength` pre-check + streamed byte cap (throws at 64 KB + 1); `decode` caps again. Timeouts 15 s request / 30 s resource. Ephemeral session, no cookie store, no credential store, no URL cache. Request: UA `DragShelf/<ver>` only (CFNetwork still adds `Accept-Language`, info).
+- Text: title/subtitle reject Cc/Cf/Zl/Zp (newline, bidi overrides). Rendered via `Text(String)` and `Button(String)` (StringProtocol inits: no Markdown, no localization lookup). Length counts graphemes, so one char can carry many combining marks (low).
+- Cache: `~/Library/Caches/com.abhishekyadav.DragShelf/Promos/feed.json`, outside `ItemCache.root` (`…/Shelf`), atomic write, user perms. Corrupt cache → `feed = nil`, and no `If-None-Match` is sent without a cache.
+
+Findings (non-blocking):
+1. PromoLoader.swift:87: low: any failure, including offline at first launch, waits a full 24 h (no promo all day). Fix: on `URLError`, store `lastFetch = now - interval + 3h` so it retries after ~3 h; keep 24 h for server 4xx/5xx/invalid.
+2. PromoFeed.swift:59: low: `count` is graphemes; a Zalgo title (1 letter + 1000s of marks) passes and can overdraw outside the line. Fix: also cap `unicodeScalars.count` (e.g. ≤ 2 × max).
+3. ShelfView.swift:39: low: first fetch (no cache) finishing during an auto-drag show inserts the footer row, so the panel grows mid-drag. Fix: skip `refreshIfStale` when `reason == .autoDrag`, or apply a new feed only when not dragging.
+
+Manual (user runs; serve `backend/promos.json` or point a debug build at a test host):
+1. Fresh prefs, feed reachable: launch, show shelf (hotkey). One line under the grid: symbol, title, grey subtitle, ✕. Grid size unchanged.
+2. Hover the line: tooltip shows the URL. Click: browser opens the link; DragShelf does not activate (frontmost app is the browser).
+3. Start a Finder drag: footer fades out, panel height does not change, no flicker at the bottom edge. Drop or cancel: footer returns. Same for dragging a tile out.
+4. Click ✕: footer switches to the next eligible promo or disappears. Quit, relaunch: dismissed promo stays hidden in the footer but is still in menu "More Apps".
+5. Menu bar: "More Apps" submenu lists eligible promos; click opens browser. With an empty/ineligible feed, the submenu is absent. After a first fetch with no cache, reopen the menu: submenu appears without relaunch.
+6. Settings: toggle "Show other apps from the developer" off: footer and submenu vanish at once, no request (Little Snitch / `nettop`). On: they return; fetch only if last fetch > 24 h.
+7. Offline (Wi-Fi off) with a cache: cached promo shows, no error UI. Offline with no cache (delete `…/Promos/feed.json` and the `promoLastFetch` default): nothing shows, no error UI.
+8. Next day (or change the date): footer shows a different promo when 2+ are eligible.
+9. VoiceOver: line reads "<title>, <subtitle>. Opens in browser"; ✕ reads "Hide this suggestion".
+10. AC-X: hotkey show → arrows/Esc work in the shelf. Menu "Show Shelf" and drag auto-show → typing still goes to the frontmost app.
