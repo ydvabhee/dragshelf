@@ -25,6 +25,23 @@ Tests use temp root only.
 Manual (user):
 1. Quit via menu: confirm cache dir empty (`ls ~/Library/Caches/com.abhishekyadav.DragShelf/Shelf`). (SIGTERM skips willTerminate; only menu Quit covers AC-5 quit.)
 
+## T-03 Floating panel + Liquid Glass shell (PASS, c5caff8)
+Auto: build, test (7 pass), build-app.sh ok. No NSApp.activate in panel path (only Settings). `#available` only in Glass.swift. Reduce Motion/Transparency/Increase Contrast handled in code. Header icons + tiles have VoiceOver labels.
+Snapshots (offscreen, `DRAGSHELF_SNAPSHOT_DIR=... swift test`): colors in code are semantic (.secondary/.tertiary/default primary), but offscreen render shows black text in dark and white icons in light. Offscreen NSHostingView in an unshown NSWindow does not propagate appearance to SwiftUI; treat as artifact, confirm on screen (steps 7-8). Glass never renders offscreen.
+Known gaps: Esc hides only when panel is key (non-activating panel rarely is) -> deferred to T-07 keyboard; drag-all button no action until T-06. Controller<->panel<->hosting view is a strong cycle (app-lifetime singleton, harmless).
+
+Manual (user):
+1. Menu "Show Shelf": panel at right edge, vertically centered, on the display containing the cursor. Menu item becomes "Hide Shelf".
+2. Frontmost app (e.g. TextEdit) stays frontmost and its window stays key after show and after clicking panel/Close.
+3. Cmd-Tab, switch Spaces, open a full-screen app: panel stays visible on top.
+4. macOS 26: glass background, 22 pt corners, circular glass header buttons. macOS 14-15 (if available): vibrant material.
+5. Empty: tray icon + "Drop here"; Drag All and Clear disabled. Close hides. Esc: note whether it works (expected only if panel is key).
+6. System Settings > Accessibility > Display: Reduce Motion -> fade only, no scale; Reduce Transparency -> opaque panel; Increase Contrast -> border.
+7. Light mode: text/icons legible on glass over light and dark wallpapers.
+8. Dark mode: same. Title/captions must be light, not black.
+9. VoiceOver: Drag All, Clear Shelf, Close announced; tiles read "<type>, <name>".
+10. Two displays: show with cursor on each.
+
 ## Manual drag/drop matrix (fill from T-04 on)
 Per cell check: shelf appears on drag start, accepts drop, stays on top across app switch,
 drag out gives right content, removal works, cache empty after clear/quit.
