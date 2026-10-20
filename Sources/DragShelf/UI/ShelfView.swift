@@ -24,7 +24,7 @@ struct ShelfView: View {
         }
         .frame(width: 288)
         .frame(minHeight: 160, alignment: .top)
-        .shelfBackground(isTargeted: false)
+        .shelfBackground(isTargeted: store.isDropTargeted)
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.15),
                    value: store.items)
     }

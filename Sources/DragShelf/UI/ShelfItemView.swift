@@ -21,13 +21,10 @@ struct ShelfItemView: View {
         .accessibilityLabel("\(typeDescription), \(name)")
     }
 
-    // ponytail: system icon for files; QuickLook thumbnails arrive with Thumbnail.swift (T-04).
     @ViewBuilder private var thumbnail: some View {
         switch item.kind {
         case .file(let url):
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                .resizable()
-                .scaledToFit()
+            FileThumbnail(url: url)
         case .url:
             symbol("link")
         case .text:

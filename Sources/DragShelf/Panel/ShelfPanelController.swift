@@ -13,7 +13,9 @@ final class ShelfPanelController {
 
     init(store: ShelfStore) {
         self.store = store
-        panel.contentView = FirstMouseHostingView(rootView: PanelRoot(controller: self))
+        let receiver = DropReceiver(rootView: PanelRoot(controller: self))
+        receiver.store = store
+        panel.contentView = receiver
         panel.onCancel = { [weak self] in self?.hide() }
     }
 
@@ -66,9 +68,4 @@ private struct PanelRoot: View {
         ShelfView(store: controller.store, maxHeight: controller.maxHeight, onClose: controller.hide)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96)
     }
-}
-
-/// The app is never active, so the first click on the panel must reach SwiftUI controls.
-private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

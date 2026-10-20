@@ -43,7 +43,9 @@ private struct ShelfBackground: ViewModifier {
         let tint = Color.accentColor.opacity(0.25)
         styled(content, shape: shape, tint: tint)
             .overlay {
-                if contrast == .increased {
+                if isTargeted {
+                    shape.strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 2)
+                } else if contrast == .increased {
                     shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                 }
             }

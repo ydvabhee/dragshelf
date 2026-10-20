@@ -5,6 +5,8 @@ import Observation
 final class ShelfStore {
     private(set) var items: [ShelfItem] = []
     var selection: Set<UUID> = []
+    /// True while a drag hovers the panel (set by `DropReceiver`).
+    var isDropTargeted = false
     @ObservationIgnored let cache: ItemCache
 
     init(cache: ItemCache = ItemCache()) {
