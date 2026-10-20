@@ -23,9 +23,14 @@ private let web = URL(string: "https://example.com/x")!
     #expect(PasteboardReader.read(pb) == [.file(file), .url(web), .text("hi")])
 }
 
-@Test func operationMaskIsCopyOutsideOnly() {
-    #expect(DragOutSource.mask(for: .outsideApplication) == .copy)
-    #expect(DragOutSource.mask(for: .withinApplication) == [])
+@Test func operationMask() {
+    for cmd in [false, true] {
+        let m: NSEvent.ModifierFlags = cmd ? .command : []
+        #expect(DragOutSource.mask(for: .withinApplication, modifiers: m, allFiles: true) == [])
+        #expect(DragOutSource.mask(for: .outsideApplication, modifiers: m, allFiles: false) == .copy)
+        #expect(DragOutSource.mask(for: .outsideApplication, modifiers: m, allFiles: true) == (cmd ? .move : .copy))
+    }
+    #expect(DragOutSource.mask(for: .outsideApplication, modifiers: [.option, .shift], allFiles: true) == .copy)
 }
 
 @Test func sessionEndRemovesOnlyOnDrop() throws {
@@ -71,6 +76,22 @@ private let web = URL(string: "https://example.com/x")!
     #expect(DragOutSource.shouldRemove(operation: .copy, keepAfterDragOut: false))
     #expect(!DragOutSource.shouldRemove(operation: .copy, keepAfterDragOut: true))
     #expect(!DragOutSource.shouldRemove(operation: [], keepAfterDragOut: false))
+    #expect(DragOutSource.shouldRemove(operation: .move, keepAfterDragOut: true))
+    #expect(DragOutSource.shouldRemove(operation: .move, keepAfterDragOut: false))
+}
+
+@Test func movedCachedItemLeavesNoEmptyDir() throws {
+    let store = tempStore()
+    defer { store.cache.wipe() }
+    let dir = try store.cache.newItemDir()
+    let f = dir.appendingPathComponent("img.png")
+    try Data("x".utf8).write(to: f)
+    let a = ShelfItem(kind: .file(f), isCached: true)
+    store.add(a)
+    try FileManager.default.removeItem(at: f) // receiver moved it away
+    DragOutSource(store: store, ids: [a.id]).ended(operation: .move)
+    #expect(store.items.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: dir.path))
 }
 
 @Test func preferencesDefaults() {

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Drag out and Cmd-C for shelf items (ADR-007): file/url → `NSURL`, text → `NSString`, copy only.
+/// Drag out and Cmd-C for shelf items (ADR-007): file/url → `NSURL`, text → `NSString`; copy, or move with Cmd for all-file drags.
 final class DragOutSource: NSObject, NSDraggingSource {
     /// Keeps the source alive for the running session (one drag at a time).
     private(set) static var current: DragOutSource?
@@ -54,33 +54,51 @@ final class DragOutSource: NSObject, NSDraggingSource {
         }
     }
 
-    /// Copy only, and never back onto our own shelf (a drop there would be a no-op duplicate).
-    static func mask(for context: NSDraggingContext) -> NSDragOperation {
-        context == .outsideApplication ? .copy : []
+    /// Outside the app: Cmd held and every item is a file → `.move`; else `.copy`. Inside the app: `[]`
+    /// (a drop on our own shelf would be a no-op duplicate).
+    /// Single-operation masks (never `[.copy, .move]`) keep the receiver and the badge predictable.
+    /// Mixed selection: whole drag copies (per-item masks are not supported by AppKit).
+    static func mask(for context: NSDraggingContext, modifiers: NSEvent.ModifierFlags = [], allFiles: Bool = false) -> NSDragOperation {
+        guard context == .outsideApplication else { return [] }
+        return allFiles && modifiers.contains(.command) ? .move : .copy
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        Self.mask(for: context)
+        let allFiles = store.items.filter { ids.contains($0.id) }.allSatisfy { if case .file = $0.kind { true } else { false } }
+        return Self.mask(for: context, modifiers: NSEvent.modifierFlags, allFiles: allFiles)
     }
 
-    /// Cmd/Option must not turn the drag into a move/link the mask forbids.
-    func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
+    /// False so the system badge follows our per-call mask (Cmd toggles move live).
+    func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { false }
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         ended(operation: operation)
         Self.current = nil
     }
 
-    /// Pure rule: `[]` = cancelled (Esc / dropped on nothing) → keep; `keepAfterDragOut` → keep.
+    /// Pure rule: `[]` = cancelled (Esc / dropped on nothing) → keep; `.move` → always remove
+    /// (the file left its folder); otherwise `keepAfterDragOut` → keep.
     static func shouldRemove(operation: NSDragOperation, keepAfterDragOut: Bool) -> Bool {
-        operation != [] && !keepAfterDragOut
+        if operation == .move { return true }
+        return operation != [] && !keepAfterDragOut
     }
 
     /// Removes the dragged items unless `shouldRemove` says keep.
-    /// Cache dirs stay until clear/quit: targets (Finder copy, browser upload, Slack) read the file after the drop.
+    /// Copy: cache dirs stay until clear/quit (targets read the file after the drop).
+    /// Move: the file is gone, so an emptied cache dir is deleted.
     func ended(operation: NSDragOperation) {
         guard Self.shouldRemove(operation: operation, keepAfterDragOut: Preferences.keepAfterDrag()) else { return }
+        let moved = store.items.filter { ids.contains($0.id) && $0.isCached }
         store.remove(ids: ids, deletingCache: false)
+        guard operation == .move else { return }
+        let fm = FileManager.default
+        let root = store.cache.root.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        for case .file(let url) in moved.map(\.kind) {
+            let parts = url.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+            guard parts.count > root.count + 1, Array(parts.prefix(root.count)) == root else { continue }
+            let dir = store.cache.root.appendingPathComponent(parts[root.count], isDirectory: true)
+            if (try? fm.contentsOfDirectory(atPath: dir.path))?.isEmpty == true { store.cache.remove(dir: dir) }
+        }
     }
 }
 

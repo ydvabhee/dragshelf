@@ -18,9 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private var appliedAutoShow: Bool?
+    private var appliedHotKey: Bool?
+
+    /// Fires on every UserDefaults change (incl. shelf moves): act only when a value changed.
     private func applyPreferences() {
-        if Preferences.autoShowEnabled() { dragMonitor.start() } else { dragMonitor.stop() }
-        if Preferences.hotKeyOn() { hotKey.register() } else { hotKey.unregister() }
+        let autoShow = Preferences.autoShowEnabled(), hotKeyOn = Preferences.hotKeyOn()
+        if autoShow != appliedAutoShow {
+            appliedAutoShow = autoShow
+            if autoShow { dragMonitor.start() } else { dragMonitor.stop() }
+        }
+        if hotKeyOn != appliedHotKey {
+            appliedHotKey = hotKeyOn
+            if hotKeyOn { hotKey.register() } else { hotKey.unregister() }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
