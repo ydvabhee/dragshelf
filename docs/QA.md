@@ -408,3 +408,25 @@ Manual:
 6. Rename a file to a name another tile already has: gets ` 2`. Compress twice: `Archive.zip`, `Archive 2.zip`.
 7. Link, text, and missing items: Rename is disabled. Select 2 items: Return does nothing.
 8. Rename a file from an external/USB volume: header shows "Renaming…" with Cancel; Clear mid-copy leaves nothing in the cache.
+
+## V2-03 Convert and resize images (8a8e1f7) - FAIL (1)
+Build, 113 tests, release build green. `cancelStopsDittoFastAndLeavesNothing` (V2-01, 1 s limit) failed once at 2.1 s on the first full run, then passed 2 full runs and alone: timing flake under load from the new image tests (low).
+- Merge with V2-04 ok: `allCases = [.compress, .rename]`; every switch (`title`, `runningTitle`, `doneTitle`, `failure`, `applicable`, `run`) covers all four cases. `run(.rename)` still opens the name field (`renamingID`), never a job. Header `ActionsMenu` and tile `menu(for:)` both show Compress, Rename…, Convert To ▸, Resize ▸; submenu parents disabled when no image applies.
+- Names: `ImageConverter` gets `taken` (shelf names) and suffixes inside the job; `ActionRunner.unique` then sees a name not on the shelf and leaves it. No double suffix. Same-name sources in one batch handled by `used`.
+- Metadata: output is written from the thumbnail `CGImage` with only the quality option, so no EXIF/GPS/TIFF/IPTC/XMP is copied. Color space travels with the image. `CreateThumbnailWithTransform` bakes orientation (output has no orientation tag). Max pixel = `min(preset, longest edge)`: no upscale. `FromImageAlways` so the embedded preview is never used.
+- JPEG output flattens alpha onto white. HEIC offered only if `CGImageDestinationCopyTypeIdentifiers` lists it. WebP source reads; WebP/AVIF never offered; resize of unwritable source falls back to JPEG.
+- ADR-016: `ShelfAction.run` is `@concurrent`, `ImageConverter` is `nonisolated`, progress closure `@Sendable`, hops to main via `Task { @MainActor }`. Job dir is in flight until the job ends.
+- Cancel: loop checks `Task.isCancelled` between images; finished outputs returned and added (sane). Cancel before the first output removes the dir and adds nothing. Clear (generation) and Quit still drop everything.
+- Finding (med): one unreadable/corrupt image throws `Failed`, so the whole batch fails, finished outputs are deleted, and the message is generic. Should skip it, keep the rest, show "1 image couldn't be converted". Fix in `ImageConverter.run` (catch per image, count failures, return them) and `ActionRunner` message.
+- Note: animated GIF/APNG converts first frame only (`CreateThumbnailAtIndex 0`). Accepted limit.
+- Low: `canRun` stats every item for each menu entry on each redraw (~8 entries); fine for small shelves.
+Manual:
+1. Drop a 4000x3000 JPEG with GPS (iPhone photo). Actions, Convert To, PNG: `<name>.png` added and selected, source unchanged. Check in Preview Inspector: no GPS/EXIF, same color profile, upright.
+2. Resize 1024 px: `<name> (1024px).jpg`, longest edge 1024. Resize 3840 on a 800 px image: stays 800.
+3. Transparent PNG, Convert To JPEG: background white.
+4. Convert To HEIC (if listed): opens in Preview. Menu lists only HEIC, JPEG, PNG, TIFF. WebP image converts to PNG; Resize of WebP gives JPEG.
+5. Select a text item and an image: Convert works on the image, caption "Skipped 1 item". Select only links: Convert To and Resize disabled.
+6. Select 20+ images, Convert: header "Converting… n of 20". Cancel midway: finished outputs stay, none partial. Clear mid-job: nothing added, cache empty.
+7. Convert `a.png` to PNG: output `a 2.png`. Run it twice: `a 2.png`, `a 3.png`.
+8. Drop a corrupt .jpg with 3 good images, Convert: currently whole batch fails (finding above).
+9. Rename… from header and tile menu still opens the name field; Compress still works.
