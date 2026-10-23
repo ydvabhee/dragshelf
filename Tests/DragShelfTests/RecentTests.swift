@@ -103,3 +103,14 @@ private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath:
     #expect(RecentList.age(now.addingTimeInterval(-10), now: now) == "just now")
     #expect(RecentList.age(now.addingTimeInterval(-120), now: now, style: .full).contains("2 minutes"))
 }
+
+@Test func recentDragRemovesShelfItemsOnlyOnMove() {
+    let store = tempStore()
+    let a = ShelfItem(kind: .text("A")), b = ShelfItem(kind: .text("B"))
+    store.add(a); store.add(b)
+    let recentA = ShelfItem(kind: .text("A")) // same key as the shelf's A, different id
+    DragOutSource(store: store, items: [recentA], fromRecent: true).ended(operation: .copy)
+    #expect(store.items.count == 2)
+    DragOutSource(store: store, items: [recentA], fromRecent: true).ended(operation: .move)
+    #expect(store.items.map(\.kind) == [b.kind])
+}
