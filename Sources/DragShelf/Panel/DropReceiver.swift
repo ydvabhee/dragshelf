@@ -18,7 +18,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     /// A drop landed (keeps an auto-shown shelf open, T-08 AC-3).
     var onDrop: (() -> Void)?
     /// A file promise from that drop failed (e.g. offline Mail attachment).
-    var onPromiseFailed: (() -> Void)?
+    var onPromiseFailed: (@MainActor () -> Void)?
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -107,7 +107,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     /// nothing from an asynchronous drop landed.
     @discardableResult
     static func ingest(_ incoming: [PasteboardReader.Incoming], into store: ShelfStore,
-                       onPromiseFailed: @escaping () -> Void = {}) -> Bool {
+                       onPromiseFailed: @escaping @MainActor () -> Void = {}) -> Bool {
         let hasImage = incoming.contains { if case .image = $0 { true } else { false } }
         if !hasImage, pendingIngestCount == 0 {
             return incoming.reduce(false) { add($1, into: store, onPromiseFailed: onPromiseFailed) || $0 }
@@ -138,7 +138,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     /// Adds one non-image value now (a promise starts receiving and counts as landed).
     private static func add(_ value: PasteboardReader.Incoming, into store: ShelfStore,
-                            onPromiseFailed: @escaping () -> Void) -> Bool {
+                            onPromiseFailed: @escaping @MainActor () -> Void) -> Bool {
         switch value {
         case .file(let url): return store.add(ShelfItem(kind: .file(url)))
         case .url(let url): return store.add(ShelfItem(kind: .url(url)))
@@ -151,10 +151,18 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     }
 
     /// Receives a file promise into `root/<UUID>/` on a background queue, then adds the item on main.
-    private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore, onFail: @escaping () -> Void) {
+    private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore, onFail: @escaping @MainActor () -> Void) {
         let cache = store.cache, generation = store.generation
         guard let dir = try? cache.newItemDir() else { log.error("promise: cannot create cache dir"); onFail(); return }
-        receiver.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: promiseQueue) { url, error in
+        receiver.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: promiseQueue,
+                                      reader: promiseHandler(dir: dir, store: store, generation: generation, onFail: onFail))
+    }
+
+    /// The promise reader. AppKit calls it on `promiseQueue`, so it must be nonisolated: a MainActor-inferred
+    /// closure traps on the runtime isolation check before its body runs. Hops to main to add the item.
+    nonisolated static func promiseHandler(dir: URL, store: ShelfStore, generation: Int,
+                                           onFail: @escaping @MainActor () -> Void) -> @Sendable (URL, (any Error)?) -> Void {
+        { url, error in
             Task { @MainActor in
                 if !finishPromise(url: error == nil ? url : nil, error: error, dir: dir, store: store,
                                   generation: generation) { onFail() }

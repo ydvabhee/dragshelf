@@ -110,3 +110,35 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(store.items.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: dir.path))
 }
+
+/// AppKit calls the promise reader on a background queue; a MainActor-isolated reader traps there.
+@Test func promiseHandlerCalledOffMainAddsItem() async throws {
+    let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
+    defer { cache.wipe() }
+    let store = ShelfStore(cache: cache)
+    let dir = try cache.newItemDir()
+    let file = dir.appendingPathComponent("image.png")
+    try Data("x".utf8).write(to: file)
+    let handler = DropReceiver<EmptyView>.promiseHandler(dir: dir, store: store, generation: store.generation) {}
+    OperationQueue().addOperation { handler(file, nil) }
+    for _ in 0..<200 where store.items.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(store.items.map(\.kind) == [.file(file)])
+}
+
+@Test func promiseHandlerErrorOffMainCallsOnFailAndRemovesDir() async throws {
+    let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
+    defer { cache.wipe() }
+    let store = ShelfStore(cache: cache)
+    let dir = try cache.newItemDir()
+    await confirmation { failed in
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            let handler = DropReceiver<EmptyView>.promiseHandler(dir: dir, store: store, generation: store.generation) {
+                failed()
+                done.resume()
+            }
+            DispatchQueue.global().async { handler(dir.appendingPathComponent("gone"), CocoaError(.fileReadUnknown)) }
+        }
+    }
+    #expect(store.items.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: dir.path))
+}

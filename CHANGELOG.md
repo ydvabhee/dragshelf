@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recent list resets to the grid each time DragShelf shows or receives a drop.
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
+### Fixed
+- DragShelf no longer quits when you drop a file promise, such as an image dragged from VS Code.
+
 ## [0.1.0] - 2026-10-23
 
 First public preview. The build is ad-hoc signed and not yet notarized (see README → Install).
