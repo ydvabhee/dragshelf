@@ -12,6 +12,15 @@ struct ActionsMenu: View {
                 Button(action.title) { store.actions.run(action, on: targets, in: store) }
                     .disabled(!store.actions.canRun(action, on: targets))
             }
+            // V2-03: disabled when the target has no image items.
+            ForEach([("Convert To", ShelfAction.conversions), ("Resize", ShelfAction.resizes)], id: \.0) { title, actions in
+                Menu(title) {
+                    ForEach(actions, id: \.self) { action in
+                        Button(action.menuTitle) { store.actions.run(action, on: targets, in: store) }
+                    }
+                }
+                .disabled(!actions.contains { store.actions.canRun($0, on: targets) })
+            }
         } label: {
             Label("Actions", systemImage: "ellipsis.circle")
         }

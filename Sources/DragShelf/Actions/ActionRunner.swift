@@ -1,24 +1,64 @@
 import Foundation
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A shelf action (PRD §10). New actions (convert, resize, rename) add a case; `ActionRunner` stays as is.
 nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
     case compress
     /// Opens the inline name field (`ActionRunner.run`); the job itself is `ActionRunner.rename`.
     case rename
+    /// Convert To ▸ (V2-03): one new image per source in this format.
+    case convert(UTType)
+    /// Resize ▸ (V2-03): longest edge in px, source format kept, never upscaled.
+    case resize(Int)
+
+    /// Top-level menu entries. Convert To ▸ and Resize ▸ are submenus listing `conversions` and `resizes`.
+    static let allCases: [ShelfAction] = [.compress, .rename]
+    static let conversions = ImageConverter.writableTypes.map { ShelfAction.convert($0) }
+    static let resizes = ImageConverter.presets.map { ShelfAction.resize($0) }
+
+    /// Submenu entry title.
+    var menuTitle: String {
+        switch self {
+        case .convert(let type): (type.preferredFilenameExtension ?? type.identifier).uppercased()
+        case .resize(let px): "\(px) px"
+        default: title
+        }
+    }
 
     /// Menu title (Finder wording).
-    var title: String { switch self { case .compress: "Compress"; case .rename: "Rename…" } }
+    var title: String {
+        switch self {
+        case .compress: "Compress"
+        case .rename: "Rename…"
+        case .convert: "Convert to \(menuTitle)"
+        case .resize(let px): "Resize to \(px) px"
+        }
+    }
     /// Header text and VoiceOver announcement while it runs.
-    var runningTitle: String { switch self { case .compress: "Compressing…"; case .rename: "Renaming…" } }
+    var runningTitle: String {
+        switch self {
+        case .compress: "Compressing…"
+        case .rename: "Renaming…"
+        case .convert: "Converting…"
+        case .resize: "Resizing…"
+        }
+    }
     /// VoiceOver announcement when it finished.
-    var doneTitle: String { switch self { case .compress: "Archive added"; case .rename: "Renamed" } }
+    var doneTitle: String {
+        switch self {
+        case .compress: "Archive added"
+        case .rename: "Renamed"
+        case .convert, .resize: "Images added"
+        }
+    }
     /// One-line error under the header.
     var failure: String {
         switch self {
         case .compress: "Couldn't compress. An item may have been moved or deleted."
         case .rename: "Couldn't rename. The item may have been moved or deleted."
+        case .convert, .resize: "Couldn't convert an image. It may be damaged, moved, or deleted."
         }
     }
 
@@ -28,15 +68,21 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         case .compress: items.filter { if case .file = $0.kind { ShelfStore.exists($0) } else { false } }
         // One present file only: links, text, and missing items can't be renamed (V2-04 AC-7).
         case .rename: items.count == 1 ? ShelfAction.compress.applicable(items) : []
+        case .convert, .resize:
+            items.filter { if case .file(let url) = $0.kind { ImageConverter.isImage(url) && ShelfStore.exists($0) } else { false } }
         }
     }
 
     /// Runs off the main actor. Reads `urls`, writes outputs only into `dir` (the job's cache dir), returns them.
-    /// `progress` takes 0...1 (zip reports none: indeterminate). Must stop promptly on task cancellation.
-    @concurrent func run(_ urls: [URL], into dir: URL, progress: @Sendable (Double) -> Void) async throws -> [URL] {
+    /// `progress` takes 0...1 (zip reports none: indeterminate). Must stop promptly on task cancellation; outputs
+    /// returned after a cancel are kept (convert keeps finished images), so throw to discard. `taken`: lowercased
+    /// names already on the shelf.
+    @concurrent func run(_ urls: [URL], into dir: URL, taken: Set<String>, progress: @Sendable (Double) -> Void) async throws -> [URL] {
         switch self {
         case .compress: [try await Zipper.zip(urls, into: dir)]
         case .rename: [] // Never runs: `ActionRunner.run(.rename)` opens the name field instead.
+        case .convert(let type): try ImageConverter.run(urls, to: type, maxPixel: nil, into: dir, taken: taken, progress: progress)
+        case .resize(let px): try ImageConverter.run(urls, to: nil, maxPixel: px, into: dir, taken: taken, progress: progress)
         }
     }
 }
@@ -50,6 +96,13 @@ final class ActionRunner {
     private(set) var running: ShelfAction?
     /// 0...1, or nil = indeterminate.
     private(set) var progress: Double?
+    /// Items in the running job; the header shows "n of count" when progress is known.
+    private(set) var count = 0
+    /// "3 of 20" while a multi-item job reports progress (V2-03 AC-6).
+    var step: String? {
+        guard let progress, count > 1 else { return nil }
+        return "\(min(count, Int((progress * Double(count)).rounded()) + 1)) of \(count)"
+    }
     /// One line under the header: an error or "Skipped n items". Cleared by the next action or when DragShelf hides.
     var message: String?
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -71,6 +124,7 @@ final class ActionRunner {
         }
         let skipped = targets.count - items.count, cache = store.cache, generation = store.generation
         let urls = items.compactMap { if case .file(let url) = $0.kind { url } else { nil } }
+        let taken = Set(store.items.compactMap { if case .file(let url) = $0.kind { url.lastPathComponent.lowercased() } else { nil } })
         message = nil
         guard let dir = try? cache.newItemDir() else {
             message = action.failure
@@ -79,11 +133,12 @@ final class ActionRunner {
         store.beginInFlight(dir)
         running = action
         progress = nil
+        count = urls.count
         Self.announce(action.runningTitle)
         let job = Task {
             let result: Result<[URL], any Error>
             do {
-                result = .success(try await action.run(urls, into: dir) { [weak self] p in
+                result = .success(try await action.run(urls, into: dir, taken: taken) { [weak self] p in
                     Task { @MainActor in if self?.running == action { self?.progress = p } }
                 })
             } catch {
@@ -94,7 +149,7 @@ final class ActionRunner {
             progress = nil
             task = nil
             let cleared = generation != store.generation
-            guard case .success(let outputs) = result, !Task.isCancelled, !cleared else {
+            guard case .success(let outputs) = result, !outputs.isEmpty, !cleared else {
                 cache.remove(dir: dir)
                 if !Task.isCancelled, !cleared {
                     message = action.failure

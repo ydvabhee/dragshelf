@@ -188,6 +188,20 @@ final class DragOutHandleView: NSView {
             item.representedObject = action
             item.isEnabled = store.actions.canRun(action, on: store.selectedItems)
         }
+        // V2-03: Convert To ▸ and Resize ▸, disabled when the selection has no image items.
+        for (title, actions) in [("Convert To", ShelfAction.conversions), ("Resize", ShelfAction.resizes)] {
+            let sub = NSMenu()
+            sub.autoenablesItems = false
+            for action in actions {
+                let item = sub.addItem(withTitle: action.menuTitle, action: #selector(runAction(_:)), keyEquivalent: "")
+                item.representedObject = action
+                item.target = self
+                item.isEnabled = store.actions.canRun(action, on: store.selectedItems)
+            }
+            let parent = menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+            parent.submenu = sub
+            parent.isEnabled = sub.items.contains(where: \.isEnabled)
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Remove from DragShelf", action: #selector(removeSelection), keyEquivalent: "")
         menu.items.forEach { $0.target = self }

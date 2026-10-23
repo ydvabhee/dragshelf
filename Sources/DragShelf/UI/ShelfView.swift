@@ -135,7 +135,7 @@ struct ShelfView: View {
                         .progressViewStyle(.circular)
                         .controlSize(.small)
                         .accessibilityLabel(action.runningTitle)
-                    Text(action.runningTitle)
+                    Text(action.runningTitle + (store.actions.step.map { " \($0)" } ?? ""))
                         .font(.headline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
