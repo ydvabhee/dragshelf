@@ -2,7 +2,6 @@
 
 **A floating shelf for drag and drop on macOS.** Start dragging anything, and the shelf slides in. Drop your files on it, switch to the target app at your own pace, then drag them out where they need to go.
 
-[![Latest release](https://img.shields.io/github/v/release/ydvabhee/dragshelf?label=release)](https://github.com/ydvabhee/dragshelf/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
@@ -147,7 +146,7 @@ Issues and pull requests are welcome.
 3. Add a unit test for any new logic.
 4. Use [Conventional Commits](https://www.conventionalcommits.org/), such as `feat: …`, `fix: …` and `docs: …`, with a short, imperative subject.
 5. Add a line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
-6. UI changes should follow Apple's Human Interface Guidelines and keep VoiceOver, keyboard access and Reduce Motion working.
+5. UI changes should follow Apple's Human Interface Guidelines and keep VoiceOver, keyboard access and Reduce Motion working.
 
 ## License
 
