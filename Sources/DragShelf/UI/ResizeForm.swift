@@ -92,10 +92,10 @@ struct ResizeForm: View {
         .padding(.top, 4)
         .padding(.bottom, 12)
         .background { KeyPanel() }
-        .onAppear {
-            sizes = items.compactMap { if case .file(let url) = $0.kind { ImageConverter.pixelSize(url) } else { nil } }
+        .task {
+            sizes = await Self.sizes(of: items.compactMap { if case .file(let url) = $0.kind { url } else { nil } })
             reset()
-            Task { focus = .width }
+            focus = .width
         }
         .onChange(of: percent) { reset() }
         .onChange(of: width) { _, text in link(from: .width, text) }
@@ -120,6 +120,11 @@ struct ResizeForm: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
+    }
+
+    /// Image header reads, off the main actor (a batch can be slow on a network volume).
+    @concurrent nonisolated static func sizes(of urls: [URL]) async -> [(width: Int, height: Int)] {
+        urls.compactMap(ImageConverter.pixelSize)
     }
 
     /// Prefill: Percent 100 %, one image its size in px, several images empty (AC-3).
@@ -149,6 +154,7 @@ struct ResizeForm: View {
         switch spec {
         case .failure(let invalid): reject(invalid.message)
         case .success(let spec):
+            if let tooLarge = spec.limitError(for: sizes) { return reject(tooLarge) }
             let present = Set(store.items.map(\.id))
             store.resizing = nil
             store.actions.run(.resizeCustom(spec), on: items.filter { present.contains($0.id) }, in: store)

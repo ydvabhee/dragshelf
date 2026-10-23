@@ -73,6 +73,7 @@ struct ShelfView: View {
             }
             if let images = store.resizing {
                 ResizeForm(store: store, items: images)
+                    .id(images.map(\.id)) // Custom… again with other images: fresh sizes and fields
             } else if store.showRecent && !store.recent.isEmpty {
                 ScrollView { RecentList(store: store) }
                     .frame(maxHeight: contentCap)

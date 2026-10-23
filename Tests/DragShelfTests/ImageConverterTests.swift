@@ -257,3 +257,34 @@ private func eq(_ a: (width: Int, height: Int), _ b: (Int, Int)) -> Bool { a.wid
     let made = try #require(store.items.last)
     if case .file(let url) = made.kind { #expect(url.lastPathComponent == "a (80×40).png") } else { Issue.record("not a file") }
 }
+
+@Test func customResizeCapsOutputSize() async throws {
+    let percent = ResizeSpec.percent(width: 400, height: 400)
+    #expect(percent.limitError(for: [(8000, 6000)]) == "Too large: max 16384 px per side")
+    #expect(ResizeSpec.pixels(width: 12000, height: 12000, fit: false).limitError(for: [(10, 10)]) == "Too large: max 100 megapixels")
+    #expect(ResizeSpec.pixels(width: 10000, height: 10000, fit: false).limitError(for: [(10, 10)]) == nil)
+    #expect(percent.limitError(for: [(100, 100), (4000, 4000)]) != nil) // any image in the batch
+    let dir = try tempDir("ImageTests"), out = try tempDir("ImageTests-out")
+    defer { rm(dir, out) }
+    let src = dir.appendingPathComponent("s.png")
+    write(makeImage(8000, 10), to: src, type: .png)
+    var used = Set<String>()
+    #expect(throws: ImageConverter.Failed.self) {
+        try ImageConverter.convert(src, to: nil, maxPixel: nil, resize: percent, into: out, used: &used)
+    }
+    #expect(try fm.contentsOfDirectory(atPath: out.path).isEmpty)
+    let sizes = await ResizeForm.sizes(of: [src, dir.appendingPathComponent("missing.png")])
+    #expect(sizes.count == 1 && sizes[0].width == 8000 && sizes[0].height == 10)
+}
+
+@Test func customResizeReopenReplacesFormImages() async throws {
+    let store = ShelfStore(cache: ItemCache(root: try tempDir("ImageTests-cache"))), dir = try tempDir("ImageTests")
+    defer { rm(dir, store.cache.root) }
+    let urls = ["a.png", "b.png"].map { dir.appendingPathComponent($0) }
+    urls.forEach { write(makeImage(20, 10), to: $0, type: .png); store.add(ShelfItem(kind: .file($0))) }
+    store.actions.run(.resizeCustom(nil), on: [store.items[0]], in: store)
+    let first = store.resizing?.map(\.id)
+    store.actions.run(.resizeCustom(nil), on: store.items, in: store)
+    // ShelfView keys the form by these ids, so a new set rebuilds its state.
+    #expect(first == [store.items[0].id] && store.resizing?.map(\.id) == store.items.map(\.id))
+}

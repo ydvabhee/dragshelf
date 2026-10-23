@@ -49,6 +49,7 @@ nonisolated enum ImageConverter {
               case let (w, h)? = size(props)
         else { throw Failed(url: src) }
         let target = resize?.size(width: w, height: h)
+        if let target, ResizeSpec.limitError(target) != nil { throw Failed(url: src) }
         let srcType = (CGImageSourceGetType(source) as String?).flatMap(UTType.init)
         let outType = type ?? srcType.flatMap { writable.contains($0.identifier) ? $0 : nil } ?? .jpeg
         let options: [CFString: Any] = [
@@ -142,6 +143,19 @@ nonisolated enum ResizeSpec: Hashable, Sendable {
     case percent(width: Int, height: Int)
 
     static let pixelRange = 1...16384, percentRange = 1...400
+    // ponytail: fixed output caps (a 16384² RGBA bitmap is already 1 GB); raise only with tiled/streamed drawing.
+    static let maxSide = 16384, maxPixels = 100_000_000
+
+    /// Output over the caps (per side or total): the form's error text; the converter refuses it too.
+    static func limitError(_ size: (width: Int, height: Int)) -> String? {
+        if size.width > maxSide || size.height > maxSide { return "Too large: max \(maxSide) px per side" }
+        return size.width * size.height > maxPixels ? "Too large: max 100 megapixels" : nil
+    }
+
+    /// First cap error over a batch of upright source sizes (Pixels and Percent alike), checked before running.
+    func limitError(for sizes: [(width: Int, height: Int)]) -> String? {
+        sizes.lazy.compactMap { ResizeSpec.limitError(self.size(width: $0.width, height: $0.height)) }.first
+    }
 
     /// Output size for a `w`×`h` (upright) image. One side set: the other follows the image's aspect.
     /// Custom sizes may upscale (AC-4).
