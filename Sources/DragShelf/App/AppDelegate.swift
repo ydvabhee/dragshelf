@@ -13,6 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dragMonitor.onDragEnd = { [weak self] in self?.panelController.dragEnded() }
         hotKey.onPress = { [weak self] in self?.panelController.toggle(reason: .hotkey) }
         applyPreferences()
+        // T-21: periodic cache sweep; each pass is a single directory listing when the cache is empty.
+        let timer = Timer(timeInterval: 30 * 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { if let store = self?.store { Task { await store.sweep() } } }
+        }
+        timer.tolerance = 5 * 60
+        RunLoop.main.add(timer, forMode: .common)
         // Settings toggles apply immediately; both calls are idempotent.
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyPreferences() }

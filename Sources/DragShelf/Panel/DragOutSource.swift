@@ -102,6 +102,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
             if hadItems, store.items.isEmpty { store.hints.visible = false }
             if recorded { store.hints.record(.draggedOut(removed: remove)) }
         }
+        Task { [store] in await store.sweep() }
         guard remove else { return }
         // Recent drag (T-20 AC-7): shelf items stay, except a `.move` of a file that is also on the shelf.
         var removeIDs = ids

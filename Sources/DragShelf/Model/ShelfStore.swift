@@ -1,6 +1,9 @@
 import CryptoKit
 import Foundation
 import Observation
+import os
+
+private let log = Logger(subsystem: PromoConfig.selfBundleID, category: "cache")
 
 /// One successful drag out: the batch of items dragged (T-17).
 struct RecentEntry: Identifiable, Hashable {
@@ -24,6 +27,11 @@ final class ShelfStore {
     /// Last drag outs, newest first, at most `recentLimit`. Memory only (OQ-03); their cache dirs are kept.
     private(set) var recent: [RecentEntry] = []
     static let recentLimit = 5
+    // ponytail: fixed limits; upgrade path is a Settings entry.
+    static let cacheCapBytes = 1 << 30
+    static let recentMaxAge: TimeInterval = 24 * 3600
+    /// In-flight guard: a dir changed within this window may belong to a drop still landing (not on the shelf yet).
+    static let sweepGrace: TimeInterval = 10
     /// Clock button: the Recent list replaces the grid. Reset on show and on any drop (T-20 AC-8).
     var showRecent = false
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
@@ -166,6 +174,27 @@ final class ShelfStore {
     static func exists(_ item: ShelfItem) -> Bool {
         guard case .file(let url) = item.kind else { return true }
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
+    }
+
+    /// T-21: frees cache dirs nothing references (shelf items, Recent). Expires Recent entries older than 24 h,
+    /// then evicts the oldest Recent entries while the cache is over 1 GB. Listing and deleting run off the main actor.
+    /// Dirs changed < `sweepGrace` ago are skipped, and a `clear()` during the scan aborts the pass.
+    func sweep(now: Date = .now) async {
+        recent.removeAll { now.timeIntervalSince($0.date) > Self.recentMaxAge }
+        let gen = generation, cache = cache
+        let found = await Task.detached { cache.scan() }.value
+        guard !found.isEmpty, gen == generation else { return }
+        func orphans() -> [ItemCache.Entry] {
+            let kept = Set((items + recent.flatMap(\.items)).compactMap(cacheDir(of:)).map(\.lastPathComponent))
+            return found.filter { !kept.contains($0.name) && now.timeIntervalSince($0.modified) > Self.sweepGrace }
+        }
+        var gone = orphans()
+        while found.reduce(0, { $0 + $1.bytes }) - gone.reduce(0, { $0 + $1.bytes }) > Self.cacheCapBytes, recent.popLast() != nil {
+            gone = orphans()
+        }
+        let doomed = gone.map { cache.root.appendingPathComponent($0.name, isDirectory: true) }
+        await Task.detached { doomed.forEach(cache.remove(dir:)) }.value
+        log.debug("cache sweep freed \(gone.reduce(0) { $0 + $1.bytes }) bytes")
     }
 
     /// Keeps Recent and the cache dirs it still references (T-17 AC-5).
