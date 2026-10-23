@@ -8,7 +8,8 @@ BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 swift build -c "$CONFIG"
 APP=build/DragShelf.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp ".build/$CONFIG/DragShelf" "$APP/Contents/MacOS/DragShelf"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -18,6 +19,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleIdentifier</key><string>com.abhishekyadav.DragShelf</string>
 	<key>CFBundleName</key><string>DragShelf</string>
 	<key>CFBundleExecutable</key><string>DragShelf</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>${VERSION}</string>
 	<key>CFBundleVersion</key><string>${BUILD}</string>

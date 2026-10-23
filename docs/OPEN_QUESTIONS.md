@@ -10,7 +10,7 @@ architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-03 | Should items survive app quit or reboot? | No. Memory only, cache wiped on launch/quit (ADR-010) | Persistence needs security-scoped/regular bookmarks + storage; new task, ~1 day |
 | OQ-04 | Hotkey: which default, and customizable? | Fixed ⌃⌥⌘D, on/off only | Custom recorder UI = new task in M4; changing the default key is trivial |
 | OQ-05 | Drag out of an original file: copy or move? | **RESOLVED by T-15 (user 2026-10-20): plain drag copies, ⌘-drag moves.** | Allowing move (e.g. with ⌘ held) touches user data; needs ADR + extra QA |
-| OQ-06 | App icon? | None in MVP (generic icon; menu bar uses SF Symbol) | Adds asset catalog + `ASSETCATALOG_COMPILER_APPICON_NAME`; small task before M5 |
+| OQ-06 | App icon? | **RESOLVED 2026-10-23: icon designed** (file card into tray, blue squircle; `scripts/make-icon.swift` → `Resources/AppIcon.icns`) | Adds asset catalog + `ASSETCATALOG_COMPILER_APPICON_NAME`; small task before M5 |
 | OQ-07 | Auto-show trigger: every content drag or a gesture (shake/modifier)? | Every content drag with a non-window drag pasteboard | Shake/modifier = new DragMonitor logic; may be needed if users find auto-show noisy |
 | OQ-08 | Remove items after successful drag out by default? | **RESOLVED by user 2026-10-20: removed** after drag out (setting "Keep items after drag out" stays, off) | Flip the default only; no code impact |
 | OQ-09 | Default shelf position? | **RESOLVED by user 2026-10-20: top center** of the cursor's screen, below the menu bar / notch | Default only; options already planned (left edge, near cursor) |

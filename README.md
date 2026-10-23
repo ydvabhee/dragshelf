@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/AppIcon.png" width="128" alt="DragShelf icon"></p>
+
 # DragShelf
 
 **A floating shelf for drag and drop on macOS.** Start dragging anything, and the shelf slides in. Drop your files on it, switch to the target app at your own pace, then drag them out where they need to go.
@@ -105,6 +107,7 @@ swift test                      # unit tests (Swift Testing)
 scripts/build-app.sh            # debug .app → build/DragShelf.app
 scripts/build-app.sh release    # optimized .app, ad-hoc signed
 scripts/make-dmg.sh             # release .app packaged as build/DragShelf.dmg
+scripts/make-icon.sh            # regenerate the app icon from scripts/make-icon.swift
 ```
 
 The version lives in [`VERSION`](VERSION) and follows [Semantic Versioning](https://semver.org/). The build number is the git commit count.

@@ -5,6 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- App icon: a file card dropping into a tray, on a blue macOS-style squircle.
+
 ### Changed
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
