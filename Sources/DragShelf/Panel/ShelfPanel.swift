@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import Quartz
 
-/// Floating, non-activating shelf window. Owns keyboard (Esc, Space, Delete, arrows, Cmd-Z) and Quick Look,
+/// Floating, non-activating shelf window. Owns keyboard (Esc, Space, Return, Delete, arrows, Cmd-Z) and Quick Look,
 /// which need the key window; show/hide behavior lives in `ShelfPanelController`.
 final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     var store: ShelfStore?
@@ -63,6 +63,8 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
 
     private func handleKey(_ event: NSEvent) -> Bool {
         guard let store else { return false }
+        // Rename field editing (V2-04): every key goes to the text, Esc and Return included.
+        if firstResponder is NSText { return false }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         // Cmd-Z: bring back the last drag out (T-17 AC-2); empty Recent passes through (system beep).
         if modifiers == .command, event.charactersIgnoringModifiers == "z" { return store.undoDragOut() }
@@ -70,6 +72,9 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
         switch Int(event.keyCode) {
         case kVK_Escape: isPreviewVisible ? closePreview() : onCancel?()
         case kVK_Space: isPreviewVisible ? closePreview() : openPreview()
+        case kVK_Return: // Finder: Return renames the one selected file (V2-04 AC-1).
+            guard store.actions.canRun(.rename, on: store.selectedItems) else { return false }
+            store.actions.run(.rename, on: store.selectedItems, in: store)
         case kVK_Delete, kVK_ForwardDelete: store.remove(ids: store.selection)
         case kVK_LeftArrow: store.moveSelection(by: -1)
         case kVK_RightArrow: store.moveSelection(by: 1)

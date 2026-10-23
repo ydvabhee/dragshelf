@@ -276,6 +276,7 @@ final class ShelfPanelController {
     func hide() {
         guard isShown else { return }
         reason = nil
+        panel.makeFirstResponder(nil) // Commits an open rename field (V2-04 AC-2).
         store.hints.visible = false
         store.actions.message = nil
         panel.closePreview()

@@ -272,7 +272,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-01 | Zip + ActionRunner + Actions menus | M6 | T-11 | US-11, common | DONE (2026-10-23) |
 | V2-02 | Share and AirDrop | M6 | V2-01 | US-13 | BACKLOG |
 | V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | BACKLOG |
-| V2-04 | Rename shelf items | M6 | V2-01 | US-12 | BACKLOG |
+| V2-04 | Rename shelf items | M6 | V2-01 | US-12 | QA |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
 V2-02 is the riskiest UI (AirDrop from a non-activating panel), so it goes early. V2-04 last: text editing in the panel touches focus.

@@ -237,6 +237,7 @@ struct ShelfView: View {
                     ForEach(store.items) { item in
                         ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
                                       isMissing: store.missing(id: item.id),
+                                      isRenaming: store.renamingID == item.id,
                                       onRemove: { store.remove(ids: [item.id]) },
                                       onQuickLook: { onQuickLook(item.id) })
                             .overlay {
@@ -246,6 +247,14 @@ struct ShelfView: View {
                             }
                             // Above the handle so it gets the click.
                             .overlay(alignment: .top) { if hovered == item.id { removeBadge(item.id) } }
+                            // Rename (V2-04): above the handle so it gets clicks and keys.
+                            .overlay(alignment: .top) {
+                                if store.renamingID == item.id {
+                                    RenameField(store: store, item: item)
+                                        .padding(.horizontal, 2)
+                                        .padding(.top, ShelfItemView.captionTop - 2)
+                                }
+                            }
                             .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                     }
                 }

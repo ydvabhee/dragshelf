@@ -87,6 +87,41 @@ final class ShelfStore {
         if deletingCache { release(gone) }
     }
 
+    // MARK: Rename (V2-04)
+
+    /// Tile whose caption is an inline rename field; nil when not renaming.
+    var renamingID: UUID?
+
+    /// Swaps the item at `id`'s index (same id: position and selection stay) and its `keys` entry, then frees the
+    /// old cache dir if nothing uses it any more. False when `id` is no longer on the shelf.
+    @discardableResult
+    func replace(id: UUID, with item: ShelfItem) -> Bool {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return false }
+        let old = items[i]
+        items[i] = item
+        keys = keys.filter { $0.value != id }
+        keys[Self.key(for: item)] = item.id
+        missingIDs.remove(id)
+        release([old])
+        return true
+    }
+
+    /// Finder-style "name 2.ext" when a file item named `name` is already on the shelf (case-insensitive).
+    /// `except`: the item being renamed (a case-only rename keeps its name).
+    func uniqueName(_ name: String, except id: UUID? = nil) -> String {
+        var used = Set(items.compactMap { item -> String? in
+            guard item.id != id, case .file(let url) = item.kind else { return nil }
+            return url.lastPathComponent.lowercased()
+        })
+        return Zipper.uniqueName(name, used: &used)
+    }
+
+    /// A cached file can be renamed in place unless a Recent entry still points into its cache dir.
+    func canRenameInPlace(_ item: ShelfItem) -> Bool {
+        guard let dir = cacheDir(of: item) else { return false }
+        return !recent.flatMap(\.items).compactMap(cacheDir(of:)).contains(dir)
+    }
+
     // MARK: Recent (T-17)
 
     /// Records one successful drag out; the oldest entry beyond `recentLimit` falls off with its cache dirs.

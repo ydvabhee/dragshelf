@@ -6,6 +6,8 @@ struct ShelfItemView: View {
     let item: ShelfItem
     var isSelected = false
     var isMissing = false
+    /// Caption hidden under the inline rename field (V2-04); its space stays.
+    var isRenaming = false
     var onRemove: () -> Void = {}
     var onQuickLook: () -> Void = {}
 
@@ -23,6 +25,7 @@ struct ShelfItemView: View {
                     .truncationMode(.middle)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(isMissing ? .secondary : .primary)
+                    .opacity(isRenaming ? 0 : 1)
                 if isMissing {
                     Label("Missing", systemImage: "exclamationmark.triangle")
                         .font(.caption2)
@@ -71,6 +74,9 @@ struct ShelfItemView: View {
     }
 
     private var name: String { item.displayName }
+
+    /// Caption's top inside the tile (padding + thumbnail + spacing): where the rename field sits.
+    static let captionTop: CGFloat = 4 + 64 + 6
 
     private var typeDescription: String {
         switch item.kind {
