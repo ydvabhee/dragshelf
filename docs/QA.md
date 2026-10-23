@@ -305,11 +305,8 @@ Manual (user runs):
 7. Auto-show (drag from Finder, drop nothing): panel hides as before. With the list open, panel height fits content, stays within screen, scrolls with 5 rows on a small display. Panel never takes focus from the frontmost app on any click.
 8. VoiceOver: clock button "Recent drags"; rows read "3 files, 2 minutes ago" with actions Restore and the default action; Light and Dark mode look right.
 
-## T-20 Clear wording + menu bar glyph (0357f0b) - FAIL (1)
-Auto: build, 65 tests, release build green. No `trash` anywhere in Sources. Clear is a text button, disabled when empty, help text and VO label/hint match AC-1. Context menu says "Remove from DragShelf". MenuBarIcon: 18x18 pt, `isTemplate = true`, drawn via handler (resolution independent). `showRecent` moved to `ShelfStore`, reset in `show()` and after every accepted drop (duplicate-only drops still return true from `ingest`).
-Finding:
-- `DragOutSource.ended` (AC-7) new branch: copy from Recent removes nothing; `.move` removes only shelf items with the same key. No unit test covers it (RecentTests only has the copy case, no `.move`, no keep-on-shelf assertion). Add a test: Recent drag `.copy` leaves shelf intact; `.move` removes only the matching shelf item.
-
+## T-20 Clear wording + menu bar glyph (0357f0b, eee829e) - PASS
+Auto: build, 66 tests, release build green. Re-verified after eee829e: `recentDragRemovesShelfItemsOnlyOnMove` asserts `.copy` keeps both shelf items and `.move` removes only the matching one. No `trash` anywhere in Sources. Clear is a text button, disabled when empty, help text and VO label/hint match AC-1. Context menu says "Remove from DragShelf". MenuBarIcon: 18x18 pt, `isTemplate = true`, drawn via handler (resolution independent). `showRecent` moved to `ShelfStore`, reset in `show()` and after every accepted drop (duplicate-only drops still return true from `ingest`).
 Manual (user runs):
 1. Header shows text "Clear" (no trash icon), greyed when empty. Hover: "Remove all items from DragShelf. Your files stay where they are." VoiceOver: "Clear DragShelf", hint "Removes all items from DragShelf; files are not deleted". Clear: items gone, original files untouched.
 2. Right-click a tile: "Remove from DragShelf"; Delete key still removes.
