@@ -21,7 +21,7 @@ Every task's implicit ACs (QA checks always):
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | DONE (2026-10-20) |
 | T-16 | UI polish: no focus ring/outline, inset scroll bar, user-resizable shelf | M4 | T-13, T-14 | US-3, US-10 | DONE (2026-10-20) |
-| T-19 | Branding: call the shelf "DragShelf" in UI text | M4 | T-16 | US-8 | QA |
+| T-19 | Branding: call the shelf "DragShelf" in UI text | M4 | T-16 | US-8 | DONE (2026-10-23) |
 | T-17 | Recent drag-outs (last 5) + ⌘Z undo | M4 | T-16 | US-4, US-6 | TODO |
 | T-18 | Contextual hints (one line, shown a few times) | M4 | T-17 | US-3, US-10 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
