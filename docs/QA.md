@@ -314,7 +314,8 @@ Manual (user runs):
 4. Drag a Recent row to Finder (copy): shelf unchanged, entry stays. Cmd-move a row whose file is also on the shelf: that shelf item goes, others stay.
 5. Open Recent (clock), hide, show: grid shown. Open Recent, drop a duplicate-only file: grid returns.
 
-## T-18 Contextual tips (bb36b0d) - FAIL (1)
+## T-18 Contextual tips (bb36b0d, fixes 8ab05f2) - PASS (re-verified)
+Re-check: Recent row has `.help("Restore to DragShelf")`; `HintEngine.reset()` clears counts, pending and the tip on screen. Findings below are historical; AC-3 and the Reset Tips note are fixed. Manual step 8 now expects the Recent row tooltip.
 Auto: build (0 warnings), 78 tests, release build green. `HintEngine` takes an injected `UserDefaults`; tests cover event to hint, show triggers, 3-show retirement, dismiss persistence, never during drag, tips off, priority over promo. Branding: all hint text says "DragShelf". Hint wins the footer slot over the promo (`ShelfView.footer`). Hint is held back while `isDragging || isDropTargeted` and kept pending while hidden. Reset Tips clears counts, dismissals and show counters.
 Findings:
 - AC-3 FAIL: Recent rows have no `.help` ("Restore to DragShelf"). The row is overlaid by `DragOutHandle`, so put the tooltip on the handle (`toolTip`) or the overlay.
@@ -346,3 +347,7 @@ Manual (user runs, drop onto DragShelf and confirm the app never quits):
 3. Mail: drag an attachment from a message (also an offline one: no crash, no leftover cache dir).
 4. Photos: drag one photo, then several. Items land in order.
 5. Press Clear right after a slow promise drop: nothing lands late. Quit: `~/Library/Caches/<bundle id>` is empty.
+
+### Re-verify off-main drawing fixes (9376101, d008965)
+Auto: build, 79 tests, release build green. `MenuBarIcon.make()` and `VisualEffectBackground.mask` are nonisolated with `@Sendable` handlers; `preferenceChanged` is nonisolated and hops to main. `imagesDrawOffMain` renders both images via `cgImage(forProposedRect:)` on a `DispatchQueue.global()` thread, so the handler runs there (not lazily on main). Proof: in a scratch copy with the old isolation (MainActor-inferred handler, image built on main, drawn off main) the test crashes (swift test exit non-zero, no pass line); with the fix it passes.
+Manual: cold launch, menu bar glyph shows and tints in light and dark; on macOS 14/15 the panel keeps rounded glass corners; toggle System Settings, Appearance, Show scroll bars: no crash.
