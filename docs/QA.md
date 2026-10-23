@@ -304,3 +304,15 @@ Manual (user runs):
 6. Drag out a pasted image or promised file, then "Clear": Recent still has it, restore and drag work. "Clear Recent" in the list: entries gone; check `~/Library/Caches/<bundle id>` has no orphan dirs. Quit: cache empty.
 7. Auto-show (drag from Finder, drop nothing): panel hides as before. With the list open, panel height fits content, stays within screen, scrolls with 5 rows on a small display. Panel never takes focus from the frontmost app on any click.
 8. VoiceOver: clock button "Recent drags"; rows read "3 files, 2 minutes ago" with actions Restore and the default action; Light and Dark mode look right.
+
+## T-20 Clear wording + menu bar glyph (0357f0b) - FAIL (1)
+Auto: build, 65 tests, release build green. No `trash` anywhere in Sources. Clear is a text button, disabled when empty, help text and VO label/hint match AC-1. Context menu says "Remove from DragShelf". MenuBarIcon: 18x18 pt, `isTemplate = true`, drawn via handler (resolution independent). `showRecent` moved to `ShelfStore`, reset in `show()` and after every accepted drop (duplicate-only drops still return true from `ingest`).
+Finding:
+- `DragOutSource.ended` (AC-7) new branch: copy from Recent removes nothing; `.move` removes only shelf items with the same key. No unit test covers it (RecentTests only has the copy case, no `.move`, no keep-on-shelf assertion). Add a test: Recent drag `.copy` leaves shelf intact; `.move` removes only the matching shelf item.
+
+Manual (user runs):
+1. Header shows text "Clear" (no trash icon), greyed when empty. Hover: "Remove all items from DragShelf. Your files stay where they are." VoiceOver: "Clear DragShelf", hint "Removes all items from DragShelf; files are not deleted". Clear: items gone, original files untouched.
+2. Right-click a tile: "Remove from DragShelf"; Delete key still removes.
+3. Menu bar glyph: tilted card into a tray with a knocked-out arrow. Check light bar, dark bar, retina and non-retina, and a tinted wallpaper: crisp, tinted by the system.
+4. Drag a Recent row to Finder (copy): shelf unchanged, entry stays. Cmd-move a row whose file is also on the shelf: that shelf item goes, others stay.
+5. Open Recent (clock), hide, show: grid shown. Open Recent, drop a duplicate-only file: grid returns.
