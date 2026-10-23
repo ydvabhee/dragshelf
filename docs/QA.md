@@ -389,3 +389,22 @@ Manual:
 4. Compress a link or text item with a file: caption "Skipped 1 item".
 5. Compress `Archive.zip` twice: two items on the shelf, dragging each to Finder gives the right zip.
 6. Fresh install (no saved size): panel is 360 wide, tip row does not move the grid; resize to the minimum: footer row still fits.
+
+## V2-04 Rename shelf items (1aa94a4) - PASS
+Build, 106 tests, release build green.
+- Original never touched: `Renamer.rename` moves only when `dir == nil`, which `ActionRunner.rename` allows only if `canRenameInPlace` (cached, resolved path under cache root, no Recent entry in the same dir). Else `copyItem` original to a new cache dir (read-only on the source). Symlinked/outside paths fail the root check, so they are cloned.
+- Recent: an item whose cache dir a Recent entry uses is cloned; `release` keeps the old dir (test `renamingItemInRecentKeepsRecentFile`).
+- `replace(id:with:)` keeps index/selection/id; old key removed, new key added. `uniqueName` is case-insensitive, handles no extension and an existing "name 2.ext" ("Archive.zip" to "Archive 2.zip" to "Archive 3.zip"); the renamed item is excluded.
+- ADR-016: cross-volume copy runs in `Task.detached` on a `nonisolated` Renamer into an in-flight dir; result applied on main only if the generation matches and the item is still on the shelf, else the dir is removed.
+- RenameField: monitor and key observer removed in `dismantleNSView`; Esc is consumed by the field delegate; `finish` sets `done` first so no double commit.
+- Low: names are not Unicode-normalized, so NFC/NFD twins both fit (separate cache dirs, no FS clash). NUL in a name is not rejected.
+- Low: a name over 255 bytes is checked after the " 2" suffix is added.
+Manual:
+1. Drop a Finder file `a.txt` on the shelf, rename to `b`: tile shows `b.txt`. In Finder `a.txt` is unchanged (name, mtime), no `b.txt` beside it.
+2. Drag the renamed tile to the Desktop: it arrives as `b.txt` with identical contents. Repeat with a folder.
+3. Select one file, press Return: field opens, base name selected, the frontmost app stays frontmost (menu bar does not change). Esc cancels and the panel stays visible. Click away commits.
+4. Type `a/b`, `:`, `.x`, an empty name: field shakes / shows the error, old name stays.
+5. Drag a file out (it goes to Recent), bring it back with Cmd-Z, rename it: the Recent entry still has its file.
+6. Rename a file to a name another tile already has: gets ` 2`. Compress twice: `Archive.zip`, `Archive 2.zip`.
+7. Link, text, and missing items: Rename is disabled. Select 2 items: Return does nothing.
+8. Rename a file from an external/USB volume: header shows "Renaming…" with Cancel; Clear mid-copy leaves nothing in the cache.
