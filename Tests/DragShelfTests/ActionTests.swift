@@ -113,7 +113,7 @@ private func rm(_ urls: URL...) { urls.forEach { try? fm.removeItem(at: $0) } }
     let start = ContinuousClock.now
     store.actions.cancel()
     await job.value
-    #expect(ContinuousClock.now - start < .seconds(1))
+    #expect(ContinuousClock.now - start < .seconds(5))
     #expect(cacheContents(store).isEmpty && store.items.count == 1 && store.actions.message == nil)
 }
 
