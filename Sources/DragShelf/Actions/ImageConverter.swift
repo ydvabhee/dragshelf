@@ -21,17 +21,18 @@ nonisolated enum ImageConverter {
         UTType(filenameExtension: url.pathExtension).map { readable.contains($0.identifier) } ?? false
     }
 
-    /// One output per source, in order. Cancel stops after the current image; finished outputs are returned.
+    /// One output per source, in order. A bad image is skipped and counted in `failed`; the rest still convert.
+    /// Cancel stops after the current image; finished outputs are returned.
     /// `taken`: lowercased names already on the shelf; outputs get a Finder-style " 2" instead of a duplicate name.
     static func run(_ urls: [URL], to type: UTType?, maxPixel: Int?, into dir: URL, taken: Set<String>,
-                    progress: @Sendable (Double) -> Void) throws -> [URL] {
-        var used = taken, outputs: [URL] = []
+                    progress: @Sendable (Double) -> Void) -> (outputs: [URL], failed: Int) {
+        var used = taken, outputs: [URL] = [], failed = 0
         for (i, url) in urls.enumerated() {
             if Task.isCancelled { break }
             progress(Double(i) / Double(urls.count))
-            outputs.append(try convert(url, to: type, maxPixel: maxPixel, into: dir, used: &used))
+            if let out = try? convert(url, to: type, maxPixel: maxPixel, into: dir, used: &used) { outputs.append(out) } else { failed += 1 }
         }
-        return outputs
+        return (outputs, failed)
     }
 
     /// `type` nil = keep the source format (Resize; falls back to JPEG when ImageIO can't write it, e.g. WebP).

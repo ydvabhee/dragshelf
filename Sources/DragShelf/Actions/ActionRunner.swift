@@ -77,12 +77,12 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
     /// `progress` takes 0...1 (zip reports none: indeterminate). Must stop promptly on task cancellation; outputs
     /// returned after a cancel are kept (convert keeps finished images), so throw to discard. `taken`: lowercased
     /// names already on the shelf.
-    @concurrent func run(_ urls: [URL], into dir: URL, taken: Set<String>, progress: @Sendable (Double) -> Void) async throws -> [URL] {
+    @concurrent func run(_ urls: [URL], into dir: URL, taken: Set<String>, progress: @Sendable (Double) -> Void) async throws -> (outputs: [URL], failed: Int) {
         switch self {
-        case .compress: [try await Zipper.zip(urls, into: dir)]
-        case .rename: [] // Never runs: `ActionRunner.run(.rename)` opens the name field instead.
-        case .convert(let type): try ImageConverter.run(urls, to: type, maxPixel: nil, into: dir, taken: taken, progress: progress)
-        case .resize(let px): try ImageConverter.run(urls, to: nil, maxPixel: px, into: dir, taken: taken, progress: progress)
+        case .compress: ([try await Zipper.zip(urls, into: dir)], 0)
+        case .rename: ([], 0) // Never runs: `ActionRunner.run(.rename)` opens the name field instead.
+        case .convert(let type): ImageConverter.run(urls, to: type, maxPixel: nil, into: dir, taken: taken, progress: progress)
+        case .resize(let px): ImageConverter.run(urls, to: nil, maxPixel: px, into: dir, taken: taken, progress: progress)
         }
     }
 }
@@ -136,7 +136,7 @@ final class ActionRunner {
         count = urls.count
         Self.announce(action.runningTitle)
         let job = Task {
-            let result: Result<[URL], any Error>
+            let result: Result<(outputs: [URL], failed: Int), any Error>
             do {
                 result = .success(try await action.run(urls, into: dir, taken: taken) { [weak self] p in
                     Task { @MainActor in if self?.running == action { self?.progress = p } }
@@ -149,7 +149,7 @@ final class ActionRunner {
             progress = nil
             task = nil
             let cleared = generation != store.generation
-            guard case .success(let outputs) = result, !outputs.isEmpty, !cleared else {
+            guard case .success(let (outputs, failed)) = result, !outputs.isEmpty, !cleared else {
                 cache.remove(dir: dir)
                 if !Task.isCancelled, !cleared {
                     message = action.failure
@@ -163,7 +163,10 @@ final class ActionRunner {
                 return item
             }
             store.selection = Set(added.map(\.id))
-            if skipped > 0 { message = "Skipped \(skipped) \(skipped == 1 ? "item" : "items")" }
+            let notes = [skipped > 0 ? "Skipped \(skipped) \(skipped == 1 ? "item" : "items")" : nil,
+                       failed > 0 ? "\(failed) \(failed == 1 ? "image" : "images") couldn’t be converted" : nil]
+                .compactMap(\.self)
+            if !notes.isEmpty { message = notes.joined(separator: ". ") }
             Self.announce([action.doneTitle, message].compactMap(\.self).joined(separator: ". "))
         }
         task = job

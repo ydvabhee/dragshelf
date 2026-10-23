@@ -113,11 +113,11 @@ private func info(_ url: URL) -> (type: String?, width: Int, height: Int, props:
     let urls = (0..<5).map { dir.appendingPathComponent("p\($0).png") }
     urls.forEach { write(makeImage(64, 64), to: $0, type: .png) }
     // Cancel while image 2 is about to start: it still finishes, 3 and 4 are not made.
-    let outputs = try await Task {
-        try ImageConverter.run(urls, to: .jpeg, maxPixel: nil, into: out, taken: []) { p in
+    let outputs = await Task {
+        ImageConverter.run(urls, to: .jpeg, maxPixel: nil, into: out, taken: []) { p in
             if p >= 0.4 { withUnsafeCurrentTask { $0?.cancel() } }
         }
-    }.value
+    }.value.outputs
     #expect(outputs.map(\.lastPathComponent) == ["p0.jpg", "p1.jpg", "p2.jpg"])
     #expect(Set(try fm.contentsOfDirectory(atPath: out.path)) == ["p0.jpg", "p1.jpg", "p2.jpg"])
 }
@@ -160,4 +160,16 @@ private func info(_ url: URL) -> (type: String?, width: Int, height: Int, props:
     await job.value
     let added = store.items.count - 20
     #expect((1..<20).contains(added) && store.selection.count == added && store.actions.message == nil)
+}
+
+@Test func badImageIsSkippedAndRestKept() async throws {
+    let store = ShelfStore(cache: ItemCache(root: try tempDir("ImageTests-cache"))), dir = try tempDir("ImageTests")
+    defer { rm(dir, store.cache.root) }
+    let urls = ["a.png", "bad.png", "c.png"].map { dir.appendingPathComponent($0) }
+    write(makeImage(16, 16), to: urls[0], type: .png)
+    try Data("not an image".utf8).write(to: urls[1])
+    write(makeImage(16, 16), to: urls[2], type: .png)
+    urls.forEach { store.add(ShelfItem(kind: .file($0))) }
+    await store.actions.run(.convert(.jpeg), on: store.items, in: store)?.value
+    #expect(store.items.count == 5 && store.actions.message == "1 image couldn’t be converted")
 }
