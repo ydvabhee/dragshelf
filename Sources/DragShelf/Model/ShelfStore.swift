@@ -111,7 +111,7 @@ final class ShelfStore {
     func uniqueName(_ name: String, except id: UUID? = nil) -> String {
         var used = Set(items.compactMap { item -> String? in
             guard item.id != id, case .file(let url) = item.kind else { return nil }
-            return url.lastPathComponent.lowercased()
+            return Zipper.key(url.lastPathComponent)
         })
         return Zipper.uniqueName(name, used: &used)
     }

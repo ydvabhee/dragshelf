@@ -43,7 +43,7 @@ private func cachedOnShelf(_ store: ShelfStore, name: String = "image.png") thro
 }
 
 @Test func validateRejectsBadNamesAcceptsUnicode() {
-    for bad in ["", "   ", "a/b", "a:b", ".hidden", String(repeating: "é", count: 128)] { // é = 2 UTF-8 bytes
+    for bad in ["", "   ", "a/b", "a:b", "a\0b", "a\tb", ".hidden", String(repeating: "é", count: 128)] { // é = 2 UTF-8 bytes
         #expect(Renamer.validate(bad) != nil, "\(bad)")
     }
     for good in ["Résumé 2024 ✓.pdf", "my file", "日本語.txt", String(repeating: "a", count: 255)] {
@@ -172,4 +172,25 @@ private func cachedOnShelf(_ store: ShelfStore, name: String = "image.png") thro
     while store.actions.running != nil { try await Task.sleep(for: .milliseconds(10)) }
     #expect(try store.items[1] == item && fm.contentsOfDirectory(atPath: store.cache.root.path).isEmpty)
     #expect(store.actions.message == nil)
+}
+
+@Test func nfcAndNfdNamesCollide() throws {
+    var used = Set<String>()
+    let nfc = "caf\u{e9}.txt", nfd = "cafe\u{301}.txt"
+    #expect(Zipper.uniqueName(nfc, used: &used) == nfc)
+    #expect(Zipper.uniqueName(nfd, used: &used) == "cafe\u{301} 2.txt")
+    let store = try tempStore()
+    defer { rm(store.cache.root) }
+    _ = try cachedOnShelf(store, name: nfc)
+    #expect(store.uniqueName(nfd) == "cafe\u{301} 2.txt")
+}
+
+@Test func suffixPushingNameOverLimitIsRejected() throws {
+    let store = try tempStore()
+    defer { rm(store.cache.root) }
+    let long = String(repeating: "a", count: 251) + ".txt" // 255 bytes
+    _ = try cachedOnShelf(store, name: long)
+    let other = try cachedOnShelf(store, name: "b.txt")
+    #expect(store.actions.rename(other, to: long, in: store) == "That name is too long.")
+    #expect(url(store.items[1])?.lastPathComponent == "b.txt")
 }

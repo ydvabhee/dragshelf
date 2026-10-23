@@ -30,11 +30,14 @@ nonisolated enum Zipper {
         return out
     }
 
-    /// Same name from two folders → Finder-style "name 2.ext". Case-insensitive, like the default APFS volume.
+    /// Collision key: NFC-normalized (é typed vs é from a decomposed Finder name) and case-folded, like the default APFS volume.
+    static func key(_ name: String) -> String { name.precomposedStringWithCanonicalMapping.lowercased() }
+
+    /// Same name from two folders → Finder-style "name 2.ext". `used` holds `key(_:)` values.
     static func uniqueName(_ name: String, used: inout Set<String>) -> String {
         let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
         var candidate = name, n = 2
-        while !used.insert(candidate.lowercased()).inserted {
+        while !used.insert(key(candidate)).inserted {
             candidate = "\(base) \(n)" + (ext.isEmpty ? "" : ".\(ext)")
             n += 1
         }

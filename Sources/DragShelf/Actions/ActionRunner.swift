@@ -124,7 +124,7 @@ final class ActionRunner {
         }
         let skipped = targets.count - items.count, cache = store.cache, generation = store.generation
         let urls = items.compactMap { if case .file(let url) = $0.kind { url } else { nil } }
-        let taken = Set(store.items.compactMap { if case .file(let url) = $0.kind { url.lastPathComponent.lowercased() } else { nil } })
+        let taken = Set(store.items.compactMap { if case .file(let url) = $0.kind { Zipper.key(url.lastPathComponent) } else { nil } })
         message = nil
         guard let dir = try? cache.newItemDir() else {
             message = action.failure

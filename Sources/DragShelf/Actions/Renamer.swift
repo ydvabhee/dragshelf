@@ -5,6 +5,7 @@ nonisolated enum Renamer {
     /// Error text for the inline message, or nil when `name` is a valid file name.
     static func validate(_ name: String) -> String? {
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Enter a name." }
+        if name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) { return "A name can’t contain control characters." }
         if name.contains("/") || name.contains(":") { return "A name can’t contain “/” or “:”." }
         if name.hasPrefix(".") { return "A name can’t begin with “.”." }
         if name.utf8.count > 255 { return "That name is too long." }

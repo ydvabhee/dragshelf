@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
 ### Fixed
+- Rename and Compress: names that differ only in accents (typed vs. decomposed) or case now get the Finder-style number instead of colliding, and control characters or a name made too long by that number are rejected.
 - Convert To and Resize: one damaged image no longer cancels the whole batch; the rest are converted and DragShelf says how many couldn’t be.
 - Dropping only items already on DragShelf now switches Recent back to the grid.
 - DragShelf no longer quits when you drop a file promise, such as an image dragged from VS Code.
