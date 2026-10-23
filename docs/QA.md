@@ -313,3 +313,36 @@ Manual (user runs):
 3. Menu bar glyph: tilted card into a tray with a knocked-out arrow. Check light bar, dark bar, retina and non-retina, and a tinted wallpaper: crisp, tinted by the system.
 4. Drag a Recent row to Finder (copy): shelf unchanged, entry stays. Cmd-move a row whose file is also on the shelf: that shelf item goes, others stay.
 5. Open Recent (clock), hide, show: grid shown. Open Recent, drop a duplicate-only file: grid returns.
+
+## T-18 Contextual tips (bb36b0d) - FAIL (1)
+Auto: build (0 warnings), 78 tests, release build green. `HintEngine` takes an injected `UserDefaults`; tests cover event to hint, show triggers, 3-show retirement, dismiss persistence, never during drag, tips off, priority over promo. Branding: all hint text says "DragShelf". Hint wins the footer slot over the promo (`ShelfView.footer`). Hint is held back while `isDragging || isDropTargeted` and kept pending while hidden. Reset Tips clears counts, dismissals and show counters.
+Findings:
+- AC-3 FAIL: Recent rows have no `.help` ("Restore to DragShelf"). The row is overlaid by `DragOutHandle`, so put the tooltip on the handle (`toolTip`) or the overlay.
+- Low: with no promo, a tip appearing while the panel is open (first drop, after Clear is hidden so n/a) adds one 28 pt row and the panel grows. Hint to promo swap keeps height (shared row height). No AC forbids the growth; accepted.
+- Low: Reset Tips does not clear a tip already on screen; it clears on next hide.
+Manual (user runs):
+1. Fresh state (Settings, Reset Tips). Drop a file: footer shows lightbulb + "Switch apps, then drag items out of DragShelf." with a small x. Panel grows by one row and does not jump.
+2. While a tip shows, start a drag (from Finder or out of DragShelf): the line fades out, the panel height does not change. When the drag ends a pending tip may appear.
+3. Show DragShelf 3 times via hotkey: 3rd show gives "Drag the top bar to move DragShelf · edges to resize." Show via menu twice: "Tip: ⌃⌥⌘D shows DragShelf from anywhere." (not shown if the shortcut is off).
+4. Drag a file out (copy to Finder): "Removed from DragShelf · ⌘Z to bring it back" on next show. With a file on the shelf: "Hold ⌘ while dragging out to move instead of copy."
+5. Press Clear with items: panel hides; next show gives "Clear only empties DragShelf; your files aren't touched."
+6. Each tip: after 3 appearances it never returns. Click x: it never returns, even after relaunch. Settings, Reset Tips: tips return.
+7. Settings, Show tips off: no tip ever shows; the promo line (if any) shows instead. With tips on and a promo present, a tip replaces the promo, then the promo returns.
+8. Tooltips (hover 1 s): Drag all, Recent drags, Clear, Close, tile Remove, Clear Recent, Recent row (expected "Restore to DragShelf", currently missing).
+9. VoiceOver: a new tip is announced ("Tip: ..., Command-Z ...") and the line reads as one element; x reads "Dismiss tip". Reduce Motion on: tip fades, no slide.
+10. Light and Dark mode, small panel width: line truncates with an ellipsis, x stays visible.
+
+## Crash fix: file promise isolation (cab9439) - PASS
+Cause: the reader closure passed to `NSFilePromiseReceiver.receivePromisedFiles(operationQueue:)` was inferred `@MainActor` (package default isolation); AppKit calls it on a background queue and the Swift 6 runtime isolation check trapped.
+Auto: `DropReceiver.promiseHandler` is `nonisolated static`, returns `@Sendable (URL, Error?) -> Void`, and only hops with `Task { @MainActor in ... }` before touching the store. `promiseHandlerCalledOffMainAddsItem` and `promiseHandlerErrorOffMainCallsOnFailAndRemovesDir` call it from background queues. Probe package with the same default isolation confirmed a MainActor-inferred closure traps off main (exit 133).
+Audit of the same class (callbacks AppKit/Foundation may run off main while inferred MainActor):
+- `DropReceiver.swift` promise reader: fixed. `Task.detached prepareImage`: nonisolated, OK.
+- `UI/MenuBarIcon.swift:7` and `UI/Glass.swift:99` `NSImage(size:flipped:drawingHandler:)`: AppKit documents "invoked on whatever thread the image is drawn on"; the closure is MainActor-inferred and traps off main (reproduced). Latent, medium. Make the handler `@Sendable` and the draw code nonisolated.
+- `UI/ShelfView.swift:250` `@objc preferenceChanged` (scroller-style notification, any thread): MainActor method called by selector; low-medium. Make it `nonisolated` and hop with `MainActor.assumeIsolated` inside `DispatchQueue.main.async`.
+- OK (no trap): `HotKey` Carbon handler (main-thread target, `assumeIsolated`), `AppDelegate` defaults observer (`queue: .main`), `DragMonitor` global monitor and Timer (main), `ShelfPanel` QL panel control methods (`nonisolated` + `assumeIsolated`), QL data source and delegate (main), `liveResizeEnded` (window notification, main), `NSAnimationContext` completions (`assumeIsolated`, main), `DragOutSource` NSDraggingSource and menu `@objc` actions (main), `RedirectGuard` (`nonisolated`), `PromoLoader` async/await, `QLThumbnailGenerator` async, `.onGeometryChange` (main).
+Manual (user runs, drop onto DragShelf and confirm the app never quits):
+1. VS Code: drag an image from the Explorer or an editor tab. Item lands; no crash.
+2. Safari: drag an image from a page (also a background image). Item lands as an image file.
+3. Mail: drag an attachment from a message (also an offline one: no crash, no leftover cache dir).
+4. Photos: drag one photo, then several. Items land in order.
+5. Press Clear right after a slow promise drop: nothing lands late. Quit: `~/Library/Caches/<bundle id>` is empty.
