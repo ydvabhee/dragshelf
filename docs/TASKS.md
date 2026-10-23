@@ -269,7 +269,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 
 | ID | Title | Milestone | Depends on | Stories | Status |
 |---|---|---|---|---|---|
-| V2-01 | Zip + ActionRunner + Actions menus | M6 | T-11 | US-11, common | QA |
+| V2-01 | Zip + ActionRunner + Actions menus | M6 | T-11 | US-11, common | DONE (2026-10-23) |
 | V2-02 | Share and AirDrop | M6 | V2-01 | US-13 | BACKLOG |
 | V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | BACKLOG |
 | V2-04 | Rename shelf items | M6 | V2-01 | US-12 | BACKLOG |
@@ -315,4 +315,5 @@ Milestone M6. Depends on: V2-01. `Actions/Renamer.swift`, `ShelfStore.replace(id
 - AC-5: Renamed item keeps its id, index, and selection (unit test on `replace(id:with:)`).
 - AC-6: Drag out of a renamed item delivers the new name with identical contents (manual, Finder).
 - AC-7: Rename disabled for link, text, and missing items.
+- AC-extra (carried from V2-01 QA): new shelf files never collide by name: a second "Archive.zip" (or a rename/convert output) gets a Finder-style suffix ("Archive 2.zip") when an item with that name is already on the shelf.
 
