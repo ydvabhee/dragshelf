@@ -365,3 +365,11 @@ Manual:
 1. Drag a large iCloud-only Photos video onto the shelf, open/close the shelf repeatedly for >15 s before it lands. Item must still land.
 2. Drop images, clear Recent, wait/trigger sweep: `~/Library/Caches/com.abhishekyadav.DragShelf/Shelf` has no orphan dirs.
 3. Item on shelf + Recent entry older than 24 h: dir removed only after item leaves shelf.
+
+## T-21 re-verify (da40458) - PASS
+Build, 86 tests, release build green. Previous FAIL fixed: `inFlight` set excludes receiving dirs from sweep.
+- inFlight cleared on every exit: promise success/fail/duplicate/Clear all go through `finishPromise` (ends first, then add or remove dir); image prepare ends right after the detached write (also on write failure and Clear). End and add happen in one main-actor step, so no gap for a sweep.
+- Delete list is computed on MainActor synchronously from live `inFlight`, then deleted off main. New dirs have fresh UUIDs, so they cannot be in the list; no race.
+- Image dir created on main before the detached write. Timer invalidated on terminate.
+- Residual (low): if AppKit never calls the promise reader (source app dies, zero files), the empty dir stays pinned until quit (wiped then). Multi-file promise: reader runs per file; first end clears the flag while later files may still download (pre-existing shape).
+Manual: repeat T-21 manual step 1 (slow iCloud Photos video, >15 s) and confirm it lands.
