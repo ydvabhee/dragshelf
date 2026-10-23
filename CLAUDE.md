@@ -39,7 +39,7 @@ commits, and security notes are written normally.
   4. Run `scripts/make-dmg.sh`.
   5. Ask the user to push `main` and the tag.
   6. After the user pushes: `gh release create vX.Y.Z build/DragShelf.dmg --title "DragShelf X.Y.Z" --notes "<changelog section>"`. This needs `gh` signed in as **ydvabhee**.
-- The asset name is always `DragShelf.dmg`, so the README link `releases/latest/download/DragShelf.dmg` keeps working.
+- The asset name is always `DragShelf.dmg`. The README points users to the Releases page (`releases/latest`), not to a direct file link.
 
 ## Source of truth
 - `docs/PRD.md`: scope and acceptance criteria

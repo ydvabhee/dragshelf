@@ -2,6 +2,7 @@
 
 **A floating shelf for drag and drop on macOS.** Start dragging anything, and the shelf slides in. Drop your files on it, switch to the target app at your own pace, then drag them out where they need to go.
 
+[![Latest release](https://img.shields.io/github/v/release/ydvabhee/dragshelf?label=release)](https://github.com/ydvabhee/dragshelf/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
@@ -36,7 +37,7 @@ DragShelf removes the rush. The shelf holds your files for as long as you need, 
 
 ### Download
 
-**[⬇ Download DragShelf.dmg (latest)](https://github.com/ydvabhee/dragshelf/releases/latest/download/DragShelf.dmg)**. Every version is listed on the [releases page](https://github.com/ydvabhee/dragshelf/releases), and the changes in each one are in the [changelog](CHANGELOG.md).
+Get the latest **`DragShelf.dmg`** from the **[Releases page](https://github.com/ydvabhee/dragshelf/releases/latest)**: open the newest release and download `DragShelf.dmg` under **Assets**. The changes in each version are in the [changelog](CHANGELOG.md).
 
 1. Open the DMG and drag **DragShelf** into **Applications**.
 2. Preview builds aren't notarized yet, so the first time you open DragShelf, macOS will block it:
