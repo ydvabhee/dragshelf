@@ -2,7 +2,7 @@
 
 ## ▶ Resume here
 1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent manager`), then say **"continue DragShelf from docs/STATUS.md"**.
-2. All v1 feature tasks are DONE (T-01..T-11, T-13..T-21). v2 Shelf Actions DONE: V2-01 Zip (+ Actions menu), V2-03 Convert/Resize, V2-04 Rename. V2-02 Share/AirDrop not requested yet (BACKLOG). Next: ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is full; release steps in CLAUDE.md).
+2. All v1 feature tasks are DONE (T-01..T-11, T-13..T-21). v2 Shelf Actions DONE: V2-01 Zip (+ Actions menu), V2-02 Share/AirDrop, V2-03 Convert/Resize, V2-04 Rename, V2-05 Custom resize. Next: ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is full; release steps in CLAUDE.md).
 3. Walk the user through the open questions below; T-12 (signing/notarization) once they have a Developer ID.
 
 ## Build / run
@@ -21,7 +21,7 @@
 | M4 Polish | T-10, T-11, T-14..T-20 | `m4-polish`, `m4-ui-polish` |
 | M5 Ship | T-12 | BLOCKED on user |
 
-- 116 unit tests, zero warnings (debug + release), idle 0% CPU / ~19 MB.
+- 125 unit tests, zero warnings (debug + release), idle 0% CPU / ~19 MB.
 - Crash fixed 2026-10-23: file-promise drops (VS Code, Safari, Mail, Photos) trapped on a Swift 6 isolation check; same bug class fixed in image drawing handlers. QA now audits off-main callbacks every task.
 - User-driven changes so far: top-center auto-show (T-08), responsive scroll + movable shelf + O(1) dedupe + no item limit (T-13), ⌘-drag move (T-15), remote promo line (T-14), UI polish + resizable shelf (T-16).
 
