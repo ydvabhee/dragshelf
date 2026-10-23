@@ -7,7 +7,7 @@ final class HotKey {
 
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
-    private static let log = Logger(subsystem: "co.trippl.DragShelf", category: "HotKey")
+    private static let log = Logger(subsystem: PromoConfig.selfBundleID, category: "HotKey")
 
     var isRegistered: Bool { hotKeyRef != nil }
 

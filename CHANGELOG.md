@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
 ### Fixed
+- Dropping only items already on DragShelf now switches Recent back to the grid.
 - DragShelf no longer quits when you drop a file promise, such as an image dragged from VS Code.
 - Dragging a row from Recent no longer removes items from DragShelf.
 - Menu bar icon, DragShelf background mask and scroll bar style no longer risk a crash when macOS draws or notifies off the main thread.

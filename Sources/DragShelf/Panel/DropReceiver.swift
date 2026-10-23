@@ -84,10 +84,10 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         setTargeted(false)
         guard let store, accepts(sender) else { return false }
+        store.showRecent = false  // any accepted drop returns to the grid (T-20 AC-8), even duplicate-only
         let failed = onPromiseFailed
         guard Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store,
                           onPromiseFailed: { failed?() }) else { return false }
-        store.showRecent = false
         onDrop?()
         return true
     }

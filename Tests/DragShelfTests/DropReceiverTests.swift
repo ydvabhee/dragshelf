@@ -44,6 +44,22 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(store.items.map(\.kind) == [.file(a), .file(b), .text("hello")])
 }
 
+@Test func duplicateOnlyDropLeavesRecentView() async {
+    let pb = NSPasteboard(name: .init("test-drop-\(UUID())"))
+    defer { pb.releaseGlobally() }
+    pb.clearContents()
+    pb.writeObjects([URL(fileURLWithPath: "/tmp/dup.txt") as NSURL])
+    let store = ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())")))
+    let receiver = DropReceiver(rootView: EmptyView())
+    receiver.store = store
+    let info = FakeDraggingInfo(pb)
+    _ = receiver.performDragOperation(info)
+    await pendingIngest?.value
+    store.showRecent = true
+    _ = receiver.performDragOperation(info)
+    #expect(!store.showRecent)
+}
+
 @Test func finishPromiseAddsCachedFile() throws {
     let cache = ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("drt-\(UUID())"))
     let store = ShelfStore(cache: cache)
