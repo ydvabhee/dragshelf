@@ -18,6 +18,10 @@ commits, and security notes are written normally.
   and never use `--global`.
 - Every agent commits its own changes at the end of each step. Conventional Commits, with the
   task id in the subject, e.g. `feat(T-03): accept file drops on shelf`.
+- Commit messages follow open-source standard: short imperative subject (≤ 72 chars) with a
+  proper type (`feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `perf`), optional short body.
+  **No `Co-Authored-By` trailers, no AI or Claude references of any kind** in messages,
+  trailers, or author/committer fields.
 - Stage specific paths, never `git add -A` blindly. Never rewrite history (no amend, rebase,
   reset --hard, or force) unless the user asks.
 - Every commit leaves the build green. Commit WIP only to a `wip/<task-id>` branch.

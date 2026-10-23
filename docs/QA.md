@@ -2,7 +2,7 @@
 
 Build cmds: `swift build && swift test && scripts/build-app.sh`. No xcodebuild (ADR-013).
 
-## T-01 skeleton (commit ca1a1a4): PASS
+## T-01 skeleton (commit f58f8a1): PASS
 Automated (done by QA):
 - AC-1 clean `swift build`: 0 warnings.
 - AC-2 `swift test`: 1 Swift Testing test passes.
@@ -17,7 +17,7 @@ Manual (user):
 4. Press ⌘Q with menu open, or click "Quit DragShelf": app exits, icon gone.
 5. Light + dark menu bar: icon legible.
 
-## T-02 Shelf model (PASS, re-verified d73f802, 26ab8de)
+## T-02 Shelf model (PASS, re-verified da0788c, 7ed5e10)
 Auto: build, test (6 pass), build-app.sh ok. Launch wipe verified.
 Fixed: dedupe normalizes `..`/symlinks (test); nested cached file deletes root child dir (test); MainActor via `.defaultIsolation(MainActor.self)` in Package.swift, accepted.
 Tests use temp root only.
@@ -25,7 +25,7 @@ Tests use temp root only.
 Manual (user):
 1. Quit via menu: confirm cache dir empty (`ls ~/Library/Caches/com.abhishekyadav.DragShelf/Shelf`). (SIGTERM skips willTerminate; only menu Quit covers AC-5 quit.)
 
-## T-03 Floating panel + Liquid Glass shell (PASS, c5caff8)
+## T-03 Floating panel + Liquid Glass shell (PASS, 2e48de1)
 Auto: build, test (7 pass), build-app.sh ok. No NSApp.activate in panel path (only Settings). `#available` only in Glass.swift. Reduce Motion/Transparency/Increase Contrast handled in code. Header icons + tiles have VoiceOver labels.
 Snapshots (offscreen, `DRAGSHELF_SNAPSHOT_DIR=... swift test`): colors in code are semantic (.secondary/.tertiary/default primary), but offscreen render shows black text in dark and white icons in light. Offscreen NSHostingView in an unshown NSWindow does not propagate appearance to SwiftUI; treat as artifact, confirm on screen (steps 7-8). Glass never renders offscreen.
 Known gaps: Esc hides only when panel is key (non-activating panel rarely is) -> deferred to T-07 keyboard; drag-all button no action until T-06. Controller<->panel<->hosting view is a strong cycle (app-lifetime singleton, harmless).
@@ -130,13 +130,13 @@ Matrix rows for T-08: all sources x "shelf appears on drag start".
 
 ## T-07 Manage items: remove, missing, Quick Look, keyboard (manual)
 Auto: `swift build` clean, `swift test` 32 pass (hash replace, missing files, arrow nav, promise-after-clear). `build-app.sh` not run by QA (user's instance running).
-Findings: Quick Look crash risk and Cmd-C of missing files fixed in 24f5874 (bounds-safe `previewURL(at:)`, `onChange(previewURLs)` -> `syncPreview`, read-only so no loop, MainActor). Scroll over tiles (DragOutHandleView has no scrollWheel) is carried to T-13. Re-verify: build clean, 32 tests pass.
+Findings: Quick Look crash risk and Cmd-C of missing files fixed in b4343cc (bounds-safe `previewURL(at:)`, `onChange(previewURLs)` -> `syncPreview`, read-only so no loop, MainActor). Scroll over tiles (DragOutHandleView has no scrollWheel) is carried to T-13. Re-verify: build clean, 32 tests pass.
 1. Hover tile -> xmark badge top-left; click removes. Move pointer onto the badge -> no flicker. Scroll grid under stationary pointer -> badge follows (AC-1, AC-8).
 2. Click tile, Delete / Fwd-Delete removes selection. Right-click unselected tile -> selects it; menu Remove, Quick Look work (AC-1, AC-8).
 3. Clear button: items gone, panel hides, `~/Library/Caches/<bundle>` empty (AC-2).
 4. Delete a file in Finder while on shelf, hide + show panel -> dimmed + "Missing". Cannot drag it, Space does nothing for it (AC-3). Deleting while panel is open updates only on next show (expected).
 5. TextEdit frontmost, click a tile, Space -> preview opens, TextEdit menu bar stays, DragShelf not in Cmd-Tab. Space/Esc closes preview; arrows move selection and preview follows (AC-4).
-6. With preview open: click another tile, remove a tile via badge/menu -> preview must not crash or show stale item (fixed in 24f5874, re-check).
+6. With preview open: click another tile, remove a tile via badge/menu -> preview must not crash or show stale item (fixed in b4343cc, re-check).
 7. Preview open, Esc once closes preview only; Esc again hides panel. Hide panel / Clear with preview open -> preview closes (AC-6).
 8. Preview in front of other apps' windows and above/near the floating shelf? Report stacking. Also Space / Mission Control switch.
 9. VoiceOver: tile actions "Remove", "Quick Look" in rotor; missing tile label ends ", missing" (AC-5).
@@ -172,7 +172,7 @@ Manual:
 7. Double-click header, and menu "Reset Shelf Position": back to top center.
 8. Regression: auto-hide of empty shelf, Quick Look sync, drag out, Esc/arrows keys.
 
-## T-10 Settings window + launch at login (27cbb2b) - PASS
+## T-10 Settings window + launch at login (0c07e63) - PASS
 Auto: `swift build`, `swift test` (40 pass, incl. `removalHonorsKeepAfterDragOut`, `preferencesDefaults`), `swift build -c release` green.
 Code review:
 - `applyPreferences` runs on every `UserDefaults.didChangeNotification` (incl. `panelOffsets` writes). `DragMonitor.start()` guards `monitor == nil`; `stop()` with no drag is a no-op. No monitor churn, no mid-drag restart. Observer uses `queue: .main`, so `assumeIsolated` is safe.
@@ -192,10 +192,10 @@ Manual (user):
 7. Quit/relaunch: all three toggles keep their values.
 8. Move the shelf repeatedly while dragging a file in: no flicker, shelf stays.
 
-## T-15 Cmd-drag moves file items (1f6282a, fix ad3d629) - PASS
+## T-15 Cmd-drag moves file items (16b8e5c, fix f58e6a9) - PASS
 Auto: build, 41 tests, release build green. AC-1..5, AC-7 code OK (initial apply at launch fires since applied* start nil; `.move` removal + empty cache dir cleanup OK).
 
-Fixed in ad3d629 (re-verified: build, 41 tests, release green). Was AC-6: Cmd mask was `.move` only (DragOutSource.swift:61-63). Copy-only receivers (Mail compose, browser upload, Slack) return `.copy` from draggingEntered; intersect with `.move` = [] -> drop rejected. Fix: Cmd+allFiles -> `[.move, .copy]`, else `.copy`. Then `ended(.move)` still removes; `.copy` result keeps normal rule.
+Fixed in f58e6a9 (re-verified: build, 41 tests, release green). Was AC-6: Cmd mask was `.move` only (DragOutSource.swift:61-63). Copy-only receivers (Mail compose, browser upload, Slack) return `.copy` from draggingEntered; intersect with `.move` = [] -> drop rejected. Fix: Cmd+allFiles -> `[.move, .copy]`, else `.copy`. Then `ended(.move)` still removes; `.copy` result keeps normal rule.
 
 Manual (user to run; Finder move with [.move,.copy] unverifiable without GUI):
 1. Finder file, plain drag to another folder (same volume): copied, shelf item removed (keep off).
@@ -207,7 +207,7 @@ Manual (user to run; Finder move with [.move,.copy] unverifiable without GUI):
 7. Esc mid-drag: items stay. Drop on shelf itself: no-op.
 8. Move shelf repeatedly: log shows no repeated hotkey register errors.
 
-## T-11 Accessibility and motion polish (0f21cd4) - PASS
+## T-11 Accessibility and motion polish (75b4f6d) - PASS
 Auto: build, 43 tests x3 (stable, ~1 s), release build green, no warnings. AC-6..10 code OK.
 
 Code review:
@@ -232,7 +232,7 @@ Manual (user runs):
 8. Two displays: drag header across screens; panel stays below menu bar and inside screen, no flicker. Max height follows screen after move.
 9. Activity Monitor with 50 items idle: CPU ~0%, memory < 60 MB.
 
-## T-14 Remote "More apps" promo line (bb0dddb, fix ae24845) - PASS
+## T-14 Remote "More apps" promo line (5488fe1, fix c094a3f) - PASS
 Auto: build, 53 tests, release build green, no warnings. No real network (stub `URLProtocol`). Mutation check: disabling `RedirectGuard` + final-URL check makes the `http:`/`evil.com` redirect cases fail, so the tests bite.
 
 Security review (trust boundary):
@@ -242,9 +242,9 @@ Security review (trust boundary):
 - Text: title/subtitle reject Cc/Cf/Zl/Zp (newline, bidi overrides). Rendered via `Text(String)` and `Button(String)` (StringProtocol inits: no Markdown, no localization lookup). Length counts graphemes, so one char can carry many combining marks (low).
 - Cache: `~/Library/Caches/com.abhishekyadav.DragShelf/Promos/feed.json`, outside `ItemCache.root` (`…/Shelf`), atomic write, user perms. Corrupt cache → `feed = nil`, and no `If-None-Match` is sent without a cache.
 
-Re-verify ae24845: build, 54 tests, release build green. All 4 lows fixed and tested: `URLError` (not `.cancelled`) retries after 3 h, server/invalid/refused-redirect errors wait 24 h; titles/subtitles capped at 2 × max scalars (Zalgo test); auto-drag show skips `refreshIfStale`; `url.port` must be nil (`:443` explicit is denied too, fail-closed) and requests send `Accept-Language: en`. Accepted residual: if the launch fetch has no cache and finishes during a drag, the panel grows once mid-drag (rare, once).
+Re-verify c094a3f: build, 54 tests, release build green. All 4 lows fixed and tested: `URLError` (not `.cancelled`) retries after 3 h, server/invalid/refused-redirect errors wait 24 h; titles/subtitles capped at 2 × max scalars (Zalgo test); auto-drag show skips `refreshIfStale`; `url.port` must be nil (`:443` explicit is denied too, fail-closed) and requests send `Accept-Language: en`. Accepted residual: if the launch fetch has no cache and finishes during a drag, the panel grows once mid-drag (rare, once).
 
-Findings (all fixed in ae24845):
+Findings (all fixed in c094a3f):
 1. PromoLoader.swift:87: low: any failure, including offline at first launch, waits a full 24 h (no promo all day). Fix: on `URLError`, store `lastFetch = now - interval + 3h` so it retries after ~3 h; keep 24 h for server 4xx/5xx/invalid.
 2. PromoFeed.swift:59: low: `count` is graphemes; a Zalgo title (1 letter + 1000s of marks) passes and can overdraw outside the line. Fix: also cap `unicodeScalars.count` (e.g. ≤ 2 × max).
 3. ShelfView.swift:39: low: first fetch (no cache) finishing during an auto-drag show inserts the footer row, so the panel grows mid-drag. Fix: skip `refreshIfStale` when `reason == .autoDrag`, or apply a new feed only when not dragging.
@@ -261,7 +261,7 @@ Manual (user runs; serve `backend/promos.json` or point a debug build at a test 
 9. VoiceOver: line reads "<title>, <subtitle>. Opens in browser"; ✕ reads "Hide this suggestion".
 10. AC-X: hotkey show → arrows/Esc work in the shelf. Menu "Show Shelf" and drag auto-show → typing still goes to the frontmost app.
 
-## T-16 UI polish: focus ring, outline, scroll bar, resize (89275f0) - PASS
+## T-16 UI polish: focus ring, outline, scroll bar, resize (d7b8766) - PASS
 Auto: build, 59 tests, release build green. Size math (clamps, columns, per-screen save, reset) covered by ShelfLayoutTests.
 Review notes (no blockers):
 - `ShelfPanel.setFrame` override (pinTop) only intercepts live resize if AppKit routes edge drags through it; verify step 3. Programmatic/animated frames bypass it, so header move, fitToContent and show/hide are unaffected.
