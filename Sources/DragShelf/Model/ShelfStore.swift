@@ -32,6 +32,10 @@ final class ShelfStore {
     static let recentMaxAge: TimeInterval = 24 * 3600
     /// In-flight guard: a dir changed within this window may belong to a drop still landing (not on the shelf yet).
     static let sweepGrace: TimeInterval = 10
+    /// Cache dir names of drops still receiving (file promise, image write): `sweep` never deletes them.
+    @ObservationIgnored private(set) var inFlight: Set<String> = []
+    func beginInFlight(_ dir: URL) { inFlight.insert(dir.lastPathComponent) }
+    func endInFlight(_ dir: URL) { inFlight.remove(dir.lastPathComponent) }
     /// Clock button: the Recent list replaces the grid. Reset on show and on any drop (T-20 AC-8).
     var showRecent = false
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
@@ -186,7 +190,7 @@ final class ShelfStore {
         guard !found.isEmpty, gen == generation else { return }
         func orphans() -> [ItemCache.Entry] {
             let kept = Set((items + recent.flatMap(\.items)).compactMap(cacheDir(of:)).map(\.lastPathComponent))
-            return found.filter { !kept.contains($0.name) && now.timeIntervalSince($0.modified) > Self.sweepGrace }
+            return found.filter { !kept.contains($0.name) && !inFlight.contains($0.name) && now.timeIntervalSince($0.modified) > Self.sweepGrace }
         }
         var gone = orphans()
         while found.reduce(0, { $0 + $1.bytes }) - gone.reduce(0, { $0 + $1.bytes }) > Self.cacheCapBytes, recent.popLast() != nil {

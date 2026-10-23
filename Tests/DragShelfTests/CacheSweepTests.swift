@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import DragShelf
 
@@ -61,4 +62,22 @@ private func later(_ s: TimeInterval = 60) -> Date { .now.addingTimeInterval(s) 
     let store = tempStore()
     await store.sweep(now: later())
     #expect(!exists(store.cache.root))
+}
+
+@Test func inFlightDirIsNotSweptUntilFinished() async throws {
+    let store = tempStore()
+    defer { store.cache.wipe() }
+    let slow = try store.cache.newItemDir() // empty, like a promise still receiving
+    try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-3600)], ofItemAtPath: slow.path)
+    store.beginInFlight(slow)
+    await store.sweep(now: later())
+    #expect(exists(slow))
+    // Failure path: finishPromise ends the in-flight mark and removes the dir.
+    #expect(!DropReceiver<EmptyView>.finishPromise(url: nil, dir: slow, store: store, generation: store.generation))
+    #expect(!exists(slow) && store.inFlight.isEmpty)
+    // Dir left behind after the mark ends is swept as an orphan.
+    let late = try store.cache.newItemDir()
+    store.beginInFlight(late); store.endInFlight(late)
+    await store.sweep(now: later())
+    #expect(!exists(late))
 }

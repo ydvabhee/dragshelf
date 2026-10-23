@@ -124,8 +124,11 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
                     continue
                 }
                 let cache = store.cache
-                guard let (file, dir, hash) = await Task.detached(operation: { prepareImage(data, type: type, cache: cache) }).value
-                else { continue }
+                guard let dir = try? cache.newItemDir() else { continue }
+                store.beginInFlight(dir)
+                let prepared = await Task.detached(operation: { prepareImage(data, type: type, dir: dir, cache: cache) }).value
+                store.endInFlight(dir)
+                guard let (file, hash) = prepared else { continue }
                 if generation == store.generation,
                    store.add(ShelfItem(kind: .file(file), isCached: true, contentHash: hash)) { landed = true }
                 else { cache.remove(dir: dir) }
@@ -154,6 +157,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     private static func receive(_ receiver: NSFilePromiseReceiver, into store: ShelfStore, onFail: @escaping @MainActor () -> Void) {
         let cache = store.cache, generation = store.generation
         guard let dir = try? cache.newItemDir() else { log.error("promise: cannot create cache dir"); onFail(); return }
+        store.beginInFlight(dir)
         receiver.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: promiseQueue,
                                       reader: promiseHandler(dir: dir, store: store, generation: generation, onFail: onFail))
     }
@@ -174,6 +178,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     /// (`generation` changed) removes the dir and anything written into it. Returns false when no item landed.
     @discardableResult
     static func finishPromise(url: URL?, error: (any Error)? = nil, dir: URL, store: ShelfStore, generation: Int) -> Bool {
+        store.endInFlight(dir)
         if let url, generation == store.generation, store.add(ShelfItem(kind: .file(url), isCached: true)) { return true }
         if let error { log.error("promise failed: \(error.localizedDescription, privacy: .public)") }
         store.cache.remove(dir: dir)
@@ -182,18 +187,18 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 }
 
 /// Off the main actor: PNG file in a new cache dir plus the SHA-256 of the original data.
-nonisolated private func prepareImage(_ data: Data, type: UTType, cache: ItemCache) -> (URL, URL, SHA256.Digest)? {
-    guard let (file, dir) = writeImage(data, type: type, cache: cache) else { return nil }
-    return (file, dir, SHA256.hash(data: data))
+nonisolated private func prepareImage(_ data: Data, type: UTType, dir: URL, cache: ItemCache) -> (URL, SHA256.Digest)? {
+    guard let file = writeImage(data, type: type, dir: dir, cache: cache) else { return nil }
+    return (file, SHA256.hash(data: data))
 }
 
 /// Writes PNG as-is (TIFF converted to PNG) to `root/<UUID>/Image <timestamp>.png`.
-nonisolated private func writeImage(_ data: Data, type: UTType, cache: ItemCache) -> (URL, URL)? {
+nonisolated private func writeImage(_ data: Data, type: UTType, dir: URL, cache: ItemCache) -> URL? {
     let png: Data? = type == .png ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
-    guard let png, let dir = try? cache.newItemDir() else { return nil }
+    guard let png else { cache.remove(dir: dir); return nil }
     let stamp = Date.now.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)).\(minute: .twoDigits).\(second: .twoDigits)",
                                              locale: .init(identifier: "en_US_POSIX"), timeZone: .current, calendar: .current))
     let file = dir.appendingPathComponent("Image \(stamp).png")
     do { try png.write(to: file) } catch { cache.remove(dir: dir); return nil }
-    return (file, dir)
+    return file
 }

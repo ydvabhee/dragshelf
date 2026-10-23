@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var panelController = ShelfPanelController(store: store, promos: promos)
     let dragMonitor = DragMonitor()
     let hotKey = HotKey()
+    private var sweepTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store.cache.wipe()
@@ -19,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         timer.tolerance = 5 * 60
         RunLoop.main.add(timer, forMode: .common)
+        sweepTimer = timer
         // Settings toggles apply immediately; both calls are idempotent.
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyPreferences() }
@@ -49,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        sweepTimer?.invalidate()
         hotKey.unregister()
         store.cache.wipe()
     }
