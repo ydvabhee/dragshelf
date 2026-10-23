@@ -6,7 +6,7 @@ import os
 
 /// Panel content view and drop destination. Lives on the panel's content view so drops work
 /// while the app is inactive. Subclasses the hosting view so SwiftUI keeps sizing the panel.
-private let log = Logger(subsystem: "com.abhishekyadav.DragShelf", category: "drop")
+private let log = Logger(subsystem: PromoConfig.selfBundleID, category: "drop")
 private let promiseQueue = OperationQueue()
 /// Tail of the drops whose items land asynchronously (image hashing). Later drops chain behind it so items
 /// keep drop order. Tests await it.
