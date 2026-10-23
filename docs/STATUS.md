@@ -2,10 +2,8 @@
 
 ## ▶ Resume here
 1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent manager`), then say **"continue DragShelf from docs/STATUS.md"**.
-2. T-16 is DONE (QA PASS e36fa09). First ask the user how the UI looks now (outlines gone? scroll bar? resize). Open risk: if dragging the bottom/side edge makes the **top** edge drift, move `pinTop` from `ShelfPanel.setFrame` to a `windowWillResize`-style hook (QA manual step 3).
-3. Run the **architect docs sync**: ARCHITECTURE.md drifted from code (DragMonitor lives in `Panel/` not `Drag/`; max height is min(4.5 rows, 50% screen) not 70%; `ItemCache` is an injectable struct; `Preferences.position` no longer exists — positioning is drag-to-move + `panelOffsets`; DropReceiver subclasses NSHostingView; promo code in `Promos/`).
-4. Build **T-19 branding**, then **T-17 Recent drag-outs + ⌘Z**, then **T-18 contextual hints** (user-approved 2026-10-20, specs in TASKS.md).
-5. Walk the user through the open questions below, then T-12 once they have a Developer ID.
+2. All v1 feature tasks are DONE (T-01..T-11, T-13..T-20). Next: **architect docs sync** (ARCHITECTURE.md vs code), then ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is full; release steps in CLAUDE.md).
+3. Walk the user through the open questions below; T-12 (signing/notarization) once they have a Developer ID.
 
 ## Build / run
 - SwiftPM only (ADR-013; `xcodebuild` broken on this Mac until `sudo xcodebuild -runFirstLaunch`).
@@ -20,10 +18,11 @@
 | M1 Shelf | T-02..T-05 | `m1-shelf` |
 | M2 Manage | T-06, T-07 | `m2-manage` |
 | M3 Auto-show | T-08, T-09, T-13 | `m3-autoshow` |
-| M4 Polish | T-10, T-11, T-14, T-15, T-16 | `m4-polish`, `m4-ui-polish` |
+| M4 Polish | T-10, T-11, T-14..T-20 | `m4-polish`, `m4-ui-polish` |
 | M5 Ship | T-12 | BLOCKED on user |
 
-- 59 unit tests, zero warnings (debug + release), idle 0% CPU / ~19 MB.
+- 79 unit tests, zero warnings (debug + release), idle 0% CPU / ~19 MB.
+- Crash fixed 2026-10-23: file-promise drops (VS Code, Safari, Mail, Photos) trapped on a Swift 6 isolation check; same bug class fixed in image drawing handlers. QA now audits off-main callbacks every task.
 - User-driven changes so far: top-center auto-show (T-08), responsive scroll + movable shelf + O(1) dedupe + no item limit (T-13), ⌘-drag move (T-15), remote promo line (T-14), UI polish + resizable shelf (T-16).
 
 ## T-16 (done at pause) — user report
