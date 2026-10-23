@@ -440,3 +440,25 @@ Build, 116 tests, release build green.
 - Low: no check that a name stays under 255 bytes after the suffix was verified beyond the added test; fine.
 - ditto cancel test limit is now 5 s; no flake in the run.
 Manual: repeat V2-03 step 8 (corrupt .jpg + 3 good): 3 outputs added, "1 image couldn’t be converted". Corrupt image alone: old error text, nothing added.
+
+## V2-05 Custom image resize (f33a5a7) - FAIL (2)
+Build, 120 tests, release build green.
+- Size math ok: aspect lock `linked` rounds half-up, min 1; fit-in-box uses min(sx, sy) per image; one side set keeps aspect; percent per axis, min 1 px; bounds 1-16384 px / 1-400 %, whole numbers, at least one side. Custom may upscale, presets unchanged. Names use the real output size.
+- Pipeline ok: thumbnail with transform (orientation applied, `size()` swaps 5-8), no source properties written, alpha kept via premultiplied context (opaque sources stay opaque), JPEG still flattened on white. Non-RGB (CMYK, gray) goes to sRGB when it is resized by the context: accepted (gray files grow, tiny shift). 16-bit kept.
+- Panel ok: `KeyPanelView` only calls `makeKey` on the non-activating panel (app stays inactive); Esc closes the form only; Return never reaches rename (handleKey returns early); `resizing` reset on show, drop, clear. Cmd-C fix: only skipped when first responder is `NSText` (field editor), tiles still copy.
+- Lock off, several images: both sides set = exact stretch for each image (Preview behavior). Accepted; the note under the fields only says "fit" when lock is on.
+- Finding (med): no pixel-count guard. 16384x16384 = 1 GB (2 GB at 16-bit); Percent 400 on a 8000x6000 photo = 32000x24000 (above the 16384 limit too). Fix: cap output at e.g. 100 MP and 16384 per side in `ImageConverter.convert` (throw `Failed`) and show the form error.
+- Finding (med): choosing Custom... from the header menu while the form is open (new selection) sets `store.resizing`, but `ResizeForm` keeps its `@State` `sizes` and fields (`onAppear` not re-run), so the old image sizes drive the lock and the "Larger" note. Fix: `.id(images.map(\.id))` on the form.
+- Low: `pixelSize` reads image headers on the main actor in `onAppear` (iCloud/network files can stall). Fix: read in a `Task` off-main.
+Manual:
+1. One image 4000x3000, Resize, Custom...: fields 4000 and 3000, lock on. Type width 1000: height 750. Resize: `<name> (1000×750).<ext>`, upright, no GPS.
+2. Lock off, width 500 height 500: exactly 500x500 (stretched). Lock on again: height follows width.
+3. Width 8000: "Larger than the original", output upscaled and sharp.
+4. Percent, 50 on a 4001x3001 image: 2001x1501. 1 % of a 50 px image: 1x1.
+5. Empty both fields, or 0, 16385, 12.5, abc: shake (fade with Reduce Motion), message, form stays open.
+6. Select 3 images of different aspect, Custom..., width 800 only: each 800 wide. Width 800 and height 800 lock on: each fits inside. Lock off: all 800x800.
+7. Form open: app menu bar stays on the previous app; typing works; Esc closes the form (panel stays); Return resizes, does not open rename; Cmd-C in a field copies the field text; Cmd-C on a selected tile copies the file.
+8. Form open, drop a file / Clear / hide and show: form gone, grid back.
+9. Form open, select other images, header Actions, Resize, Custom...: fields must show the new image size (finding 2).
+10. Percent 400 on a 8000x6000 photo: should refuse or fail cleanly, not use GBs (finding 1; watch Activity Monitor).
+11. Transparent PNG/HEIC upscale keeps transparency; CMYK JPEG resizes and opens in Preview.
