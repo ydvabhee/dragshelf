@@ -247,7 +247,10 @@ final class OverlayScrollerView: NSView {
         apply()
     }
 
-    @objc private func preferenceChanged() { DispatchQueue.main.async { [weak self] in self?.apply() } }
+    /// The scroller-style notification may post off the main thread.
+    @objc nonisolated private func preferenceChanged() {
+        DispatchQueue.main.async { [weak self] in MainActor.assumeIsolated { self?.apply() } }
+    }
     private func apply() { enclosingScrollView?.scrollerStyle = .overlay }
 }
 

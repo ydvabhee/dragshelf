@@ -80,7 +80,7 @@ private struct ShelfBackground: ViewModifier {
 }
 
 /// macOS 14–15 fallback. `state = .active` keeps it vibrant while the panel is not key.
-private struct VisualEffectBackground: NSViewRepresentable {
+struct VisualEffectBackground: NSViewRepresentable {
     let cornerRadius: CGFloat
 
     func makeNSView(context: Context) -> NSVisualEffectView {
@@ -94,9 +94,10 @@ private struct VisualEffectBackground: NSViewRepresentable {
 
     func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 
-    private static func mask(radius: CGFloat) -> NSImage {
+    /// Nonisolated, `@Sendable` handler: AppKit may run the drawing handler on any thread.
+    nonisolated static func mask(radius: CGFloat) -> NSImage {
         let side = radius * 2 + 1
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { @Sendable rect in
             NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
             return true
         }

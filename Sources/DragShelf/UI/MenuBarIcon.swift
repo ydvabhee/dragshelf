@@ -3,18 +3,22 @@ import AppKit
 /// Menu bar glyph matching the app icon: tilted file card dropping into a tray with a down arrow (T-20).
 /// Drawn in an 18×18 pt box; black + alpha only, so the system tints it (template).
 enum MenuBarIcon {
-    static let image: NSImage = {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            drawGlyph(in: NSGraphicsContext.current!.cgContext)
+    static let image = make()
+
+    /// Nonisolated, `@Sendable` handler: AppKit may run the drawing handler on any thread.
+    nonisolated static func make() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { @Sendable _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            drawGlyph(in: ctx)
             return true
         }
         image.isTemplate = true
         image.accessibilityDescription = "DragShelf"
         return image
-    }()
+    }
 
     /// Reference drawing: `docs/assets/menubar-glyph-prototype.swift`.
-    static func drawGlyph(in ctx: CGContext) {
+    nonisolated static func drawGlyph(in ctx: CGContext) {
         ctx.setFillColor(CGColor(gray: 0, alpha: 1))
         ctx.setStrokeColor(CGColor(gray: 0, alpha: 1))
 
