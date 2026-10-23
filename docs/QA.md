@@ -430,3 +430,13 @@ Manual:
 7. Convert `a.png` to PNG: output `a 2.png`. Run it twice: `a 2.png`, `a 3.png`.
 8. Drop a corrupt .jpg with 3 good images, Convert: currently whole batch fails (finding above).
 9. Rename… from header and tile menu still opens the name field; Compress still works.
+
+### V2-03 / V2-04 fix round (d4d7989, 9332751, e893b6d) - PASS
+Build, 116 tests, release build green.
+- Bad image: skipped via `try?` per image, counted in `failed`; `convert` removes its half-written output on a failed finalize and throws before creating a file otherwise, so no partial file. Good outputs land in the in-flight dir, the dir is released, outputs added and selected. All failing: no outputs, dir removed, old failure text.
+- Message grammar: "1 image couldn’t be converted" / "2 images couldn’t be converted", joined with "Skipped n item(s)" by ". ". No "image(s)" in the UI.
+- Names: `Zipper.key` (NFC + lowercase) used by `uniqueName` and `taken`; control characters rejected.
+- Low: a failed image still reserves its output name in `used`, so a later same-named output may get " 2" (cosmetic, rare).
+- Low: no check that a name stays under 255 bytes after the suffix was verified beyond the added test; fine.
+- ditto cancel test limit is now 5 s; no flake in the run.
+Manual: repeat V2-03 step 8 (corrupt .jpg + 3 good): 3 outputs added, "1 image couldn’t be converted". Corrupt image alone: old error text, nothing added.
