@@ -277,6 +277,7 @@ final class ShelfPanelController {
         guard isShown else { return }
         reason = nil
         store.hints.visible = false
+        store.actions.message = nil
         panel.closePreview()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = false }

@@ -269,7 +269,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 
 | ID | Title | Milestone | Depends on | Stories | Status |
 |---|---|---|---|---|---|
-| V2-01 | Zip + ActionRunner + Actions menus | M6 | T-11 | US-11, common | BACKLOG |
+| V2-01 | Zip + ActionRunner + Actions menus | M6 | T-11 | US-11, common | QA |
 | V2-02 | Share and AirDrop | M6 | V2-01 | US-13 | BACKLOG |
 | V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | BACKLOG |
 | V2-04 | Rename shelf items | M6 | V2-01 | US-12 | BACKLOG |

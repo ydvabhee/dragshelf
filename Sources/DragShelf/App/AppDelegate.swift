@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         sweepTimer?.invalidate()
         hotKey.unregister()
+        store.actions.cancel()
         store.cache.wipe()
     }
 }

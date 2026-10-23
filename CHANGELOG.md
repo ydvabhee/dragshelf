@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Compress: zip DragShelf items from the new Actions menu (⋯) in the header or a tile's context menu. One item becomes "<name>.zip", several become "Archive.zip"; the zip is added and selected, the originals stay. Links and text are skipped. A spinner and Cancel show while it runs.
 - App icon: a file card dropping into a tray, on a blue macOS-style squircle.
 - Recent drags: the last 5 drag outs sit under a clock button in the DragShelf header; click one to put it back or drag it out again. ⌘Z (or "Undo Drag Out" in the menu bar) restores the latest.
 - Tips: a one-line hint under DragShelf now and then (for example "Hold ⌘ while dragging out to move instead of copy"). Each shows up to 3 times; ✕ hides it for good. Settings → Tips turns them off or resets them.

@@ -183,6 +183,12 @@ final class DragOutHandleView: NSView {
         let menu = NSMenu()
         menu.addItem(withTitle: "Quick Look", action: #selector(previewSelection), keyEquivalent: "").isEnabled = !store.previewURLs.isEmpty
         menu.addItem(.separator())
+        for action in ShelfAction.allCases {
+            let item = menu.addItem(withTitle: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
+            item.representedObject = action
+            item.isEnabled = store.actions.canRun(action, on: store.selectedItems)
+        }
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Remove from DragShelf", action: #selector(removeSelection), keyEquivalent: "")
         menu.items.forEach { $0.target = self }
         menu.autoenablesItems = false
@@ -190,6 +196,10 @@ final class DragOutHandleView: NSView {
     }
 
     @objc private func previewSelection() { id.map(onQuickLook) }
+    @objc private func runAction(_ sender: NSMenuItem) {
+        guard let store, let action = sender.representedObject as? ShelfAction else { return }
+        store.actions.run(action, on: store.selectedItems, in: store)
+    }
     @objc private func removeSelection() { store.map { $0.remove(ids: $0.selection) } }
 
     override func mouseDown(with event: NSEvent) {

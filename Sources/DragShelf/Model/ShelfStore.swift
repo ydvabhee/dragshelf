@@ -42,6 +42,8 @@ final class ShelfStore {
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
     @ObservationIgnored let hints: HintEngine
+    /// Shelf actions (V2-01): one job at a time; Clear cancels it.
+    @ObservationIgnored let actions = ActionRunner()
     /// Dedupe index beside `items` (O(1) add). Image items key by content hash, everything else by kind.
     @ObservationIgnored private(set) var keys: [Key: UUID] = [:]
 
@@ -204,6 +206,7 @@ final class ShelfStore {
     /// Keeps Recent and the cache dirs it still references (T-17 AC-5).
     func clear() {
         generation += 1
+        actions.cancel()
         cache.wipe(keeping: Set(recent.flatMap(\.items).compactMap(cacheDir(of:)).map(\.lastPathComponent)))
         items.removeAll()
         keys.removeAll()

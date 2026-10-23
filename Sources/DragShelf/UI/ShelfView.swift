@@ -24,6 +24,14 @@ struct ShelfView: View {
     @State private var hovered: UUID?
     /// Promo row height, measured: the grid cap leaves room for it so the panel never exceeds `maxHeight`.
     @State private var footerHeight: CGFloat = 0
+    /// Action caption height, measured like the footer.
+    @State private var captionHeight: CGFloat = 0
+
+    /// Grid / Recent height cap: what `maxHeight` leaves after header, caption, and footer.
+    private var contentCap: CGFloat {
+        max(0, maxHeight - Self.headerHeight - (store.actions.message == nil ? 0 : captionHeight)
+            - (hint == nil && promo == nil ? 0 : footerHeight))
+    }
 
     /// One footer line: a hint wins over a promo (T-18 AC-1).
     enum Footer: Equatable { case hint(HintEngine.Hint), promo(Promo) }
@@ -49,9 +57,22 @@ struct ShelfView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            // Last action's result or error, one line (V2-01 AC-4, AC-7).
+            if let message = store.actions.message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(message)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { captionHeight = $0 }
+            }
             if store.showRecent && !store.recent.isEmpty {
                 ScrollView { RecentList(store: store) }
-                    .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (hint == nil && promo == nil ? 0 : footerHeight)))
+                    .frame(maxHeight: contentCap)
                     .fixedSize(horizontal: false, vertical: true)
             } else if store.items.isEmpty {
                 emptyState
@@ -106,13 +127,32 @@ struct ShelfView: View {
                 .disabled(store.items.isEmpty)
                 .overlay { DragOutHandle(store: store) }
 
-                Text(store.showRecent && !store.recent.isEmpty ? "Recent"
-                     : store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if let action = store.actions.running {
+                    // Running job (V2-01 AC-5): spinner or progress, title, Cancel.
+                    ProgressView(value: store.actions.progress)
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .accessibilityLabel(action.runningTitle)
+                    Text(action.runningTitle)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Button { store.actions.cancel() } label: {
+                        Label("Cancel", systemImage: "xmark.circle")
+                    }
+                    .help("Cancel")
+                    .accessibilityHint("Stops \(action.title.lowercased()) and adds nothing")
+                } else {
+                    Text(store.showRecent && !store.recent.isEmpty ? "Recent"
+                         : store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 Spacer(minLength: 0)
+
+                ActionsMenu(store: store)
 
                 if !store.recent.isEmpty {
                     Button { store.showRecent.toggle() } label: {
@@ -218,7 +258,7 @@ struct ShelfView: View {
             // Click on empty space deselects.
             .background { Color.clear.contentShape(.rect).onTapGesture { store.selection = [] } }
             // Hug content until the cap, then scroll.
-            .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (hint == nil && promo == nil ? 0 : footerHeight)))
+            .frame(maxHeight: contentCap)
             .fixedSize(horizontal: false, vertical: true)
             .flashScrollIndicators(trigger: store.items.count)
             // Reveal what was just added (appended at the end) (T-13 AC-3).
