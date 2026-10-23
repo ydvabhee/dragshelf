@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     var onResetPosition: () -> Void
+    var onResetTips: () -> Void
 
     @AppStorage(Preferences.autoShow) private var autoShow = true
     @AppStorage(Preferences.hotKeyEnabled) private var hotKeyEnabled = true
@@ -50,7 +51,7 @@ struct SettingsView: View {
             Section {
                 Toggle("Show tips", isOn: $showTips)
                 LabeledContent("Seen them all?") {
-                    Button("Reset Tips") { HintEngine.reset() }
+                    Button("Reset Tips", action: onResetTips)
                 }
             } header: {
                 Text("Tips")

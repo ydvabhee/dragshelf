@@ -35,7 +35,8 @@ struct DragShelfApp: App {
             Image(nsImage: MenuBarIcon.image)
         }
         Settings {
-            SettingsView(onResetPosition: { appDelegate.panelController.resetPosition() })
+            SettingsView(onResetPosition: { appDelegate.panelController.resetPosition() },
+                         onResetTips: { appDelegate.store.hints.reset() })
         }
     }
 }

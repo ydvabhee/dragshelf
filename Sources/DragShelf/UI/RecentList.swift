@@ -58,6 +58,7 @@ struct RecentList: View {
                 DragOutHandle(store: store, onHover: { inside in
                     if inside { hovered = entry.id } else if hovered == entry.id { hovered = nil }
                 }, recentItems: present, onClick: { store.restore(entry.id) })
+                .help("Restore to DragShelf")
             }
         }
         .accessibilityElement(children: .ignore)

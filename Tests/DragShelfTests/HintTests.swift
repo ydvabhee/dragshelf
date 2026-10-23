@@ -71,7 +71,10 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
     again.visible = true
     again.record(.dropped)
     #expect(again.current == nil)
-    HintEngine.reset(d)
+    again.record(.cleared)
+    #expect(again.current == .clear)
+    again.reset()
+    #expect(again.current == nil)
     again.record(.dropped)
     #expect(again.current == .firstDrop)
     #expect(again.count(.firstDrop) == 1)
