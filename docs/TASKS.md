@@ -217,6 +217,16 @@ Milestone M4. Depends on: T-17. Source: user 2026-10-23 ("keep cleaning the temp
 - AC-5: Logger line with bytes freed (debug level). No UI.
 - AC-6: Unit tests with a temp cache root: orphan removed, shelf-referenced kept, Recent-referenced kept until evicted, size cap evicts oldest first, age expiry, empty cache no-op.
 
+## V2-05 Custom image resize (Pixels/Percent, aspect lock)
+Milestone M6. Depends on: V2-03. Source: user 2026-10-23 ("add a custom resize for images"). Supersedes OQ-23 "presets only". Model: Preview's Tools → Adjust Size.
+- AC-1: "Resize ▸" gains a separator + "Custom…" (header Actions menu and tile menu), enabled when target items contain an image.
+- AC-2: Custom… shows an inline form inside the panel (in place of the grid, like Recent; no sheet/window — must not activate the app; panel becomes key for typing): segmented Pixels | Percent; Width and Height fields; aspect-lock toggle (`link` SF Symbol, on by default); Cancel and Resize buttons (Resize = default, Return); Esc cancels; VoiceOver labels.
+- AC-3: One image: fields prefilled with its pixel size; with lock on, editing one field updates the other from the image's aspect ratio. Several images: fields start empty, semantics = fit each image inside W x H keeping its own aspect; either field may be empty (constrain one dimension only); Percent applies to each image.
+- AC-4: Explicit custom sizes may upscale (presets still never upscale); show a subtle note "Larger than the original" when any output would upscale.
+- AC-5: Validation: integers 1–16384 px, 1–400 %, at least one dimension; invalid → shake (fade under Reduce Motion) + one-line message, form stays open.
+- AC-6: Output reuses V2-03 pipeline (same format as source, metadata stripped, orientation applied, color profile kept, per-image failure skip, progress, cancel, in-flight dir); name "<base> (<W>×<H>).<ext>" with the actual output size; collisions via uniqueName.
+- AC-7: Unit tests: aspect-lock math, fit-in-box for mixed aspect batch, single-dimension constraint, percent, upscale allowed for custom only, validation bounds, output names.
+
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
 - AC-1: Launch at login toggle calls `SMAppService.mainApp.register/unregister`; toggle reflects real status after relaunch.
@@ -273,6 +283,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-02 | Share and AirDrop | M6 | V2-01 | US-13 | BACKLOG |
 | V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | DONE (2026-10-23) |
 | V2-04 | Rename shelf items | M6 | V2-01 | US-12 | DONE (2026-10-23) |
+| V2-05 | Custom image resize (Pixels/Percent, aspect lock) | M6 | V2-03 | US-14 | TODO |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
 V2-02 is the riskiest UI (AirDrop from a non-activating panel), so it goes early. V2-04 last: text editing in the panel touches focus.
