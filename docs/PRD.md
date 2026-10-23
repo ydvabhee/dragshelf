@@ -1,6 +1,6 @@
 # DragShelf — Product Requirements
 
-Status: draft v1 (2026-10-20). Owner: product-architect. Open questions: `docs/OPEN_QUESTIONS.md`.
+Status: draft v1 (2026-10-20). Owner: architect. Open questions: `docs/OPEN_QUESTIONS.md`.
 
 ## 1. Problem
 Dragging a file into an app that is hidden or behind other windows fails. The user must

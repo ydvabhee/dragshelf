@@ -1,6 +1,6 @@
 ---
-name: qa-engineer
-description: QA engineer for DragShelf. Use after mac-developer finishes a task, to verify acceptance criteria, run the build and tests, review the diff for bugs, and keep docs/QA.md (test plan + manual drag/drop matrix) up to date. Reports pass/fail; does not fix app code.
+name: qa
+description: QA engineer for DragShelf. Use after developer finishes a task, to verify acceptance criteria, run the build and tests, review the diff for bugs, and keep docs/QA.md (test plan + manual drag/drop matrix) up to date. Reports pass/fail; does not fix app code.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---

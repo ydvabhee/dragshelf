@@ -1,7 +1,7 @@
 # DragShelf — Status & Handoff (paused 2026-10-20)
 
 ## ▶ Resume here
-1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent engineering-manager`), then say **"continue DragShelf from docs/STATUS.md"**.
+1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent manager`), then say **"continue DragShelf from docs/STATUS.md"**.
 2. T-16 is DONE (QA PASS e36fa09). First ask the user how the UI looks now (outlines gone? scroll bar? resize). Open risk: if dragging the bottom/side edge makes the **top** edge drift, move `pinTop` from `ShelfPanel.setFrame` to a `windowWillResize`-style hook (QA manual step 3).
 3. Run the **architect docs sync**: ARCHITECTURE.md drifted from code (DragMonitor lives in `Panel/` not `Drag/`; max height is min(4.5 rows, 50% screen) not 70%; `ItemCache` is an injectable struct; `Preferences.position` no longer exists — positioning is drag-to-move + `panelOffsets`; DropReceiver subclasses NSHostingView; promo code in `Promos/`).
 4. Build **T-17 Recent drag-outs + ⌘Z** then **T-18 contextual hints** (user-approved 2026-10-20, specs in TASKS.md).
@@ -11,7 +11,7 @@
 - SwiftPM only (ADR-013; `xcodebuild` broken on this Mac until `sudo xcodebuild -runFirstLaunch`).
 - `swift build` · `swift test` · `scripts/build-app.sh [release]` → `build/DragShelf.app` · `open build/DragShelf.app`.
 - Dev and QA must also run the release build (an -O-only compiler crash was caught once).
-- Agents: `.claude/agents/` (engineering-manager, product-architect, mac-developer, qa-engineer). Loop: dev → QA → fix → QA PASS → manager marks DONE. One commit per step; the user pushes to `origin` (github.com/ydvabhee/dragshelf).
+- Agents: `.claude/agents/` (manager, architect, developer, qa). Loop: dev → QA → fix → QA PASS → manager marks DONE. One commit per step; the user pushes to `origin` (github.com/ydvabhee/dragshelf).
 
 ## v1 progress
 | Milestone | Tasks | Tag |

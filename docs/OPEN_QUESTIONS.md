@@ -1,7 +1,7 @@
 # DragShelf — Open Questions
 
 User was away; defaults were picked so work is not blocked. Change any default by answering here;
-product-architect then updates PRD/ARCHITECTURE/TASKS.
+architect then updates PRD/ARCHITECTURE/TASKS.
 
 | ID | Question | Default chosen | Impact if changed |
 |---|---|---|---|

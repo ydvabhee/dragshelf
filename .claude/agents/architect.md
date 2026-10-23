@@ -1,5 +1,5 @@
 ---
-name: product-architect
+name: architect
 description: Product manager + architect for DragShelf (macOS floating drag-and-drop shelf). Use FIRST for any new feature, scope question, or tech-stack decision. Writes/updates docs/PRD.md and docs/ARCHITECTURE.md. Does not write app code.
 tools: Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch
 model: opus

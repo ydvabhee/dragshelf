@@ -1,5 +1,5 @@
 ---
-name: mac-developer
+name: developer
 description: Senior macOS engineer for DragShelf. Use to implement one task from docs/TASKS.md in Swift/AppKit/SwiftUI, build it with SwiftPM, and write unit tests. Follows docs/ARCHITECTURE.md exactly; does not change scope.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet

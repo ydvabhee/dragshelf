@@ -4,10 +4,10 @@ Native macOS floating drag-and-drop shelf: drag something onto the shelf, switch
 target app at your own pace, then drag it out of the shelf into that app.
 
 ## Agent workflow
-`engineering-manager` → `product-architect` (PRD, architecture, tasks) → `mac-developer`
-(one task) → `qa-engineer` (verify) → back to the manager.
+`manager` → `architect` (PRD, architecture, tasks) → `developer`
+(one task) → `qa` (verify) → back to the manager.
 
-Start a session with `claude --agent engineering-manager`.
+Start a session with `claude --agent manager`.
 
 Token rule: agent-to-agent reports use caveman full, docs use caveman lite, and code,
 commits, and security notes are written normally.
