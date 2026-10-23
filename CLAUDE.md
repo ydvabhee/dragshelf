@@ -13,7 +13,10 @@ Token rule: agent-to-agent reports use caveman full, docs use caveman lite, and 
 commits, and security notes are written normally.
 
 ## Git
-- Local repo only, in this folder. Never add a remote or push. "Ship a step" means commit.
+- Remote: `origin` = `git@github.com:ydvabhee/dragshelf.git` (GitHub user `ydvabhee`). Auth uses the
+  repo-local `core.sshCommand` with `~/.ssh/id_ed25519_ydvabhee`; don't change it or the global SSH config.
+- "Ship a step" = commit, then `git push` (main + tags). Never force-push; if a push is rejected,
+  stop and report to the user.
 - Identity is set in the repo config (`Abhishek Yadav <yk.abhee@gmail.com>`). Never change it,
   and never use `--global`.
 - Every agent commits its own changes at the end of each step. Conventional Commits, with the

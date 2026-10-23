@@ -11,7 +11,7 @@
 - SwiftPM only (ADR-013; `xcodebuild` broken on this Mac until `sudo xcodebuild -runFirstLaunch`).
 - `swift build` · `swift test` · `scripts/build-app.sh [release]` → `build/DragShelf.app` · `open build/DragShelf.app`.
 - Dev and QA must also run the release build (an -O-only compiler crash was caught once).
-- Agents: `.claude/agents/` (engineering-manager, product-architect, mac-developer, qa-engineer). Loop: dev → QA → fix → QA PASS → manager marks DONE. Local git only, one commit per step.
+- Agents: `.claude/agents/` (engineering-manager, product-architect, mac-developer, qa-engineer). Loop: dev → QA → fix → QA PASS → manager marks DONE. One commit per step, pushed to `origin` (github.com/ydvabhee/dragshelf).
 
 ## v1 progress
 | Milestone | Tasks | Tag |
