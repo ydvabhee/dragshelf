@@ -27,9 +27,10 @@ struct ShareTests {
     }
 
     @Test func restoresFocusOnlyWhenItTookIt() {
-        #expect(Sharer.shouldDeactivate(activated: true, otherWindowKey: false))
-        #expect(!Sharer.shouldDeactivate(activated: false, otherWindowKey: false)) // app was already active
-        #expect(!Sharer.shouldDeactivate(activated: true, otherWindowKey: true)) // Settings became key meanwhile
-        #expect(!Sharer.shouldDeactivate(activated: false, otherWindowKey: true))
+        // Share/AirDrop sheet still key at the callback: not Settings, so focus goes back.
+        #expect(Sharer.shouldDeactivate(activated: true, settingsKey: false))
+        #expect(!Sharer.shouldDeactivate(activated: false, settingsKey: false)) // app was already active
+        #expect(!Sharer.shouldDeactivate(activated: true, settingsKey: true)) // user went to Settings meanwhile
+        #expect(!Sharer.shouldDeactivate(activated: false, settingsKey: true))
     }
 }

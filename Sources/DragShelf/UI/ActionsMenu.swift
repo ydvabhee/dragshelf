@@ -45,7 +45,8 @@ struct ActionsMenu: View {
 /// windows can open behind the frontmost app. So this action, and only this one, calls `NSApp.activate()` (the same
 /// exception as Settings, ARCHITECTURE §5 rule 6) and `NSApp.deactivate()` when the picker closes without a choice or
 /// the service finishes, fails, or is cancelled; focus goes back to the previous app and the panel drops key. It
-/// only gives focus back when it took it (app was inactive) and no other DragShelf window (Settings) is key then.
+/// only gives focus back when it took it (app was inactive) and the Settings window is not key then. Share sheets and
+/// pickers are DragShelf windows too and are often still key at the callback, so they don't count.
 /// One share at a time: Share…/AirDrop while the picker or the AirDrop sheet is open is ignored.
 /// The panel stays up meanwhile: `hidesOnDeactivate` is false and no auto-hide rule fires for a non-empty shelf.
 final class Sharer: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
@@ -59,8 +60,8 @@ final class Sharer: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDe
     private var activated = false
     private var busy: Bool { pickerOpen || service != nil }
 
-    /// Focus goes back to the previous app only if sharing took it and no other DragShelf window took key since.
-    static func shouldDeactivate(activated: Bool, otherWindowKey: Bool) -> Bool { activated && !otherWindowKey }
+    /// Focus goes back to the previous app only if sharing took it and the user didn't move to Settings meanwhile.
+    static func shouldDeactivate(activated: Bool, settingsKey: Bool) -> Bool { activated && !settingsKey }
 
     static func items(for targets: [ShelfItem]) -> [Any] {
         targets.filter(ShelfStore.exists).map(DragOutSource.writer(for:))
@@ -104,11 +105,9 @@ final class Sharer: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDe
         picker = nil
         service = nil
         pickerOpen = false
-        // ponytail: a service sheet still key at this point counts as "other"; then focus stays. Upgrade = track
-        // windows opened by sharing if QA sees it.
-        let other = NSApp.keyWindow.map { !($0 is ShelfPanel) } ?? false
+        let settingsKey = NSApp.keyWindow.map { $0 === SettingsWindowTag.window } ?? false
         defer { activated = false }
-        if Self.shouldDeactivate(activated: activated, otherWindowKey: other) { NSApp.deactivate() }
+        if Self.shouldDeactivate(activated: activated, settingsKey: settingsKey) { NSApp.deactivate() }
     }
 
     // ADR-016: AppKit may call these off main.
