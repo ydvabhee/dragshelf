@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Tips: a one-line hint under DragShelf now and then (for example "Hold ⌘ while dragging out to move instead of copy"). Each shows up to 3 times; ✕ hides it for good. Settings → Tips turns them off or resets them.
 
 ### Changed
+- DragShelf opens a bit larger by default (360 pt wide) and always keeps room for the tip line, so it no longer grows when a tip appears. Sizes you set yourself stay as they are; Reset Position gives the new default.
 - Temp files are freed while DragShelf runs: unused cache is swept on show and every 30 minutes, Recent entries expire after 24 hours, and the cache stays under 1 GB.
 - Header "Clear" is now a text button (no trash icon); the context menu says "Remove from DragShelf". Both leave your files untouched.
 - Menu bar icon now matches the app icon (file card dropping into a tray).

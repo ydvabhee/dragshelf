@@ -3,7 +3,7 @@ import SwiftUI
 /// One quiet line under the grid: optional SF Symbol, title, secondary subtitle, ✕ (ARCHITECTURE §12).
 struct PromoFooter: View {
     /// Shared with `HintFooter`: swapping promo ↔ hint never changes the panel height (T-18).
-    static let rowHeight: CGFloat = 18
+    static let rowHeight: CGFloat = 18, bottomPadding: CGFloat = 10
     let promo: Promo
     var onDismiss: () -> Void
 
@@ -44,7 +44,7 @@ struct PromoFooter: View {
         .font(.callout)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 14)
-        .padding(.bottom, 10)
+        .padding(.bottom, PromoFooter.bottomPadding)
     }
 }
 
@@ -81,7 +81,7 @@ struct HintFooter: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 14)
-        .padding(.bottom, 10)
+        .padding(.bottom, PromoFooter.bottomPadding)
     }
 }
 

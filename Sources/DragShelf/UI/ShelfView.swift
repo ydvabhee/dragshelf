@@ -22,15 +22,12 @@ struct ShelfView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
     @State private var hovered: UUID?
-    /// Promo row height, measured: the grid cap leaves room for it so the panel never exceeds `maxHeight`.
-    @State private var footerHeight: CGFloat = 0
     /// Action caption height, measured like the footer.
     @State private var captionHeight: CGFloat = 0
 
-    /// Grid / Recent height cap: what `maxHeight` leaves after header, caption, and footer.
+    /// Grid / Recent height cap: what `maxHeight` leaves after header, caption, and the footer row.
     private var contentCap: CGFloat {
-        max(0, maxHeight - Self.headerHeight - (store.actions.message == nil ? 0 : captionHeight)
-            - (hint == nil && promo == nil ? 0 : footerHeight))
+        max(0, maxHeight - Self.headerHeight - (store.actions.message == nil ? 0 : captionHeight) - Self.footerRowHeight)
     }
 
     /// One footer line: a hint wins over a promo (T-18 AC-1).
@@ -39,15 +36,19 @@ struct ShelfView: View {
         hint.map(Footer.hint) ?? promo.map(Footer.promo)
     }
 
-    static let defaultWidth: CGFloat = 288
+    static let defaultWidth: CGFloat = 360
     private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
     /// ponytail: fixed header and tile heights; `tileHeightMatchesLayout` test catches drift.
     private static let headerHeight: CGFloat = 52
     static let tileHeight: CGFloat = 103
-    /// Panel height for 4.5 tile rows: the half row hints there is more (T-13 AC-2).
-    static let maxContentHeight = headerHeight + 4 * (tileHeight + 12) + tileHeight / 2
-    /// User-resize floor: header + one tile column and row (T-16 AC-5).
-    static let minSize = NSSize(width: 176, height: headerHeight + tileHeight + 14)
+    /// Tip / promo row, always reserved (empty when neither shows): a tip never grows the panel.
+    static let footerRowHeight = PromoFooter.rowHeight + PromoFooter.bottomPadding
+    /// Panel height for 4.5 tile rows plus the footer row: the half row hints there is more (T-13 AC-2).
+    static let maxContentHeight = headerHeight + 4 * (tileHeight + 12) + tileHeight / 2 + footerRowHeight
+    /// User-resize floor: header + one tile column and row + footer row (T-16 AC-5).
+    static let minSize = NSSize(width: 176, height: headerHeight + tileHeight + 14 + footerRowHeight)
+    /// Content floor: room for the empty state between header and footer row.
+    static let minHeight: CGFloat = 160 + footerRowHeight
 
     /// Adaptive columns: as many `minTileWidth` tiles as fit (T-16 AC-5). Arrow keys use it too.
     static func columnCount(width: CGFloat) -> Int {
@@ -95,17 +96,18 @@ struct ShelfView: View {
                             .transition(.opacity)
                     }
                 }
-                .onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0 }
                 .opacity(dragging ? 0 : 1)
                 .allowsHitTesting(!dragging)
                 .accessibilityHidden(dragging)
                 .animation(.easeInOut(duration: 0.15), value: dragging)
                 .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1), value: hint)
                 .transition(.opacity)
+            } else {
+                Color.clear.frame(height: Self.footerRowHeight)
             }
         }
         .frame(width: width)
-        .frame(minHeight: 160, alignment: .top)
+        .frame(minHeight: Self.minHeight, alignment: .top)
         .shelfBackground(isTargeted: store.isDropTargeted)
         // Clicks make the panel key; never draw the system focus ring (T-16 AC-1). Selection is the tile's own style.
         .focusEffectDisabled()

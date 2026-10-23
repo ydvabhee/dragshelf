@@ -35,7 +35,7 @@ private let visible = NSRect(x: 0, y: 0, width: 1512, height: 945)
 @Test func columnsFollowWidth() {
     #expect(ShelfView.columnCount(width: ShelfView.minSize.width) == 1)
     #expect(ShelfView.columnCount(width: ShelfView.defaultWidth) == 3)
-    #expect(ShelfView.columnCount(width: 368) == 4)
+    #expect(ShelfView.columnCount(width: 360) == 3 && ShelfView.columnCount(width: 368) == 4)
     #expect(ShelfView.columnCount(width: 0) == 1)
     #expect(ShelfView.columnCount(width: visible.width) > 4)
 }
@@ -105,6 +105,20 @@ private func scrollViews(in view: NSView) -> [NSScrollView] {
 @Test func tileHeightMatchesLayout() {
     let tile = NSHostingView(rootView: ShelfItemView(item: ShelfItem(kind: .text("x"))).frame(width: 88))
     #expect(abs(tile.fittingSize.height - ShelfView.tileHeight) < 1, "\(tile.fittingSize.height)")
+    let footer = NSHostingView(rootView: HintFooter(hint: .clear, onDismiss: {}).frame(width: ShelfView.defaultWidth))
+    #expect(abs(footer.fittingSize.height - ShelfView.footerRowHeight) < 1, "\(footer.fittingSize.height)")
+}
+
+/// Defaults: 360 pt wide = 3 columns; the footer row is reserved in min and max heights.
+@Test func defaultSizeReservesFooterRow() {
+    #expect(ShelfView.defaultWidth == 360 && ShelfView.columnCount(width: ShelfView.defaultWidth) == 3)
+    #expect(ShelfView.footerRowHeight == 28)
+    #expect(ShelfView.maxContentHeight == 52 + 4 * (ShelfView.tileHeight + 12) + ShelfView.tileHeight / 2 + 28)
+    #expect(ShelfView.minSize.height == 52 + ShelfView.tileHeight + 14 + 28)
+    let store = ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("x-\(UUID().uuidString)")))
+    let empty = NSHostingView(rootView: ShelfView(store: store)).fittingSize.height
+    let tip = NSHostingView(rootView: ShelfView(store: store, hint: .clear)).fittingSize.height
+    #expect(empty == tip && empty >= ShelfView.minHeight, "\(empty) \(tip)")
 }
 
 @Test func dedupeKeys() {

@@ -211,10 +211,10 @@ open build/DragShelf.app         # run; never run the bare binary
 ## 6. UI design (Apple HIG)
 - **Branding (T-19):** commands, titles, tooltips, and VoiceOver labels that name the panel say **"DragShelf"** ("Show DragShelf",
   "Clear DragShelf", "Remove from DragShelf"), never a bare "Shelf". Code identifiers keep `Shelf*` names.
-- Size: default width 288 pt; user-resizable from the bottom, side edges, and bottom corners (top edge = move area).
-  Min 176 × (header + 1 tile row); max = screen `visibleFrame`. Columns adapt: as many 80 pt tiles as fit.
-- Height fits content (min 160 pt), top edge fixed, async after each geometry change. Cap = the user's resized height on that display,
-  else min(4.5 tile rows, 50% of `visibleFrame` height); beyond the cap the grid scrolls. New items scroll into view.
+- Size: default width 360 pt (3 columns); user-resizable from the bottom, side edges, and bottom corners (top edge = move area).
+  Min 176 × (header + 1 tile row + footer row); max = screen `visibleFrame`. Columns adapt: as many 80 pt tiles as fit.
+- Height fits content (min 160 pt + footer row), top edge fixed, async after each geometry change. Cap = the user's resized height on that display,
+  else min(4.5 tile rows + footer row, 50% of `visibleFrame` height). The tip/promo footer row (28 pt) is always reserved, so a tip never grows the panel; beyond the cap the grid scrolls. New items scroll into view.
 - Header: Drag All (`square.stack.3d.up`, drag handle), title ("DragShelf" empty / "N Items" / "Recent"), Recent
   (`clock.arrow.circlepath`, only when Recent exists), **Clear** (text button, no trash icon; files untouched), Close (`xmark`).
   Empty header area drags the window (`WindowDragView`, clamped to `visibleFrame`); double-click = Reset Position.
