@@ -277,3 +277,13 @@ Manual (user runs):
 5. Drag bottom edge to ~300 pt with 10+ items: grid scrolls above that height. Remove items: panel shrinks to fit below the max. Add a few: grows to the max again. Never resized: defaults as before (4.5 rows).
 6. Scroll bar: thin, auto-hides, away from right edge and rounded corners, only with overflow. Attach a mouse / set "Always show scroll bars": still overlay. Quick Look (Space) preview, dragging a tile out (drag image), and the glass shadow are not clipped.
 7. Resize, quit, relaunch, show: same size and position. Move to a second display: its own size. "Reset Shelf Position" (menu, Settings, header double-click) resets size and position on both. Regression pass: drag in, drag out, auto-hide, promo footer, Quick Look.
+
+## T-19 Branding: "DragShelf" in UI text (63ed047) - PASS
+Auto: build, 59 tests, release build green. Grep of all quoted strings in Sources: no bare "Shelf" naming the panel (menu, header title, Clear button label/help/hints, Settings toggle/section/button/footers all say DragShelf). Only identifiers, bundle ids and cache paths keep "Shelf" (intended, AC-6). README usage table and CHANGELOG Unreleased Changed line match.
+Nit: CHANGELOG 0.1.0 line 21 still says "Reset Shelf Position". Historical release entry, left as is.
+
+Manual (user runs):
+1. Menu bar: "Show DragShelf" / "Hide DragShelf" (toggles with panel), "Reset DragShelf Position", "Quit DragShelf".
+2. Empty panel header reads "DragShelf"; with 3 items reads "3 Items".
+3. Hover trash: tooltip "Clear DragShelf". VoiceOver on trash: label "Clear DragShelf", hint "Removes every item and hides DragShelf". Hide button hint "Hides DragShelf; items stay".
+4. Settings: "Show DragShelf when dragging", section "DragShelf", button "Reset DragShelf Position", footers say DragShelf. No bare "Shelf" anywhere.
