@@ -71,7 +71,9 @@ struct ShelfView: View {
                     .padding(.bottom, 6)
                     .onGeometryChange(for: CGFloat.self, of: \.size.height) { captionHeight = $0 }
             }
-            if store.showRecent && !store.recent.isEmpty {
+            if let images = store.resizing {
+                ResizeForm(store: store, items: images)
+            } else if store.showRecent && !store.recent.isEmpty {
                 ScrollView { RecentList(store: store) }
                     .frame(maxHeight: contentCap)
                     .fixedSize(horizontal: false, vertical: true)
@@ -145,7 +147,7 @@ struct ShelfView: View {
                     .help("Cancel")
                     .accessibilityHint("Stops \(action.title.lowercased()) and adds nothing")
                 } else {
-                    Text(store.showRecent && !store.recent.isEmpty ? "Recent"
+                    Text(store.resizing != nil ? "Resize" : store.showRecent && !store.recent.isEmpty ? "Recent"
                          : store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
                         .font(.headline)
                         .foregroundStyle(.secondary)

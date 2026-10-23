@@ -53,7 +53,8 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     /// Cmd-C copies the selection (panel is key after a tile click). `copy(_:)` covers a menu-routed Cmd-C.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-              event.charactersIgnoringModifiers == "c", store?.selection.isEmpty == false
+              event.charactersIgnoringModifiers == "c", store?.selection.isEmpty == false,
+              !(window?.firstResponder is NSText) // typing in a field (rename, resize form) copies its text
         else { return super.performKeyEquivalent(with: event) }
         copy(nil)
         return true
@@ -85,6 +86,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
         setTargeted(false)
         guard let store, accepts(sender) else { return false }
         store.showRecent = false  // any accepted drop returns to the grid (T-20 AC-8), even duplicate-only
+        store.resizing = nil
         let failed = onPromiseFailed
         guard Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store,
                           onPromiseFailed: { failed?() }) else { return false }

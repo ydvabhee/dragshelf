@@ -12,10 +12,11 @@ struct ActionsMenu: View {
                 Button(action.title) { store.actions.run(action, on: targets, in: store) }
                     .disabled(!store.actions.canRun(action, on: targets))
             }
-            // V2-03: disabled when the target has no image items.
+            // V2-03: disabled when the target has no image items. V2-05: Resize ends with "Custom…".
             ForEach([("Convert To", ShelfAction.conversions), ("Resize", ShelfAction.resizes)], id: \.0) { title, actions in
                 Menu(title) {
                     ForEach(actions, id: \.self) { action in
+                        if action == .resizeCustom(nil) { Divider() }
                         Button(action.menuTitle) { store.actions.run(action, on: targets, in: store) }
                     }
                 }

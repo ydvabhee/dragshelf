@@ -63,6 +63,12 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
 
     private func handleKey(_ event: NSEvent) -> Bool {
         guard let store else { return false }
+        // Custom resize form (V2-05): Esc closes it (not the panel); every other key goes to the form.
+        if store.resizing != nil {
+            guard Int(event.keyCode) == kVK_Escape else { return false }
+            store.resizing = nil
+            return true
+        }
         // Rename field editing (V2-04): every key goes to the text, Esc and Return included.
         if firstResponder is NSText { return false }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])

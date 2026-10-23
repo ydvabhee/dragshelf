@@ -38,6 +38,8 @@ final class ShelfStore {
     func endInFlight(_ dir: URL) { inFlight.remove(dir.lastPathComponent) }
     /// Clock button: the Recent list replaces the grid. Reset on show and on any drop (T-20 AC-8).
     var showRecent = false
+    /// Image items in the Custom… resize form (V2-05), shown in place of the grid; nil = no form. Reset like Recent.
+    var resizing: [ShelfItem]?
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
@@ -242,6 +244,7 @@ final class ShelfStore {
     func clear() {
         generation += 1
         actions.cancel()
+        resizing = nil
         cache.wipe(keeping: Set(recent.flatMap(\.items).compactMap(cacheDir(of:)).map(\.lastPathComponent)))
         items.removeAll()
         keys.removeAll()

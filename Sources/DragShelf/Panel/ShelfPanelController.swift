@@ -218,6 +218,7 @@ final class ShelfPanelController {
         store.refreshMissing()
         Task { await store.sweep() }
         store.showRecent = false
+        store.resizing = nil
         let hasFile = store.items.contains { if case .file = $0.kind { true } else { false } }
         store.hints.record(.shown(reason, hasFile: hasFile, hasRecent: !store.recent.isEmpty))
         store.hints.visible = true

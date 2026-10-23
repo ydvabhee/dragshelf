@@ -188,11 +188,12 @@ final class DragOutHandleView: NSView {
             item.representedObject = action
             item.isEnabled = store.actions.canRun(action, on: store.selectedItems)
         }
-        // V2-03: Convert To ▸ and Resize ▸, disabled when the selection has no image items.
+        // V2-03: Convert To ▸ and Resize ▸ (V2-05: then Custom…), disabled when the selection has no image items.
         for (title, actions) in [("Convert To", ShelfAction.conversions), ("Resize", ShelfAction.resizes)] {
             let sub = NSMenu()
             sub.autoenablesItems = false
             for action in actions {
+                if action == .resizeCustom(nil) { sub.addItem(.separator()) }
                 let item = sub.addItem(withTitle: action.menuTitle, action: #selector(runAction(_:)), keyEquivalent: "")
                 item.representedObject = action
                 item.target = self

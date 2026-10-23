@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Custom resize: Resize ▸ Custom… opens a size form right in DragShelf (Pixels or Percent, width and height, a link button to keep the aspect ratio). Several images each fit inside the size; custom sizes may enlarge, and DragShelf says so. Copies are named like "photo (800×600).jpg"; the originals stay.
 - Rename: press Return or choose "Rename…" on a file to edit its name right on the tile (Return or a click elsewhere saves, Esc cancels). DragShelf renames its own copy; your original file keeps its name. New items named like one already on DragShelf get a Finder-style number ("Archive 2.zip").
 - Convert To and Resize: turn image items into HEIC, JPEG, PNG, or TIFF, or shrink them to 512, 1024, 2048, or 3840 px on the longest edge, from the Actions menu or a tile's context menu. Each image gets a new upright copy (for example "photo.jpg" or "photo (1024px).jpg") without location or camera data; the originals stay. Images are never enlarged, and Cancel keeps the ones already done.
 - Compress: zip DragShelf items from the new Actions menu (⋯) in the header or a tile's context menu. One item becomes "<name>.zip", several become "Archive.zip"; the zip is added and selected, the originals stay. Links and text are skipped. A spinner and Cancel show while it runs.

@@ -12,17 +12,21 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
     case convert(UTType)
     /// Resize ▸ (V2-03): longest edge in px, source format kept, never upscaled.
     case resize(Int)
+    /// Resize ▸ Custom… (V2-05): nil opens the size form in place of the grid (`ActionRunner.run`); the form's
+    /// Resize runs it with the spec.
+    case resizeCustom(ResizeSpec?)
 
     /// Top-level menu entries. Convert To ▸ and Resize ▸ are submenus listing `conversions` and `resizes`.
     static let allCases: [ShelfAction] = [.compress, .rename]
     static let conversions = ImageConverter.writableTypes.map { ShelfAction.convert($0) }
-    static let resizes = ImageConverter.presets.map { ShelfAction.resize($0) }
+    static let resizes = ImageConverter.presets.map { ShelfAction.resize($0) } + [.resizeCustom(nil)]
 
     /// Submenu entry title.
     var menuTitle: String {
         switch self {
         case .convert(let type): (type.preferredFilenameExtension ?? type.identifier).uppercased()
         case .resize(let px): "\(px) px"
+        case .resizeCustom: "Custom…"
         default: title
         }
     }
@@ -34,6 +38,7 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         case .rename: "Rename…"
         case .convert: "Convert to \(menuTitle)"
         case .resize(let px): "Resize to \(px) px"
+        case .resizeCustom: "Resize…"
         }
     }
     /// Header text and VoiceOver announcement while it runs.
@@ -42,7 +47,7 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         case .compress: "Compressing…"
         case .rename: "Renaming…"
         case .convert: "Converting…"
-        case .resize: "Resizing…"
+        case .resize, .resizeCustom: "Resizing…"
         }
     }
     /// VoiceOver announcement when it finished.
@@ -50,7 +55,7 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         switch self {
         case .compress: "Archive added"
         case .rename: "Renamed"
-        case .convert, .resize: "Images added"
+        case .convert, .resize, .resizeCustom: "Images added"
         }
     }
     /// One-line error under the header.
@@ -58,7 +63,7 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         switch self {
         case .compress: "Couldn't compress. An item may have been moved or deleted."
         case .rename: "Couldn't rename. The item may have been moved or deleted."
-        case .convert, .resize: "Couldn't convert an image. It may be damaged, moved, or deleted."
+        case .convert, .resize, .resizeCustom: "Couldn't convert an image. It may be damaged, moved, or deleted."
         }
     }
 
@@ -68,7 +73,7 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         case .compress: items.filter { if case .file = $0.kind { ShelfStore.exists($0) } else { false } }
         // One present file only: links, text, and missing items can't be renamed (V2-04 AC-7).
         case .rename: items.count == 1 ? ShelfAction.compress.applicable(items) : []
-        case .convert, .resize:
+        case .convert, .resize, .resizeCustom:
             items.filter { if case .file(let url) = $0.kind { ImageConverter.isImage(url) && ShelfStore.exists($0) } else { false } }
         }
     }
@@ -83,6 +88,9 @@ nonisolated enum ShelfAction: Hashable, CaseIterable, Sendable {
         case .rename: ([], 0) // Never runs: `ActionRunner.run(.rename)` opens the name field instead.
         case .convert(let type): ImageConverter.run(urls, to: type, maxPixel: nil, into: dir, taken: taken, progress: progress)
         case .resize(let px): ImageConverter.run(urls, to: nil, maxPixel: px, into: dir, taken: taken, progress: progress)
+        case .resizeCustom(let spec?):
+            ImageConverter.run(urls, to: nil, maxPixel: nil, resize: spec, into: dir, taken: taken, progress: progress)
+        case .resizeCustom(nil): ([], 0) // Never runs: opens the size form instead.
         }
     }
 }
@@ -120,6 +128,12 @@ final class ActionRunner {
         if action == .rename {
             message = nil
             store.renamingID = items[0].id
+            return nil
+        }
+        if action == .resizeCustom(nil) {
+            message = nil
+            store.showRecent = false
+            store.resizing = items
             return nil
         }
         let skipped = targets.count - items.count, cache = store.cache, generation = store.generation

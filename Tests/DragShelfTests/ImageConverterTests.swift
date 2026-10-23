@@ -45,7 +45,7 @@ private func info(_ url: URL) -> (type: String?, width: Int, height: Int, props:
     #expect(ImageConverter.writableTypes.allSatisfy { [UTType.heic, .jpeg, .png, .tiff].contains($0) })
     #expect([UTType.jpeg, .png, .tiff].allSatisfy { ImageConverter.writableTypes.contains($0) })
     #expect(ShelfAction.conversions.map(\.menuTitle).allSatisfy { ["HEIC", "JPEG", "PNG", "TIFF"].contains($0) })
-    #expect(ShelfAction.resizes.map(\.menuTitle) == ["512 px", "1024 px", "2048 px", "3840 px"])
+    #expect(ShelfAction.resizes.map(\.menuTitle) == ["512 px", "1024 px", "2048 px", "3840 px", "Custom…"])
     #expect(ImageConverter.isImage(URL(fileURLWithPath: "/x/photo.webp"))) // WebP input (AC-7)
     #expect(!ImageConverter.isImage(URL(fileURLWithPath: "/x/notes.txt")))
 }
@@ -172,4 +172,88 @@ private func info(_ url: URL) -> (type: String?, width: Int, height: Int, props:
     urls.forEach { store.add(ShelfItem(kind: .file($0))) }
     await store.actions.run(.convert(.jpeg), on: store.items, in: store)?.value
     #expect(store.items.count == 5 && store.actions.message == "1 image couldn’t be converted")
+}
+
+// MARK: Custom resize (V2-05 AC-7)
+
+private func eq(_ a: (width: Int, height: Int), _ b: (Int, Int)) -> Bool { a.width == b.0 && a.height == b.1 }
+
+@Test func customResizeSizeMath() {
+    // Aspect lock: the other field follows the image's aspect.
+    #expect(ResizeSpec.linked(1000, from: 4000, to: 3000) == 750)
+    #expect(ResizeSpec.linked(100, from: 333, to: 1000) == 300)
+    #expect(ResizeSpec.linked(1, from: 4000, to: 10) == 1)
+    // Fit in box, mixed aspect batch: each keeps its own aspect.
+    let box = ResizeSpec.pixels(width: 1000, height: 1000, fit: true)
+    #expect(eq(box.size(width: 4000, height: 3000), (1000, 750)))
+    #expect(eq(box.size(width: 3000, height: 4000), (750, 1000)))
+    #expect(eq(box.size(width: 500, height: 250), (1000, 500))) // custom may upscale
+    // One dimension only.
+    #expect(eq(ResizeSpec.pixels(width: 800, height: nil, fit: true).size(width: 4000, height: 3000), (800, 600)))
+    #expect(eq(ResizeSpec.pixels(width: nil, height: 300, fit: false).size(width: 4000, height: 3000), (400, 300)))
+    // Exact (one image, or lock off): stretches.
+    #expect(eq(ResizeSpec.pixels(width: 1049, height: 10, fit: false).size(width: 1000, height: 10), (1049, 10)))
+    // Percent of each side.
+    #expect(eq(ResizeSpec.percent(width: 50, height: 50).size(width: 4000, height: 3001), (2000, 1501)))
+    #expect(eq(ResizeSpec.percent(width: 1, height: 1).size(width: 10, height: 10), (1, 1)))
+    // Upright size: orientation 6 swaps width and height.
+    let props: [CFString: Any] = [kCGImagePropertyPixelWidth: 4000, kCGImagePropertyPixelHeight: 3000, kCGImagePropertyOrientation: 6]
+    #expect(ImageConverter.size(props).map { eq($0, (3000, 4000)) } == true)
+}
+
+@Test func customResizeValidation() {
+    func spec(_ w: String, _ h: String, percent: Bool = false, fit: Bool = false) -> ResizeSpec? {
+        try? ResizeSpec.parse(width: w, height: h, percent: percent, fit: fit).get()
+    }
+    #expect(spec("1", "16384") == .pixels(width: 1, height: 16384, fit: false))
+    #expect(spec(" 640 ", "", fit: true) == .pixels(width: 640, height: nil, fit: true))
+    #expect(spec("400", "", percent: true) == .percent(width: 400, height: 400))
+    #expect(spec("50", "25", percent: true) == .percent(width: 50, height: 25))
+    for (w, h, percent) in [("0", "", false), ("16385", "", false), ("", "", false), ("12.5", "", false), ("abc", "10", false),
+                            ("-5", "", false), ("401", "", true), ("0", "", true), ("", "", true)] {
+        #expect(spec(w, h, percent: percent) == nil, "\(w)×\(h) \(percent)")
+    }
+    #expect(throws: ResizeSpec.Invalid(message: "Enter a width or a height.")) {
+        try ResizeSpec.parse(width: "", height: " ", percent: false, fit: true).get()
+    }
+}
+
+@Test func customResizeUpscalesAndDownscalesPresetsDoNot() throws {
+    let dir = try tempDir("ImageTests"), out = try tempDir("ImageTests-out")
+    defer { rm(dir, out) }
+    let src = dir.appendingPathComponent("small.png")
+    write(makeImage(300, 200), to: src, type: .png)
+    var used = Set<String>()
+    let up = try ImageConverter.convert(src, to: nil, maxPixel: nil, resize: .pixels(width: 600, height: 400, fit: false),
+                                        into: out, used: &used)
+    let big = info(up)
+    #expect(big.type == UTType.png.identifier && big.width == 600 && big.height == 400)
+    #expect(up.lastPathComponent == "small (600×400).png")
+    let down = try ImageConverter.convert(src, to: nil, maxPixel: nil, resize: .percent(width: 50, height: 50), into: out, used: &used)
+    #expect(info(down).width == 150 && info(down).height == 100 && down.lastPathComponent == "small (150×100).png")
+    let stretched = try ImageConverter.convert(src, to: nil, maxPixel: nil, resize: .pixels(width: 100, height: 500, fit: false),
+                                               into: out, used: &used)
+    #expect(info(stretched).width == 100 && info(stretched).height == 500)
+    #expect(try ImageConverter.convert(src, to: nil, maxPixel: nil, resize: .pixels(width: 600, height: 400, fit: false),
+                                       into: out, used: &used).lastPathComponent == "small (600×400) 2.png")
+    let preset = info(try ImageConverter.convert(src, to: nil, maxPixel: 3840, into: out, used: &used))
+    #expect(preset.width == 300 && preset.height == 200) // presets never upscale
+}
+
+@Test func customResizeOpensFormThenRuns() async throws {
+    let store = ShelfStore(cache: ItemCache(root: try tempDir("ImageTests-cache"))), dir = try tempDir("ImageTests")
+    defer { rm(dir, store.cache.root) }
+    let png = dir.appendingPathComponent("a.png"), txt = dir.appendingPathComponent("a.txt")
+    write(makeImage(40, 20), to: png, type: .png)
+    try Data("hi".utf8).write(to: txt)
+    [png, txt].forEach { store.add(ShelfItem(kind: .file($0))) }
+    store.showRecent = true
+    #expect(store.actions.run(.resizeCustom(nil), on: store.items, in: store) == nil)
+    #expect(store.resizing?.count == 1 && !store.showRecent)
+    store.clear()
+    #expect(store.resizing == nil)
+    store.add(ShelfItem(kind: .file(png)))
+    await store.actions.run(.resizeCustom(.pixels(width: 80, height: nil, fit: true)), on: store.items, in: store)?.value
+    let made = try #require(store.items.last)
+    if case .file(let url) = made.kind { #expect(url.lastPathComponent == "a (80×40).png") } else { Issue.record("not a file") }
 }
