@@ -44,13 +44,23 @@ struct ActionsMenu: View {
 /// Activation: the picker and the service sheets (AirDrop, Messages, …) are windows of this app, and an inactive app's
 /// windows can open behind the frontmost app. So this action, and only this one, calls `NSApp.activate()` (the same
 /// exception as Settings, ARCHITECTURE §5 rule 6) and `NSApp.deactivate()` when the picker closes without a choice or
-/// the service finishes, fails, or is cancelled; focus goes back to the previous app and the panel drops key.
+/// the service finishes, fails, or is cancelled; focus goes back to the previous app and the panel drops key. It
+/// only gives focus back when it took it (app was inactive) and no other DragShelf window (Settings) is key then.
+/// One share at a time: Share…/AirDrop while the picker or the AirDrop sheet is open is ignored.
 /// The panel stays up meanwhile: `hidesOnDeactivate` is false and no auto-hide rule fires for a non-empty shelf.
 final class Sharer: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
     static let shared = Sharer()
-    /// Kept while open: AppKit does not retain the picker.
+    /// Kept until sharing ends: AppKit holds the picker and the service delegate weakly.
     private var picker: NSSharingServicePicker?
+    private var service: NSSharingService?
+    /// Picker on screen (show → didChoose); the AirDrop sheet is open while `service` is set.
+    private var pickerOpen = false
+    /// DragShelf was inactive and this share activated it.
     private var activated = false
+    private var busy: Bool { pickerOpen || service != nil }
+
+    /// Focus goes back to the previous app only if sharing took it and no other DragShelf window took key since.
+    static func shouldDeactivate(activated: Bool, otherWindowKey: Bool) -> Bool { activated && !otherWindowKey }
 
     static func items(for targets: [ShelfItem]) -> [Any] {
         targets.filter(ShelfStore.exists).map(DragOutSource.writer(for:))
@@ -64,35 +74,41 @@ final class Sharer: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDe
     /// System share picker under `anchor` (a tile), else at the mouse in the panel (header menu: where "Share…" was clicked).
     func share(_ targets: [ShelfItem], anchor: NSView? = nil) {
         let items = Self.items(for: targets)
-        guard !items.isEmpty, let view = anchor ?? NSApp.windows.first(where: { $0 is ShelfPanel })?.contentView,
+        guard !busy, !items.isEmpty, let view = anchor ?? NSApp.windows.first(where: { $0 is ShelfPanel })?.contentView,
               let window = view.window else { return }
         let rect = anchor?.bounds
             ?? NSRect(origin: view.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil), size: .zero)
         let picker = NSSharingServicePicker(items: items)
         picker.delegate = self
         self.picker = picker
+        pickerOpen = true
         activate()
         picker.show(relativeTo: rect, of: view, preferredEdge: .minY)
     }
 
     func airDrop(_ targets: [ShelfItem]) {
         let items = Self.items(for: targets)
-        guard let service = NSSharingService(named: .sendViaAirDrop), service.canPerform(withItems: items) else { return }
+        guard !busy, let service = NSSharingService(named: .sendViaAirDrop), service.canPerform(withItems: items) else { return }
         service.delegate = self
+        self.service = service
         activate()
         service.perform(withItems: items)
     }
 
     private func activate() {
-        activated = true
+        activated = !NSApp.isActive
         NSApp.activate()
     }
 
     private func finished() {
         picker = nil
-        guard activated else { return }
-        activated = false
-        NSApp.deactivate()
+        service = nil
+        pickerOpen = false
+        // ponytail: a service sheet still key at this point counts as "other"; then focus stays. Upgrade = track
+        // windows opened by sharing if QA sees it.
+        let other = NSApp.keyWindow.map { !($0 is ShelfPanel) } ?? false
+        defer { activated = false }
+        if Self.shouldDeactivate(activated: activated, otherWindowKey: other) { NSApp.deactivate() }
     }
 
     // ADR-016: AppKit may call these off main.
@@ -102,8 +118,8 @@ final class Sharer: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDe
     }
 
     nonisolated func sharingServicePicker(_ picker: NSSharingServicePicker, didChoose service: NSSharingService?) {
-        guard service == nil else { return }
-        Task { @MainActor in self.finished() }
+        let chose = service != nil
+        Task { @MainActor in if chose { self.pickerOpen = false } else { self.finished() } }
     }
 
     nonisolated func sharingService(_ sharingService: NSSharingService, didShareItems items: [Any]) {

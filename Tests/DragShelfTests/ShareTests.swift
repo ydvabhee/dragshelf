@@ -25,4 +25,11 @@ struct ShareTests {
             #expect(!Sharer.canAirDrop(targets))
         }
     }
+
+    @Test func restoresFocusOnlyWhenItTookIt() {
+        #expect(Sharer.shouldDeactivate(activated: true, otherWindowKey: false))
+        #expect(!Sharer.shouldDeactivate(activated: false, otherWindowKey: false)) // app was already active
+        #expect(!Sharer.shouldDeactivate(activated: true, otherWindowKey: true)) // Settings became key meanwhile
+        #expect(!Sharer.shouldDeactivate(activated: false, otherWindowKey: true))
+    }
 }
