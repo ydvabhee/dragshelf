@@ -19,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 - DragShelf no longer quits when you drop a file promise, such as an image dragged from VS Code.
 - Dragging a row from Recent no longer removes items from DragShelf.
+- Menu bar icon, DragShelf background mask and scroll bar style no longer risk a crash when macOS draws or notifies off the main thread.
 
 ## [0.1.0] - 2026-10-23
 
