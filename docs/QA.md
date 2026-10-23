@@ -457,3 +457,10 @@ Manual:
 5. AirDrop then cancel, repeat 10 times: app never stays active in the Dock/menu bar (retain finding).
 6. Delete the file on disk: Share… and AirDrop disabled for that item; link plus missing file shares the link only.
 7. Tile context menu: Share… opens the picker under the tile.
+
+### V2-02 fix round (c61f58c, 04b824a) - PASS
+Build, 119 tests, release build green.
+- AirDrop service now held in `service` until `finished()`; picker held too. `activated = !NSApp.isActive`. Second Share/AirDrop ignored while `busy`.
+- Settings check: `SettingsWindowTag.window` is a weak static. Never opened: nil, `keyWindow.map { $0 === nil }` is false, no crash. Closed and freed: weak goes nil, same. Closed but kept by SwiftUI: not key, so false; focus restored. Ref is never explicitly cleared; weak plus the key check make that safe. `viewDidMoveToWindow` guards a nil window.
+- Low: `didChoose` with a service (not AirDrop) clears `pickerOpen` only; `picker` stays held until that service reports, then `finished()` runs. OK.
+Manual: repeat steps 2, 4, 5 above; also open Settings, close it, then Share… and cancel: focus returns to the previous app.
