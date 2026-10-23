@@ -62,7 +62,7 @@ Building from source avoids the Gatekeeper prompt, because a locally built app i
 
 | Action | How |
 |---|---|
-| Show the shelf | Start dragging anything, press **⌃⌥⌘D**, or choose **Show Shelf** from the menu bar |
+| Show the shelf | Start dragging anything, press **⌃⌥⌘D**, or choose **Show DragShelf** from the menu bar |
 | Add items | Drop them onto the shelf |
 | Copy out | Drag an item to any app or folder |
 | Move out | Hold **⌘** while dragging a file out |
@@ -72,7 +72,7 @@ Building from source avoids the Gatekeeper prompt, because a locally built app i
 | Copy to clipboard | Select items and press **⌘C** |
 | Move the shelf | Drag its header |
 | Resize the shelf | Drag its bottom or side edges |
-| Reset position and size | Double-click the header, or choose **Reset Shelf Position** |
+| Reset position and size | Double-click the header, or choose **Reset DragShelf Position** |
 | Hide | **Esc**, the close button, or ⌃⌥⌘D |
 
 Items leave the shelf once they've been dragged out. Cancelled drags keep them. The shelf is temporary: it empties when you quit.
@@ -85,7 +85,7 @@ Open **Settings…** from the menu bar icon.
 - **Auto-show on drag**: turn off to show the shelf only with the shortcut or the menu
 - **Global shortcut ⌃⌥⌘D**
 - **Keep items after drag out**
-- **Reset Shelf Position**
+- **Reset DragShelf Position**
 - **Show other apps from the developer**: the one-line suggestion described below
 
 ## Privacy

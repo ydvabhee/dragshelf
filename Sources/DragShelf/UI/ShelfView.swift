@@ -78,7 +78,7 @@ struct ShelfView: View {
                 .disabled(store.items.isEmpty)
                 .overlay { DragOutHandle(store: store) }
 
-                Text(store.items.isEmpty ? "Shelf" : "^[\(store.items.count) Item](inflect: true)")
+                Text(store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -89,17 +89,17 @@ struct ShelfView: View {
                     store.clear()
                     onClose()
                 } label: {
-                    Label("Clear Shelf", systemImage: "trash")
+                    Label("Clear DragShelf", systemImage: "trash")
                 }
-                .help("Clear shelf")
-                .accessibilityHint("Removes every item and hides the shelf")
+                .help("Clear DragShelf")
+                .accessibilityHint("Removes every item and hides DragShelf")
                 .disabled(store.items.isEmpty)
 
                 Button(action: onClose) {
                     Label("Close", systemImage: "xmark")
                 }
                 .help("Close")
-                .accessibilityHint("Hides the shelf; items stay")
+                .accessibilityHint("Hides DragShelf; items stay")
             }
             .labelStyle(.iconOnly)
             .shelfButtonStyle()

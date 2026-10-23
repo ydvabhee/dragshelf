@@ -26,24 +26,24 @@ struct SettingsView: View {
                 if let loginError {
                     Text(loginError).font(.callout).foregroundStyle(.red)
                 }
-                Toggle("Show shelf when dragging", isOn: $autoShow)
+                Toggle("Show DragShelf when dragging", isOn: $autoShow)
                 Toggle("Global shortcut ⌃⌥⌘D", isOn: $hotKeyEnabled)
                     .accessibilityLabel("Global shortcut Control-Option-Command-D")
             } header: {
                 Text("General")
             } footer: {
-                Text("The shelf appears when you start dragging a file, link, or text. The shortcut shows or hides it from any app.")
+                Text("DragShelf appears when you start dragging a file, link, or text. The shortcut shows or hides it from any app.")
                     .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Keep items after drag out", isOn: $keepAfterDragOut)
                 LabeledContent("Position") {
-                    Button("Reset Shelf Position", action: onResetPosition)
+                    Button("Reset DragShelf Position", action: onResetPosition)
                 }
             } header: {
-                Text("Shelf")
+                Text("DragShelf")
             } footer: {
-                Text("Off: items leave the shelf once dropped elsewhere. Drag the shelf header to move it.")
+                Text("Off: items leave DragShelf once dropped elsewhere. Drag the DragShelf header to move it.")
                     .foregroundStyle(.secondary)
             }
             Section {
@@ -51,7 +51,7 @@ struct SettingsView: View {
             } header: {
                 Text("More Apps")
             } footer: {
-                Text("A one-line suggestion under the shelf and a More Apps menu. The list is downloaded once a day; nothing about you is sent.")
+                Text("A one-line suggestion under DragShelf and a More Apps menu. The list is downloaded once a day; nothing about you is sent.")
                     .foregroundStyle(.secondary)
             }
         }

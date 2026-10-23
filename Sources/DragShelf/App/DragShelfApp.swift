@@ -8,11 +8,11 @@ struct DragShelfApp: App {
 
     var body: some Scene {
         MenuBarExtra("DragShelf", systemImage: "tray.and.arrow.down") {
-            Button(appDelegate.panelController.isShown ? "Hide Shelf" : "Show Shelf") {
+            Button(appDelegate.panelController.isShown ? "Hide DragShelf" : "Show DragShelf") {
                 appDelegate.panelController.toggle()
             }
             .keyboardShortcut("d", modifiers: [.control, .option, .command])
-            Button("Reset Shelf Position") { appDelegate.panelController.resetPosition() }
+            Button("Reset DragShelf Position") { appDelegate.panelController.resetPosition() }
             let promos = showPromos ? appDelegate.promos.menuPromos : []
             if !promos.isEmpty {
                 Menu("More Apps") {
