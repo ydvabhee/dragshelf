@@ -24,6 +24,7 @@ Every task's implicit ACs (QA checks always):
 | T-16 | UI polish: no focus ring/outline, inset scroll bar, user-resizable shelf | M4 | T-13, T-14 | US-3, US-10 | DONE (2026-10-20) |
 | T-19 | Branding: call the shelf "DragShelf" in UI text | M4 | T-16 | US-8 | DONE (2026-10-23) |
 | T-20 | Clear wording (no trash icon) + menu bar glyph matching app icon | M4 | T-17 | US-6, US-8 | DONE (2026-10-23) |
+| T-21 | Cache hygiene: free temp files while running | M4 | T-17 | US-6 | TODO |
 | T-17 | Recent drag-outs (last 5) + ⌘Z undo | M4 | T-16 | US-4, US-6 | DONE (2026-10-23) |
 | T-18 | Contextual hints (one line, shown a few times) | M4 | T-17 | US-3, US-10 | DONE (2026-10-23) |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
@@ -206,6 +207,15 @@ Milestone M4. Depends on: T-17 (same header and menu files). Source: user 2026-1
 - AC-6: README usage table and CHANGELOG `[Unreleased]` updated. Build/test/release green.
 - AC-7 (carried from T-17 QA): dragging a Recent row never removes shelf items (skip `remove(ids:)` when the drag came from Recent, unless `.move` and the same file item is on the shelf); Recent entry stays.
 - AC-8 (carried from T-17 QA): the Recent list resets to the grid on every show; any drop onto the panel (even duplicate-only) switches back to the grid.
+
+## T-21 Cache hygiene: free temp files while running
+Milestone M4. Depends on: T-17. Source: user 2026-10-23 ("keep cleaning the temp data so it does not consume a lot"). The cache (`~/Library/Caches/com.abhishekyadav.DragShelf`) is wiped at launch/quit, but with launch at login the app can run for weeks while Recent keeps cached files (images, file promises) alive.
+- AC-1: Orphan sweep: after any change that can drop a reference (remove, clear, drag out, Recent eviction, Clear Recent, undo, image replace) and on each show, delete cache dirs referenced by neither a shelf item nor a Recent entry. Cheap: one directory listing; never touches non-cache paths.
+- AC-2: Size cap: if the cache exceeds 1 GB (`ponytail:` constant, upgrade path: a setting), evict the oldest Recent entries (and their cache dirs) until under the cap. Never deletes dirs used by items still on the shelf.
+- AC-3: Age limit: Recent entries older than 24 h are dropped (with their dirs) on the next sweep; a sweep also runs every 30 min while the app is running (timer, tolerance set, no work when the cache is empty).
+- AC-4: Sweeps run off the main actor for the file system work; results applied on MainActor; Swift 6 clean (ADR-016 rules).
+- AC-5: Logger line with bytes freed (debug level). No UI.
+- AC-6: Unit tests with a temp cache root: orphan removed, shelf-referenced kept, Recent-referenced kept until evicted, size cap evicts oldest first, age expiry, empty cache no-op.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).

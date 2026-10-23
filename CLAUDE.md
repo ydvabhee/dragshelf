@@ -28,6 +28,10 @@ commits, and security notes are written normally.
   reset --hard, or force) unless the user asks.
 - Every commit leaves the build green. Commit WIP only to a `wip/<task-id>` branch.
 
+## Temp data
+- Agents put experiments, probes and snapshots only in the session scratchpad, and delete them when the task is done. Remove any git worktree and its branch once its commit is merged.
+- Never commit build output (`.build/`, `build/`), and don't create scratch copies of the repo inside it.
+
 ## Versioning and releases
 - The version lives in `VERSION` (SemVer). `scripts/build-app.sh` stamps it into `CFBundleShortVersionString`; the build number is the git commit count.
 - Every user-visible `feat` or `fix` commit adds one line under `## [Unreleased]` in `CHANGELOG.md` (Keep a Changelog: Added, Changed, Fixed, Removed).

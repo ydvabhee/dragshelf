@@ -5,8 +5,8 @@ architect then updates PRD/ARCHITECTURE/TASKS.
 
 | ID | Question | Default chosen | Impact if changed |
 |---|---|---|---|
-| OQ-01 | License and price: free/open source or paid? | **RESOLVED by user 2026-10-20: free for now.** No license file yet | Paid needs licensing/trial code (new task) and affects PRD positioning only |
-| OQ-02 | Bundle identifier / team name? | `com.abhishekyadav.DragShelf` | Cheap now; after release it resets UserDefaults, login item, and TCC state. Change before T-12 |
+| OQ-01 | License and price: free/open source or paid? | **RESOLVED by user: free; 2026-10-23: public repo for now, license not chosen yet** (no LICENSE file; README says so) | Paid needs licensing/trial code (new task) and affects PRD positioning only |
+| OQ-02 | Bundle identifier / team name? | **RESOLVED by user 2026-10-23: keep** `com.abhishekyadav.DragShelf` (user wrote "OQ-32 skip"; read as OQ-02, keep default) | Cheap now; after release it resets UserDefaults, login item, and TCC state. Change before T-12 |
 | OQ-03 | Should items survive app quit or reboot? | No. Memory only, cache wiped on launch/quit (ADR-010) | Persistence needs security-scoped/regular bookmarks + storage; new task, ~1 day |
 | OQ-04 | Hotkey: which default, and customizable? | Fixed ⌃⌥⌘D, on/off only | Custom recorder UI = new task in M4; changing the default key is trivial |
 | OQ-05 | Drag out of an original file: copy or move? | **RESOLVED by T-15 (user 2026-10-20): plain drag copies, ⌘-drag moves.** | Allowing move (e.g. with ⌘ held) touches user data; needs ADR + extra QA |
@@ -35,4 +35,4 @@ architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-28 | T-14 promos on by default? | On, with Settings toggle "Show other apps from the developer" | Off by default = fewer views, no network request until the user opts in |
 | OQ-29 | T-14: hide promos for apps the user already has installed? | No (schema has no promoted-app bundle id) | Add optional `appBundleId` to the schema and check `NSWorkspace.urlForApplication(withBundleIdentifier:)` locally; no data leaves the Mac |
 | OQ-30 | Item limit on the shelf? | **RESOLVED (measured) 2026-10-20: no limit** after O(1) dedupe (T-13). 5000 items: 0.05 ms/add, 8 ms UI update, +3 MB | Revisit only if a real user hits a problem |
-| OQ-31 | PRD US-8 draft listed a "Clear Shelf" menu bar item; no task built it. Add "Clear DragShelf" to the menu? | Not built; Clear lives in the panel header only | One `Button` in `DragShelfApp` calling `store.clear()` + hide; small task |
+| OQ-31 | PRD US-8 draft listed a "Clear Shelf" menu bar item; no task built it. Add "Clear DragShelf" to the menu? | **RESOLVED by user 2026-10-23: skip** (Clear stays in the panel header only) | One `Button` in `DragShelfApp` calling `store.clear()` + hide; small task |
