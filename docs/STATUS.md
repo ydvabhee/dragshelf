@@ -2,7 +2,7 @@
 
 ## ▶ Resume here
 1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent manager`), then say **"continue DragShelf from docs/STATUS.md"**.
-2. All v1 feature tasks are DONE (T-01..T-11, T-13..T-20). Next: **architect docs sync** (ARCHITECTURE.md vs code), then ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is full; release steps in CLAUDE.md).
+2. All v1 feature tasks are DONE (T-01..T-11, T-13..T-21; T-21 = cache hygiene). Next: **architect docs sync** (ARCHITECTURE.md vs code), then ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is full; release steps in CLAUDE.md).
 3. Walk the user through the open questions below; T-12 (signing/notarization) once they have a Developer ID.
 
 ## Build / run
