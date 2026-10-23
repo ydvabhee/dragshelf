@@ -4,7 +4,8 @@ Ordered. One task per developer run. **Priority override (user, 2026-10-20): T-0
 Status: `TODO` → `IN PROGRESS` → `QA` → `DONE` (or `BLOCKED`). Stories: `docs/PRD.md`. Design: `docs/ARCHITECTURE.md`.
 
 Every task's implicit ACs (QA checks always):
-- `swift build` (zero warnings), `swift test`, and `scripts/build-app.sh` (ARCHITECTURE §3) all succeed; manual checks run `open build/DragShelf.app`.
+- `swift build` (zero warnings), `swift test`, and `scripts/build-app.sh release` (ARCHITECTURE §3; the release build is required) all succeed; manual checks run `open build/DragShelf.app`.
+- Any closure AppKit/Foundation may call off the main thread is `nonisolated` + `@Sendable` (ADR-016); new ones get an off-main test.
 - No permission prompt appears. No new dependency. New UI uses SF Symbols, system fonts, VoiceOver labels.
 
 | ID | Title | Milestone | Depends on | Stories | Status |

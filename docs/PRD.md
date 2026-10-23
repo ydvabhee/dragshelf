@@ -1,6 +1,6 @@
 # DragShelf — Product Requirements
 
-Status: draft v1 (2026-10-20). Owner: architect. Open questions: `docs/OPEN_QUESTIONS.md`.
+Status: v1 as built (synced with code 2026-10-23, T-01..T-20). Owner: architect. Open questions: `docs/OPEN_QUESTIONS.md`.
 
 ## 1. Problem
 Dragging a file into an app that is hidden or behind other windows fails. The user must
@@ -21,7 +21,7 @@ switch to the target app at your own pace, then drag it out of the shelf into th
 | | Dropover | Yoink | **DragShelf** |
 |---|---|---|---|
 | Trigger | Shake cursor while dragging (default) | Shelf at screen edge on drag | Shelf appears on **any** content drag, no gesture |
-| Shelves | Multiple, stackable | One + history | **One**, no history |
+| Shelves | Multiple, stackable | One + history | **One**, plus the last 5 drag outs (Recent, memory only) |
 | Extras | Cloud upload, actions, scripts | iOS sync, clipboard history | **None** (do one thing) |
 | Permissions | Some features need Accessibility | — | **None required** |
 | Price | Paid | Paid | Free, open source (assumed, see OQ-01) |
@@ -34,18 +34,20 @@ looks and behaves like part of macOS.
 - Shelf appears automatically when a content drag starts. Also opens from menu bar and global hotkey.
 - Accepts files, folders, file promises (images from browsers, Mail, Photos), images, links, text.
 - Shows items as a grid of thumbnails/icons with names.
-- Drag items out one at a time, a selection, or all at once.
-- Items are removed after a successful drag out (setting to keep them).
+- Drag items out one at a time, a selection, or all at once. Plain drag copies; ⌘-drag moves files.
+- Items are removed after a successful drag out (setting to keep them). Recent keeps the last 5 drag outs; ⌘Z brings one back.
 - Remove one item, clear all, Quick Look with Space.
-- Menu bar app, no Dock icon. Settings: launch at login, auto-show on/off, shelf position,
-  keep items after drag out, hotkey on/off.
+- Shelf opens at top center; drag its header to move it, drag its edges to resize it, remembered per display.
+- Menu bar app, no Dock icon. Settings: launch at login, auto-show on/off, keep items after drag out, hotkey on/off,
+  reset position, tips on/off + reset, promos on/off.
+- One-line contextual tips, each shown a few times (US-17).
 - Modern Apple look: Liquid Glass on macOS 26, material fallback on macOS 14–15. SF Symbols,
   system fonts, light/dark, VoiceOver, Reduce Motion, Reduce Transparency.
 - One-line "More apps" promo for the developer's other apps, from a remote feed (US-15). Off with one toggle.
 
 ## 6. Non-goals (MVP)
 - Cloud sync, upload, or share extensions.
-- History or persistence across app quit (shelf starts empty each launch).
+- Persistent history, or persistence across app quit (shelf and Recent start empty each launch).
 - Multiple shelves, shelf stacking, named shelves.
 - Shake-to-show gesture.
 - Custom hotkey recorder (fixed default hotkey, on/off only).
@@ -65,7 +67,7 @@ looks and behaves like part of macOS.
 | M6 | v2: Shelf Actions (BACKLOG, starts after v1 ships; §10) |
 
 ## 8. User stories and acceptance criteria
-AC wording is for QA. "Shelf" = the DragShelf floating panel.
+AC wording is for QA. "Shelf" = the DragShelf floating panel. UI text always names it "DragShelf", never a bare "Shelf" (T-19).
 
 ### US-1 Auto-show on drag (M3)
 As a user, when I start dragging content, the shelf appears so I can drop it without switching apps.
@@ -97,8 +99,9 @@ As a user, I drop files, images, links, or text on the shelf and they stay there
 - AC-1: Dragging a file item into Finder, Mail compose, Slack/Messages, or a browser upload field delivers that file.
 - AC-2: Dragging a link item into a browser address bar or text field delivers the URL; into Finder creates a `.webloc`.
 - AC-3: Dragging a text item into a text field inserts the text.
-- AC-4: The original file on disk is never moved or deleted by a drag out (copy semantics).
+- AC-4: A plain drag out never moves or deletes the original file (copy).
 - AC-5: After a successful drop the item is removed from the shelf; after a cancelled drag (Esc or drop on nothing) it stays.
+- AC-6: Holding ⌘ while dragging only file items moves them (Finder moves the file); toggling ⌘ mid-drag switches live. Links, text, and mixed selections always copy. A move always removes the item, even with "Keep items after drag out" on (T-15).
 
 ### US-5 Drag many items out (M2)
 - AC-1: Cmd-click / Shift-click select multiple items; dragging any selected item drags all selected.
@@ -107,41 +110,42 @@ As a user, I drop files, images, links, or text on the shelf and they stay there
 - AC-4: Cmd-C copies selected items to the clipboard (keyboard alternative to drag).
 
 ### US-6 Manage items (M2)
-- AC-1: Hover shows a remove button per item; Delete key and context menu "Remove" remove selected items.
-- AC-2: "Clear" removes all items and hides the shelf.
+- AC-1: Hover shows a remove button per item; Delete key and context menu "Remove from DragShelf" remove selected items.
+- AC-2: "Clear" (a text button, no trash icon) removes all items and hides the shelf. Original files and Recent are untouched.
 - AC-3: Close button and Esc hide the shelf but keep its items.
 - AC-4: The last item leaving the shelf (removed or dragged out) hides the shelf.
 - AC-5: A file deleted from disk shows as "missing" (dimmed) and cannot be dragged out.
-- AC-6: Cached copies (promised files, dropped image data) are deleted on remove, clear, and quit.
+- AC-6: Cached copies (promised files, dropped image data) are deleted on remove, clear, and quit, but kept while a Recent entry still uses them.
 
 ### US-7 Quick Look (M2)
 - AC-1: Space with a file item selected opens Quick Look; Space again closes it.
 - AC-2: Arrow keys move the selection and Quick Look follows.
 
 ### US-8 Open shelf on demand (M3)
-- AC-1: Menu bar item has: Show Shelf, Clear Shelf, Settings…, Quit DragShelf.
+- AC-1: Menu bar menu has: Show/Hide DragShelf (shows ⌃⌥⌘D), Undo Drag Out (⌘Z, disabled when Recent is empty), Reset DragShelf Position, More Apps (US-15), Settings…, Quit DragShelf. The menu bar icon is a template glyph matching the app icon. (The draft's "Clear Shelf" menu item was not built: OQ-31.)
 - AC-2: Global hotkey ⌃⌥⌘D toggles the shelf from any app, without a permission prompt.
 - AC-3: App has no Dock icon and no app menu bar when shown.
 
 ### US-9 Settings (M4)
 - AC-1: Launch at login toggle registers/unregisters the app; state survives relaunch.
 - AC-2: Auto-show on drag toggle (default on).
-- AC-3: Shelf position: top center by default; user drags the shelf by its header to move it, position remembered per display; "Reset Shelf Position" in Settings and menu. (Picker dropped 2026-10-20, superseded by T-13.)
+- AC-3: Shelf position: top center by default; user drags the shelf by its header to move it and its bottom/side edges to resize it; position and size remembered per display; "Reset DragShelf Position" in Settings, the menu, and header double-click resets both. (Picker dropped 2026-10-20, superseded by T-13/T-16.)
 - AC-4: Keep items after drag out toggle (default off).
 - AC-5: Global hotkey toggle (default on).
 - AC-6: All settings persist across relaunch.
+- AC-7: "Show tips" toggle (default on) and "Reset Tips" button (US-17).
 
 ### US-10 Native look and accessibility (M1–M4)
 - AC-1: On macOS 26 the shelf uses Liquid Glass; on macOS 14–15 a translucent material that stays vibrant when the panel is not key.
 - AC-2: Correct in light and dark mode, and when the system accent color changes.
 - AC-3: Reduce Transparency → opaque background. Reduce Motion → fades instead of springs/scales. Increase Contrast → visible borders.
 - AC-4: VoiceOver reads every item ("PDF document, Report.pdf") and every button; items expose Remove and Quick Look actions.
-- AC-5: Only SF Symbols and system fonts; all text supports the system text size setting where SwiftUI provides it.
+- AC-5: Only SF Symbols and system fonts, except the menu bar glyph and app icon (drawn in code to match each other); all text supports the system text size setting where SwiftUI provides it.
 
 ### US-15 Discover the developer's other apps (M4, T-14)
 As the developer, I promote my other apps inside DragShelf, and new apps appear without a DragShelf update.
 As a user, I see at most one small line, and I can hide it.
-- AC-1: When the feed has an eligible promo, the panel shows one footer line (optional SF Symbol, title, secondary subtitle, small ✕) under the grid. It never covers tiles or the drop area.
+- AC-1: When the feed has an eligible promo and no tip is due (a tip wins the slot, US-17), the panel shows one footer line (optional SF Symbol, title, secondary subtitle, small ✕) under the grid. It never covers tiles or the drop area.
 - AC-2: The footer is hidden while any drag is in progress (auto-show, hovering, or drag out).
 - AC-3: Clicking the line opens its `https` URL in the default browser. DragShelf downloads and installs nothing.
 - AC-4: ✕ hides that promo for good (also after relaunch). Other promos can still appear.
@@ -153,6 +157,24 @@ As a user, I see at most one small line, and I can hide it.
 - AC-10: Promos for DragShelf itself, or outside their app version or date window, are never shown.
 - AC-11: The request carries no identifiers: plain GET, `User-Agent: DragShelf/<version>`, no cookies.
 - AC-12: A feed entry with a non-`https` URL or a host not on the built-in allowlist is never shown and never opened.
+
+### US-16 Recent drag outs and undo (M4, T-17)
+As a user, when a drag out went to the wrong place or an upload failed, I get the item back without finding it again.
+- AC-1: Each successful drag out (copy or move) records one Recent entry = the dragged batch. Last 5 kept; cancelled drags record nothing.
+- AC-2: ⌘Z (panel key) or menu "Undo Drag Out" restores the newest entry's items (normal dedupe) and removes the entry; repeat walks back.
+- AC-3: A header clock button (hidden when Recent is empty) shows the Recent list inside the panel: one row per entry ("3 files · 2 min ago"), newest first. Click a row → restore. Drag a row → drags its items out (copy/⌘-move rules of US-4).
+- AC-4: Missing files show "Missing" and are skipped; a row with nothing present is dimmed and inert.
+- AC-5: Dragging a Recent row never removes shelf items, except a ⌘-move of a file that is also on the shelf.
+- AC-6: Clear keeps Recent. "Clear Recent" empties it. Recent is memory only (gone after quit).
+- AC-7: The list resets to the grid on every show and on any drop onto the panel.
+
+### US-17 Contextual tips (M4, T-18)
+As a new user, I learn the non-obvious gestures without a tutorial.
+- AC-1: At most one tip line, in the footer slot (wins over a promo); `lightbulb` + secondary caption + ✕. Never a popup.
+- AC-2: Never shown or changed during a drag. Each tip shows at most 3 times; ✕ retires it for good.
+- AC-3: Tips: after a drop, after a drag out that removed items (⌘Z), when Recent has entries, when the shelf has a file (⌘ to move), on the 3rd show (move/resize), on the 2nd menu show (hotkey, only while the hotkey is on), after Clear (files untouched). Texts: ARCHITECTURE §13.
+- AC-4: Every header button, the clock button, and Recent rows have a tooltip.
+- AC-5: VoiceOver reads the tip; Reduce Motion → fade only.
 
 ## 9. Success metrics (manual, MVP)
 - Drag from Finder into a hidden app via shelf in ≤ 2 gestures, no lost drops in the QA matrix.

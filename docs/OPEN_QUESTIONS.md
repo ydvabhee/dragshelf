@@ -35,3 +35,4 @@ architect then updates PRD/ARCHITECTURE/TASKS.
 | OQ-28 | T-14 promos on by default? | On, with Settings toggle "Show other apps from the developer" | Off by default = fewer views, no network request until the user opts in |
 | OQ-29 | T-14: hide promos for apps the user already has installed? | No (schema has no promoted-app bundle id) | Add optional `appBundleId` to the schema and check `NSWorkspace.urlForApplication(withBundleIdentifier:)` locally; no data leaves the Mac |
 | OQ-30 | Item limit on the shelf? | **RESOLVED (measured) 2026-10-20: no limit** after O(1) dedupe (T-13). 5000 items: 0.05 ms/add, 8 ms UI update, +3 MB | Revisit only if a real user hits a problem |
+| OQ-31 | PRD US-8 draft listed a "Clear Shelf" menu bar item; no task built it. Add "Clear DragShelf" to the menu? | Not built; Clear lives in the panel header only | One `Button` in `DragShelfApp` calling `store.clear()` + hide; small task |
