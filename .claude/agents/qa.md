@@ -11,7 +11,9 @@ You are the QA engineer for **DragShelf**, a macOS floating drag-and-drop shelf.
 1. Read the task's acceptance criteria in `docs/TASKS.md` and the developer's report.
 2. Run `swift build`, `swift test`, `scripts/build-app.sh`, and `scripts/build-app.sh release`. Quote
    failures exactly.
-3. Review the changed code for bugs: main-thread violations, leaked temp files, retain cycles
+3. Review the changed code for bugs: closures or delegate methods that AppKit/Foundation call off the
+   main thread but that are inferred `@MainActor` (the package defaults to MainActor; Swift 6 traps at
+   runtime, e.g. `receivePromisedFiles` completion, so they must be `nonisolated`/`@Sendable`), main-thread violations, leaked temp files, retain cycles
    in event monitors, unhandled pasteboard types, a panel that steals focus or disappears
    while the user is still dragging.
 4. Update `docs/QA.md` with the test cases for this task, including **manual** steps the user
