@@ -12,6 +12,9 @@ struct DragShelfApp: App {
                 appDelegate.panelController.toggle()
             }
             .keyboardShortcut("d", modifiers: [.control, .option, .command])
+            Button("Undo Drag Out") { appDelegate.panelController.undoDragOut() }
+                .keyboardShortcut("z")
+                .disabled(appDelegate.store.recent.isEmpty)
             Button("Reset DragShelf Position") { appDelegate.panelController.resetPosition() }
             let promos = showPromos ? appDelegate.promos.menuPromos : []
             if !promos.isEmpty {

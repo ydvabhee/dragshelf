@@ -8,11 +8,16 @@ final class DragOutSource: NSObject, NSDraggingSource {
     private(set) static var current: DragOutSource?
 
     let store: ShelfStore
-    let ids: Set<UUID>
+    /// The dragged batch, as it was when the drag started.
+    let items: [ShelfItem]
+    /// Dragged from a Recent row (T-17): the entry stays as it is, no new one is recorded.
+    let fromRecent: Bool
+    private var ids: Set<UUID> { Set(items.map(\.id)) }
 
-    init(store: ShelfStore, ids: Set<UUID>) {
+    init(store: ShelfStore, items: [ShelfItem], fromRecent: Bool = false) {
         self.store = store
-        self.ids = ids
+        self.items = items
+        self.fromRecent = fromRecent
     }
 
     static func writer(for item: ShelfItem) -> any NSPasteboardWriting {
@@ -30,7 +35,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
     }
 
     /// Starts one session with an `NSDraggingItem` per item; icons stack under the cursor.
-    static func begin(items: [ShelfItem], event: NSEvent, view: NSView, store: ShelfStore) {
+    static func begin(items: [ShelfItem], event: NSEvent, view: NSView, store: ShelfStore, fromRecent: Bool = false) {
         guard !items.isEmpty else { return }
         let p = view.convert(event.locationInWindow, from: nil)
         let dragItems = items.enumerated().map { i, item in
@@ -40,14 +45,14 @@ final class DragOutSource: NSObject, NSDraggingSource {
                                contents: icon(for: item))
             return d
         }
-        let source = DragOutSource(store: store, ids: Set(items.map(\.id)))
+        let source = DragOutSource(store: store, items: items, fromRecent: fromRecent)
         current = source
         store.isDragging = true
         let session = view.beginDraggingSession(with: dragItems, event: event, source: source)
         session.draggingFormation = items.count > 1 ? .stack : .none
     }
 
-    private static func icon(for item: ShelfItem) -> NSImage {
+    static func icon(for item: ShelfItem) -> NSImage {
         switch item.kind {
         case .file(let url): NSWorkspace.shared.icon(forFile: url.path)
         case .url: NSWorkspace.shared.icon(for: .internetShortcut)
@@ -65,7 +70,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        let allFiles = store.items.filter { ids.contains($0.id) }.allSatisfy { if case .file = $0.kind { true } else { false } }
+        let allFiles = items.allSatisfy { if case .file = $0.kind { true } else { false } }
         return Self.mask(for: context, modifiers: NSEvent.modifierFlags, allFiles: allFiles)
     }
 
@@ -85,12 +90,13 @@ final class DragOutSource: NSObject, NSDraggingSource {
         return operation != [] && !keepAfterDragOut
     }
 
-    /// Removes the dragged items unless `shouldRemove` says keep.
-    /// Copy: cache dirs stay until clear/quit (targets read the file after the drop).
+    /// Any drop records a Recent entry (T-17), then removes the dragged items unless `shouldRemove` says keep.
+    /// Copy: cache dirs stay (Recent holds them; targets read the file after the drop).
     /// Move: the file is gone, so an emptied cache dir is deleted.
     func ended(operation: NSDragOperation) {
+        if operation != [], !fromRecent { store.recordDragOut(items) }
         guard Self.shouldRemove(operation: operation, keepAfterDragOut: Preferences.keepAfterDrag()) else { return }
-        let moved = store.items.filter { ids.contains($0.id) && $0.isCached }
+        let moved = items.filter(\.isCached)
         store.remove(ids: ids, deletingCache: false)
         guard operation == .move else { return }
         let fm = FileManager.default
@@ -104,7 +110,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
     }
 }
 
-/// Transparent AppKit layer over a tile (`id`) or the drag-all button (`id == nil`).
+/// Transparent AppKit layer over a tile (`id`), the drag-all button (`id == nil`), or a Recent row (`recentItems`).
 /// AppKit mouse handling, not a SwiftUI gesture, so the first click in the inactive panel starts a drag.
 /// Being the hit view, it also owns the tile's hover tracking and context menu (T-07 AC-8).
 struct DragOutHandle: NSViewRepresentable {
@@ -112,6 +118,9 @@ struct DragOutHandle: NSViewRepresentable {
     var id: UUID?
     var onHover: (Bool) -> Void = { _ in }
     var onQuickLook: (UUID) -> Void = { _ in }
+    /// Recent row (T-17): drags these present items; a click without a drag calls `onClick` (restore).
+    var recentItems: [ShelfItem]?
+    var onClick: () -> Void = {}
 
     func makeNSView(context: Context) -> DragOutHandleView { DragOutHandleView() }
 
@@ -120,7 +129,9 @@ struct DragOutHandle: NSViewRepresentable {
         view.id = id
         view.onHover = onHover
         view.onQuickLook = onQuickLook
-        view.toolTip = id == nil ? "Drag all items" : nil
+        view.recentItems = recentItems
+        view.onClick = onClick
+        view.toolTip = recentItems != nil ? "Restore to DragShelf" : id == nil ? "Drag all items" : nil
     }
 }
 
@@ -129,6 +140,8 @@ final class DragOutHandleView: NSView {
     var id: UUID?
     var onHover: (Bool) -> Void = { _ in }
     var onQuickLook: (UUID) -> Void = { _ in }
+    var recentItems: [ShelfItem]?
+    var onClick: () -> Void = {}
     private var mouseDown: NSEvent?
     /// Plain click on an already-selected tile keeps the selection for a multi-drag; collapses on mouse up.
     private var collapseOnUp = false
@@ -179,11 +192,13 @@ final class DragOutHandleView: NSView {
         guard hypot(b.x - a.x, b.y - a.y) >= 3 else { return }
         mouseDown = nil
         collapseOnUp = false
-        DragOutSource.begin(items: store.dragItems(for: id), event: start, view: self, store: store)
+        DragOutSource.begin(items: recentItems ?? store.dragItems(for: id), event: start, view: self, store: store,
+                            fromRecent: recentItems != nil)
     }
 
     override func mouseUp(with event: NSEvent) {
         if collapseOnUp, let id { store?.select(id, command: false, shift: false) }
+        if mouseDown != nil { onClick() }
         mouseDown = nil
         collapseOnUp = false
     }

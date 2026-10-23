@@ -70,8 +70,22 @@ struct ShelfItemView: View {
             .background(.fill.tertiary, in: .rect(cornerRadius: 12, style: .continuous))
     }
 
-    private var name: String {
+    private var name: String { item.displayName }
+
+    private var typeDescription: String {
         switch item.kind {
+        case .file(let url):
+            (try? url.resourceValues(forKeys: [.localizedTypeDescriptionKey]))?.localizedTypeDescription ?? "File"
+        case .url: "Link"
+        case .text: "Text"
+        }
+    }
+}
+
+extension ShelfItem {
+    /// Tile caption and Recent row title: file name, link host, or first text line.
+    var displayName: String {
+        switch kind {
         case .file(let url): url.lastPathComponent
         // Zero-width spaces let long hosts wrap at dots instead of hyphenating.
         case .url(let url): (url.host(percentEncoded: false) ?? url.absoluteString)
@@ -80,15 +94,6 @@ struct ShelfItemView: View {
             text.split(whereSeparator: \.isNewline)
                 .lazy.map { $0.trimmingCharacters(in: .whitespaces) }
                 .first { !$0.isEmpty } ?? ""
-        }
-    }
-
-    private var typeDescription: String {
-        switch item.kind {
-        case .file(let url):
-            (try? url.resourceValues(forKeys: [.localizedTypeDescriptionKey]))?.localizedTypeDescription ?? "File"
-        case .url: "Link"
-        case .text: "Text"
         }
     }
 }

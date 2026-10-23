@@ -2,6 +2,13 @@ import CryptoKit
 import Foundation
 import Observation
 
+/// One successful drag out: the batch of items dragged (T-17).
+struct RecentEntry: Identifiable, Hashable {
+    let id = UUID()
+    let date: Date
+    let items: [ShelfItem]
+}
+
 @Observable
 final class ShelfStore {
     private(set) var items: [ShelfItem] = []
@@ -14,6 +21,9 @@ final class ShelfStore {
     var isDragging = false
     /// File items whose file was gone at the last `refreshMissing()` (panel show).
     private(set) var missingIDs: Set<UUID> = []
+    /// Last drag outs, newest first, at most `recentLimit`. Memory only (OQ-03); their cache dirs are kept.
+    private(set) var recent: [RecentEntry] = []
+    static let recentLimit = 5
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
@@ -36,12 +46,13 @@ final class ShelfStore {
         let key = Self.key(for: item)
         if let old = keys[key] {
             guard case .image = key, let i = items.firstIndex(where: { $0.id == old }) else { return false }
-            removeCacheDir(of: items[i])
+            let replaced = items[i]
             selection.remove(old)
             // One assignment: the shelf never looks empty mid-replace (empty → panel hides).
             var next = items
             next.remove(at: i)
             items = next + [item]
+            release([replaced])
         } else {
             items.append(item)
         }
@@ -51,10 +62,43 @@ final class ShelfStore {
 
     /// `deletingCache: false` leaves cache dirs for the clear/quit wipe (drag out: targets read files late).
     func remove(ids: Set<UUID>, deletingCache: Bool = true) {
-        if deletingCache { items.filter { ids.contains($0.id) }.forEach(removeCacheDir(of:)) }
+        let gone = items.filter { ids.contains($0.id) }
         items.removeAll { ids.contains($0.id) }
         keys = keys.filter { !ids.contains($0.value) }
         selection.subtract(ids)
+        if deletingCache { release(gone) }
+    }
+
+    // MARK: Recent (T-17)
+
+    /// Records one successful drag out; the oldest entry beyond `recentLimit` falls off with its cache dirs.
+    func recordDragOut(_ batch: [ShelfItem], at date: Date = .now) {
+        guard !batch.isEmpty else { return }
+        recent.insert(RecentEntry(date: date, items: batch), at: 0)
+        if recent.count > Self.recentLimit { release(recent.removeLast().items) }
+    }
+
+    /// Puts an entry's present items back (normal dedupe) and drops the entry. Missing files are skipped.
+    func restore(_ id: RecentEntry.ID) {
+        guard let i = recent.firstIndex(where: { $0.id == id }) else { return }
+        let entry = recent[i]
+        entry.items.filter(Self.exists).forEach { add($0) }
+        recent.remove(at: i)
+        release(entry.items)
+    }
+
+    /// Cmd-Z: restores the newest entry; false when Recent is empty.
+    @discardableResult
+    func undoDragOut() -> Bool {
+        guard let newest = recent.first else { return false }
+        restore(newest.id)
+        return true
+    }
+
+    func clearRecent() {
+        let gone = recent.flatMap(\.items)
+        recent.removeAll()
+        release(gone)
     }
 
     var selectedItems: [ShelfItem] { items.filter { selection.contains($0.id) } }
@@ -110,15 +154,20 @@ final class ShelfStore {
 
     /// Marks file items whose file no longer exists. Runs each time the panel shows.
     func refreshMissing() {
-        let gone = Set(items.filter {
-            if case .file(let url) = $0.kind { !FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) } else { false }
-        }.map(\.id))
+        let gone = Set(items.filter { !Self.exists($0) }.map(\.id))
         if gone != missingIDs { missingIDs = gone }
     }
 
+    /// False for a file item whose file is gone; links and text always exist.
+    static func exists(_ item: ShelfItem) -> Bool {
+        guard case .file(let url) = item.kind else { return true }
+        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
+    }
+
+    /// Keeps Recent and the cache dirs it still references (T-17 AC-5).
     func clear() {
         generation += 1
-        cache.wipe()
+        cache.wipe(keeping: Set(recent.flatMap(\.items).compactMap(cacheDir(of:)).map(\.lastPathComponent)))
         items.removeAll()
         keys.removeAll()
         selection.removeAll()
@@ -139,12 +188,18 @@ final class ShelfStore {
         }
     }
 
-    private func removeCacheDir(of item: ShelfItem) {
-        guard item.isCached, case .file(let url) = item.kind else { return }
+    /// Direct child of the cache root that holds a cached item's file (handles nested files).
+    private func cacheDir(of item: ShelfItem) -> URL? {
+        guard item.isCached, case .file(let url) = item.kind else { return nil }
         let root = cache.root.standardizedFileURL.resolvingSymlinksInPath().pathComponents
         let parts = url.standardizedFileURL.resolvingSymlinksInPath().pathComponents
-        // Delete the direct child of root that contains the file (handles nested files).
-        guard parts.count > root.count + 1, Array(parts.prefix(root.count)) == root else { return }
-        cache.remove(dir: cache.root.appendingPathComponent(parts[root.count], isDirectory: true))
+        guard parts.count > root.count + 1, Array(parts.prefix(root.count)) == root else { return nil }
+        return cache.root.appendingPathComponent(parts[root.count], isDirectory: true)
+    }
+
+    /// Deletes the cache dirs of `gone` that no shelf item or Recent entry still uses.
+    private func release(_ gone: [ShelfItem]) {
+        let used = Set((items + recent.flatMap(\.items)).compactMap(cacheDir(of:)))
+        Set(gone.compactMap(cacheDir(of:))).subtracting(used).forEach(cache.remove(dir:))
     }
 }

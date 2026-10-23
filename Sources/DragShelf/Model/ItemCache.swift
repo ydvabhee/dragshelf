@@ -24,9 +24,9 @@ nonisolated struct ItemCache: Sendable {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    /// Removes everything under `root`.
-    func wipe() {
+    /// Removes everything under `root` except the item dirs named in `keeping`.
+    func wipe(keeping: Set<String> = []) {
         let contents = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
-        contents.forEach(remove(dir:))
+        contents.filter { !keeping.contains($0.lastPathComponent) }.forEach(remove(dir:))
     }
 }

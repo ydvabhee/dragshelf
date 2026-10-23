@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 - App icon: a file card dropping into a tray, on a blue macOS-style squircle.
+- Recent drags: the last 5 drag outs sit under a clock button in the DragShelf header; click one to put it back or drag it out again. ⌘Z (or "Undo Drag Out" in the menu bar) restores the latest.
 
 ### Changed
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").

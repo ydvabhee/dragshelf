@@ -42,7 +42,7 @@ private let web = URL(string: "https://example.com/x")!
     let a = ShelfItem(kind: .file(cached), isCached: true), b = ShelfItem(kind: .text("keep"))
     store.add(a); store.add(b)
     store.selection = [a.id]
-    let source = DragOutSource(store: store, ids: [a.id])
+    let source = DragOutSource(store: store, items: [a])
     source.ended(operation: [])
     #expect(store.items.count == 2)
     source.ended(operation: .copy)
@@ -89,7 +89,7 @@ private let web = URL(string: "https://example.com/x")!
     let a = ShelfItem(kind: .file(f), isCached: true)
     store.add(a)
     try FileManager.default.removeItem(at: f) // receiver moved it away
-    DragOutSource(store: store, ids: [a.id]).ended(operation: .move)
+    DragOutSource(store: store, items: [a]).ended(operation: .move)
     #expect(store.items.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: dir.path))
 }

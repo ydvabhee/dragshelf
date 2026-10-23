@@ -21,6 +21,8 @@ struct ShelfView: View {
     @State private var hovered: UUID?
     /// Promo row height, measured: the grid cap leaves room for it so the panel never exceeds `maxHeight`.
     @State private var footerHeight: CGFloat = 0
+    /// Clock button: the Recent list replaces the grid (T-17 AC-3).
+    @State private var showRecent = false
 
     static let defaultWidth: CGFloat = 288
     private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
@@ -40,7 +42,11 @@ struct ShelfView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            if store.items.isEmpty {
+            if showRecent && !store.recent.isEmpty {
+                ScrollView { RecentList(store: store) }
+                    .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (promo == nil ? 0 : footerHeight)))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if store.items.isEmpty {
                 emptyState
             } else {
                 grid
@@ -65,6 +71,9 @@ struct ShelfView: View {
         .focusEffectDisabled()
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.15),
                    value: store.items)
+        // Back to the grid when items arrive (a restore, a drop) or Recent empties.
+        .onChange(of: store.items.count) { old, new in if new > old { showRecent = false } }
+        .onChange(of: store.recent.isEmpty) { _, empty in if empty { showRecent = false } }
     }
 
     private var header: some View {
@@ -78,12 +87,23 @@ struct ShelfView: View {
                 .disabled(store.items.isEmpty)
                 .overlay { DragOutHandle(store: store) }
 
-                Text(store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
+                Text(showRecent && !store.recent.isEmpty ? "Recent"
+                     : store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                if !store.recent.isEmpty {
+                    Button { showRecent.toggle() } label: {
+                        Label("Recent drags", systemImage: "clock.arrow.circlepath")
+                    }
+                    .help("Recent drags")
+                    .foregroundStyle(showRecent ? Color.accentColor : Color.primary)
+                    .accessibilityAddTraits(showRecent ? .isSelected : [])
+                    .accessibilityHint(showRecent ? "Shows DragShelf items again" : "Lists recent drags out to restore or drag again")
+                }
 
                 Button {
                     store.clear()

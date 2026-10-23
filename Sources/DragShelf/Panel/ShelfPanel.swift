@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import Quartz
 
-/// Floating, non-activating shelf window. Owns keyboard (Esc, Space, Delete, arrows) and Quick Look,
+/// Floating, non-activating shelf window. Owns keyboard (Esc, Space, Delete, arrows, Cmd-Z) and Quick Look,
 /// which need the key window; show/hide behavior lives in `ShelfPanelController`.
 final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     var store: ShelfStore?
@@ -62,8 +62,11 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     }
 
     private func handleKey(_ event: NSEvent) -> Bool {
-        guard let store,
-              event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return false }
+        guard let store else { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        // Cmd-Z: bring back the last drag out (T-17 AC-2); empty Recent passes through (system beep).
+        if modifiers == .command, event.charactersIgnoringModifiers == "z" { return store.undoDragOut() }
+        guard modifiers.isEmpty else { return false }
         switch Int(event.keyCode) {
         case kVK_Escape: isPreviewVisible ? closePreview() : onCancel?()
         case kVK_Space: isPreviewVisible ? closePreview() : openPreview()

@@ -88,7 +88,7 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     let receiver = DropReceiver(rootView: EmptyView())
     receiver.store = store
     let info = FakeDraggingInfo(pb)
-    info.source = DragOutSource(store: store, ids: [])
+    info.source = DragOutSource(store: store, items: [])
     #expect(receiver.draggingEntered(info) == [])
     #expect(!store.isDropTargeted)
     #expect(!receiver.performDragOperation(info))

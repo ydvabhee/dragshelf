@@ -239,6 +239,11 @@ final class ShelfPanelController {
         })
     }
 
+    /// Menu "Undo Drag Out": restores the last drag out and shows the panel with it (T-17 AC-2).
+    func undoDragOut() {
+        if store.undoDragOut() { show() }
+    }
+
     /// Quick Look on one tile (context menu, VoiceOver): acts on the selection if the tile is in it.
     func quickLook(_ id: UUID) {
         store.selection = store.targetIDs(for: id)
