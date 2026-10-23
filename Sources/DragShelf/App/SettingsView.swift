@@ -1,3 +1,4 @@
+import AppKit
 import ServiceManagement
 import SwiftUI
 
@@ -70,6 +71,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460)
+        .background(SettingsWindowTag())
         .fixedSize(horizontal: false, vertical: true)
         .onAppear { loginStatus = SMAppService.mainApp.status }
     }
@@ -82,5 +84,22 @@ struct SettingsView: View {
             loginError = "Could not change launch at login: \(error.localizedDescription)"
         }
         loginStatus = SMAppService.mainApp.status
+    }
+}
+
+/// Remembers the Settings window so `Sharer` can tell it from share sheets (V2-02). Our own weak reference, not the
+/// window's title (localized) or SwiftUI's private identifier; the identifier is left alone so SwiftUI still finds
+/// and reuses its window.
+struct SettingsWindowTag: NSViewRepresentable {
+    static weak var window: NSWindow?
+
+    func makeNSView(context: Context) -> NSView { TagView() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class TagView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { SettingsWindowTag.window = window }
+        }
     }
 }

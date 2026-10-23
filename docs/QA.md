@@ -462,3 +462,26 @@ Manual:
 9. Form open, select other images, header Actions, Resize, Custom...: fields must show the new image size (finding 2).
 10. Percent 400 on a 8000x6000 photo: should refuse or fail cleanly, not use GBs (finding 1; watch Activity Monitor).
 11. Transparent PNG/HEIC upscale keeps transparency; CMYK JPEG resizes and opens in Preview.
+## V2-02 Share and AirDrop (e259658) - FAIL (2)
+Build, 118 tests, release build green.
+- ADR-016: picker and service delegate methods are `nonisolated`, hop with `Task { @MainActor }`; no main-only state touched off main. OK.
+- Items: present files only (`ShelfStore.exists`), file/link as `NSURL`, text as `NSString`; same writers as drag out. Missing files left out; Share and AirDrop disabled when none left. Covered by `ShareTests`.
+- Panel: `hidesOnDeactivate` false, no auto-hide path fires for a non-empty shelf. Items stay on shelf. Branding "Share…" / "AirDrop" ok.
+- Finding (med) `ActionsMenu.swift` `airDrop`: the `NSSharingService` is a local and its `delegate` is weak. Nothing retains it, so it can be freed before `didShare`/`didFail`; then `finished()` never runs and the app stays active (the picker path is fine, `picker` is held). Fix: keep the service in a property and clear it in `finished()`.
+- Finding (med) `activate()`/`finished()`: `activated` is set even if the app was already active, and `deactivate()` runs even if the user moved to DragShelf Settings meanwhile. Focus is taken from Settings. Fix: `activated = !NSApp.isActive` before activating; in `finished()` deactivate only if `activated` and no other app window is key (`NSApp.keyWindow` is nil or the panel).
+- Low: a second Share while the picker is open replaces `picker` and `activated` state; harmless.
+Manual:
+1. Drop a file, a link and text. Select all, Actions, Share…: picker opens in front, panel stays. Pick Notes or Messages: items arrive; items still on shelf.
+2. Click outside the picker (no choice): focus returns to the previous app.
+3. Select 2 files, AirDrop: AirDrop sheet in front; send to a nearby device: both arrive with names. Cancel the sheet: focus returns.
+4. Open Settings (it is key), then run Share… from the shelf and cancel: Settings must stay key (fails today).
+5. AirDrop then cancel, repeat 10 times: app never stays active in the Dock/menu bar (retain finding).
+6. Delete the file on disk: Share… and AirDrop disabled for that item; link plus missing file shares the link only.
+7. Tile context menu: Share… opens the picker under the tile.
+
+### V2-02 fix round (c61f58c, 04b824a) - PASS
+Build, 119 tests, release build green.
+- AirDrop service now held in `service` until `finished()`; picker held too. `activated = !NSApp.isActive`. Second Share/AirDrop ignored while `busy`.
+- Settings check: `SettingsWindowTag.window` is a weak static. Never opened: nil, `keyWindow.map { $0 === nil }` is false, no crash. Closed and freed: weak goes nil, same. Closed but kept by SwiftUI: not key, so false; focus restored. Ref is never explicitly cleared; weak plus the key check make that safe. `viewDidMoveToWindow` guards a nil window.
+- Low: `didChoose` with a service (not AirDrop) clears `pickerOpen` only; `picker` stays held until that service reports, then `finished()` runs. OK.
+Manual: repeat steps 2, 4, 5 above; also open Settings, close it, then Share… and cancel: focus returns to the previous app.
