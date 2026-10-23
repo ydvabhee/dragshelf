@@ -373,3 +373,19 @@ Build, 86 tests, release build green. Previous FAIL fixed: `inFlight` set exclud
 - Image dir created on main before the detached write. Timer invalidated on terminate.
 - Residual (low): if AppKit never calls the promise reader (source app dies, zero files), the empty dir stays pinned until quit (wiped then). Multi-file promise: reader runs per file; first end clears the flag while later files may still download (pre-existing shape).
 Manual: repeat T-21 manual step 1 (slow iCloud Photos video, >15 s) and confirm it lands.
+
+## V2-01 Zip + ActionRunner (e3b1196) and larger default size (036acdf) - PASS
+Build, 95 tests, release build green.
+- ADR-016: ditto `terminationHandler` is `@Sendable`, captures only the continuation. `ShelfAction.run` is `@concurrent`, `progress` is `@Sendable`, `Zipper` and `ShelfAction` are nonisolated. No readability handlers (stdout/stderr go to `nullDevice`, so no pipe can fill and block).
+- Process: absolute `/usr/bin/ditto`, args array (no shell), sources are absolute paths so a leading `-` cannot be read as a flag. Cancel runs `terminate()` from `onCancel`, and a cancel racing the launch is caught by the `Task.isCancelled` check after `run()`. `ditto` returns only after the termination handler fires, so no zombie, and the job dir is deleted only after ditto exited.
+- In-flight and generation: job dir is in `inFlight` until the job ends, so sweep skips it (test `sweepNeverDeletesRunningJobDir`). Clear bumps `generation` and cancels; the job removes its dir and adds nothing. Quit cancels, then wipes the cache.
+- Naming: each job writes into a fresh dir, so `Archive.zip` never overwrites one already on the shelf; the 2nd lands as a separate item with the same name (not "Archive 2.zip", low). Same-name sources inside one zip get Finder suffixes.
+- Size: width 360 (3 columns), footer row reserved (`footerRowHeight` 28) in min/max/grid cap, so a tip does not grow the panel (test compares empty vs tip height). Saved sizes untouched (only defaults and `minSize` changed).
+- Minor: `Process` is touched from the cancel handler and the launching thread at once (`isRunning`, `terminate`). Benign here; Foundation allows it.
+Manual:
+1. Select 2 files and a folder, Actions, Compress: `Archive.zip` appears, selected; originals unchanged. Unzip in Finder: names and contents match.
+2. Compress one item whose name has spaces, quotes, and a leading `-`. Zip is named `<name>.zip` and opens.
+3. Compress a multi-GB folder, press Cancel: stops within 1 s, no partial zip, cache dir empty. Repeat with Clear, and with Quit.
+4. Compress a link or text item with a file: caption "Skipped 1 item".
+5. Compress `Archive.zip` twice: two items on the shelf, dragging each to Finder gives the right zip.
+6. Fresh install (no saved size): panel is 360 wide, tip row does not move the grid; resize to the minimum: footer row still fits.
