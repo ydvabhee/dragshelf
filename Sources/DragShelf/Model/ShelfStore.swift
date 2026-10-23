@@ -16,9 +16,9 @@ final class ShelfStore {
     /// Shift-click range start: the last plain or Cmd-clicked item.
     @ObservationIgnored private var anchor: UUID?
     /// True while a drag hovers the panel (set by `DropReceiver`).
-    var isDropTargeted = false
-    /// True while a system drag (auto-show) or a drag out runs; hides the promo footer (T-14).
-    var isDragging = false
+    var isDropTargeted = false { didSet { hints.dragging = isDragging || isDropTargeted } }
+    /// True while a system drag (auto-show) or a drag out runs; hides the promo footer (T-14) and holds back hints (T-18).
+    var isDragging = false { didSet { hints.dragging = isDragging || isDropTargeted } }
     /// File items whose file was gone at the last `refreshMissing()` (panel show).
     private(set) var missingIDs: Set<UUID> = []
     /// Last drag outs, newest first, at most `recentLimit`. Memory only (OQ-03); their cache dirs are kept.
@@ -29,6 +29,7 @@ final class ShelfStore {
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache
+    @ObservationIgnored let hints: HintEngine
     /// Dedupe index beside `items` (O(1) add). Image items key by content hash, everything else by kind.
     @ObservationIgnored private(set) var keys: [Key: UUID] = [:]
 
@@ -36,8 +37,9 @@ final class ShelfStore {
         case file(String), url(String), text(String), image(SHA256.Digest)
     }
 
-    init(cache: ItemCache = ItemCache()) {
+    init(cache: ItemCache = ItemCache(), hints: HintEngine = HintEngine()) {
         self.cache = cache
+        self.hints = hints
     }
 
     /// Appends in drop order. Same file path, URL, or exact text keeps one item; returns false on duplicate.

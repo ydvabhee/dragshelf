@@ -34,7 +34,10 @@ final class ShelfPanelController {
         self.promos = promos
         let receiver = DropReceiver(rootView: PanelRoot(controller: self))
         receiver.store = store
-        receiver.onDrop = { [weak self] in self?.droppedOnShelf = true }
+        receiver.onDrop = { [weak self] in
+            self?.droppedOnShelf = true
+            self?.store.hints.record(.dropped)
+        }
         receiver.onPromiseFailed = { [weak self] in self?.promiseFailed() }
         panel.contentView = receiver
         panel.store = store
@@ -214,6 +217,9 @@ final class ShelfPanelController {
         self.reason = reason
         store.refreshMissing()
         store.showRecent = false
+        let hasFile = store.items.contains { if case .file = $0.kind { true } else { false } }
+        store.hints.record(.shown(reason, hasFile: hasFile, hasRecent: !store.recent.isEmpty))
+        store.hints.visible = true
         // Not during an auto-drag show: a first feed landing mid-drag would add the footer row and grow the panel.
         if reason != .autoDrag { Task { await promos.refreshIfStale() } }
         updateLimits(for: screen)
@@ -253,7 +259,11 @@ final class ShelfPanelController {
 
     /// VoiceOver: low-priority "Item added" when the shelf grows (T-11 AC-1).
     func announceAdded(_ count: Int) {
-        let text = count == 1 ? "Item added" : "\(count) items added"
+        announce(count == 1 ? "Item added" : "\(count) items added")
+    }
+
+    /// Low-priority VoiceOver announcement (item added, a tip appeared).
+    func announce(_ text: String) {
         NSAccessibility.post(element: panel, notification: .announcementRequested,
                              userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.low.rawValue])
     }
@@ -265,6 +275,7 @@ final class ShelfPanelController {
     func hide() {
         guard isShown else { return }
         reason = nil
+        store.hints.visible = false
         panel.closePreview()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = false }
@@ -286,6 +297,7 @@ private struct PanelRoot: View {
     let controller: ShelfPanelController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(Preferences.showPromos) private var showPromos = true
+    @AppStorage(Preferences.showTips) private var showTips = true
 
     var body: some View {
         // Re-evaluated on every show (reads `isShown`), so the daily rotation advances.
@@ -294,11 +306,14 @@ private struct PanelRoot: View {
                   onQuickLook: controller.quickLook, onMoved: controller.userMoved,
                   onResetPosition: controller.resetPosition,
                   promo: showPromos ? controller.promos.footerPromo : nil,
-                  onDismissPromo: controller.promos.dismiss)
+                  onDismissPromo: controller.promos.dismiss,
+                  hint: showTips ? controller.store.hints.current : nil,
+                  onDismissHint: controller.store.hints.dismiss)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }
             .onChange(of: controller.store.items.count) { old, new in if new > old { controller.announceAdded(new - old) } }
+            .onChange(of: controller.store.hints.current) { _, hint in if let hint { controller.announce(hint.spokenText) } }
             // Quick Look follows any selection/items change, not only keys.
             .onChange(of: controller.store.previewURLs) { controller.previewSourceChanged() }
             // Async: `fittingSize` read synchronously here is 0 and would collapse the panel.

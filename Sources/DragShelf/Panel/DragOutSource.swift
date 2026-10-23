@@ -94,8 +94,15 @@ final class DragOutSource: NSObject, NSDraggingSource {
     /// Copy: cache dirs stay (Recent holds them; targets read the file after the drop).
     /// Move: the file is gone, so an emptied cache dir is deleted.
     func ended(operation: NSDragOperation) {
-        if operation != [], !fromRecent { store.recordDragOut(items) }
-        guard Self.shouldRemove(operation: operation, keepAfterDragOut: Preferences.keepAfterDrag()) else { return }
+        let recorded = operation != [] && !fromRecent, hadItems = !store.items.isEmpty
+        if recorded { store.recordDragOut(items) }
+        let remove = Self.shouldRemove(operation: operation, keepAfterDragOut: Preferences.keepAfterDrag())
+        defer {
+            // An emptied shelf hides (ARCHITECTURE §5 rule 4): the tip waits for the next show (T-18).
+            if hadItems, store.items.isEmpty { store.hints.visible = false }
+            if recorded { store.hints.record(.draggedOut(removed: remove)) }
+        }
+        guard remove else { return }
         // Recent drag (T-20 AC-7): shelf items stay, except a `.move` of a file that is also on the shelf.
         var removeIDs = ids
         if fromRecent {

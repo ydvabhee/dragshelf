@@ -15,12 +15,21 @@ struct ShelfView: View {
     /// Footer promo (nil when promos are off or none is eligible) and its ✕ (T-14).
     var promo: Promo?
     var onDismissPromo: (String) -> Void = { _ in }
+    /// Contextual tip (T-18); takes the footer slot over the promo. Nil when tips are off or none is due.
+    var hint: HintEngine.Hint?
+    var onDismissHint: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
     @State private var hovered: UUID?
     /// Promo row height, measured: the grid cap leaves room for it so the panel never exceeds `maxHeight`.
     @State private var footerHeight: CGFloat = 0
+
+    /// One footer line: a hint wins over a promo (T-18 AC-1).
+    enum Footer: Equatable { case hint(HintEngine.Hint), promo(Promo) }
+    static func footer(hint: HintEngine.Hint?, promo: Promo?) -> Footer? {
+        hint.map(Footer.hint) ?? promo.map(Footer.promo)
+    }
 
     static let defaultWidth: CGFloat = 288
     private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
@@ -42,7 +51,7 @@ struct ShelfView: View {
             header
             if store.showRecent && !store.recent.isEmpty {
                 ScrollView { RecentList(store: store) }
-                    .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (promo == nil ? 0 : footerHeight)))
+                    .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (hint == nil && promo == nil ? 0 : footerHeight)))
                     .fixedSize(horizontal: false, vertical: true)
             } else if store.items.isEmpty {
                 emptyState
@@ -51,15 +60,27 @@ struct ShelfView: View {
             }
             // Own row under the grid: never over tiles. Hidden during any drag; the row keeps its height so the
             // panel does not resize under the pointer (a hover at the bottom edge would otherwise flicker).
-            if let promo {
+            // ZStack: an outgoing and incoming line overlap instead of stacking (no height jump on swap).
+            if let footer = Self.footer(hint: hint, promo: promo) {
                 let dragging = store.isDragging || store.isDropTargeted
-                PromoFooter(promo: promo, onDismiss: { onDismissPromo(promo.id) })
-                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0 }
-                    .opacity(dragging ? 0 : 1)
-                    .allowsHitTesting(!dragging)
-                    .accessibilityHidden(dragging)
-                    .animation(.easeInOut(duration: 0.15), value: dragging)
-                    .transition(.opacity)
+                ZStack {
+                    switch footer {
+                    case .hint(let hint):
+                        HintFooter(hint: hint, onDismiss: onDismissHint)
+                            .id(hint)
+                            .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+                    case .promo(let promo):
+                        PromoFooter(promo: promo, onDismiss: { onDismissPromo(promo.id) })
+                            .transition(.opacity)
+                    }
+                }
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0 }
+                .opacity(dragging ? 0 : 1)
+                .allowsHitTesting(!dragging)
+                .accessibilityHidden(dragging)
+                .animation(.easeInOut(duration: 0.15), value: dragging)
+                .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1), value: hint)
+                .transition(.opacity)
             }
         }
         .frame(width: width)
@@ -97,7 +118,7 @@ struct ShelfView: View {
                     Button { store.showRecent.toggle() } label: {
                         Label("Recent drags", systemImage: "clock.arrow.circlepath")
                     }
-                    .help("Recent drags")
+                    .help(store.showRecent ? "Show DragShelf items" : "Show recent drags")
                     .foregroundStyle(store.showRecent ? Color.accentColor : Color.primary)
                     .accessibilityAddTraits(store.showRecent ? .isSelected : [])
                     .accessibilityHint(store.showRecent ? "Shows DragShelf items again" : "Lists recent drags out to restore or drag again")
@@ -106,6 +127,8 @@ struct ShelfView: View {
                 Button("Clear") {
                     store.clear()
                     onClose()
+                    // After the hide: the tip waits for the next show instead of flashing out (T-20 AC-5).
+                    store.hints.record(.cleared)
                 }
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
@@ -195,7 +218,7 @@ struct ShelfView: View {
             // Click on empty space deselects.
             .background { Color.clear.contentShape(.rect).onTapGesture { store.selection = [] } }
             // Hug content until the cap, then scroll.
-            .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (promo == nil ? 0 : footerHeight)))
+            .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (hint == nil && promo == nil ? 0 : footerHeight)))
             .fixedSize(horizontal: false, vertical: true)
             .flashScrollIndicators(trigger: store.items.count)
             // Reveal what was just added (appended at the end) (T-13 AC-3).

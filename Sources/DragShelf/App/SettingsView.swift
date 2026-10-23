@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(Preferences.hotKeyEnabled) private var hotKeyEnabled = true
     @AppStorage(Preferences.keepAfterDragOut) private var keepAfterDragOut = false
     @AppStorage(Preferences.showPromos) private var showPromos = true
+    @AppStorage(Preferences.showTips) private var showTips = true
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
 
@@ -44,6 +45,17 @@ struct SettingsView: View {
                 Text("DragShelf")
             } footer: {
                 Text("Off: items leave DragShelf once dropped elsewhere. Drag the DragShelf header to move it.")
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Show tips", isOn: $showTips)
+                LabeledContent("Seen them all?") {
+                    Button("Reset Tips") { HintEngine.reset() }
+                }
+            } header: {
+                Text("Tips")
+            } footer: {
+                Text("A one-line tip under DragShelf now and then. Each tip shows up to 3 times.")
                     .foregroundStyle(.secondary)
             }
             Section {
