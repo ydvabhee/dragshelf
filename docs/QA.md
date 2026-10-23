@@ -485,3 +485,11 @@ Build, 119 tests, release build green.
 - Settings check: `SettingsWindowTag.window` is a weak static. Never opened: nil, `keyWindow.map { $0 === nil }` is false, no crash. Closed and freed: weak goes nil, same. Closed but kept by SwiftUI: not key, so false; focus restored. Ref is never explicitly cleared; weak plus the key check make that safe. `viewDidMoveToWindow` guards a nil window.
 - Low: `didChoose` with a service (not AirDrop) clears `pickerOpen` only; `picker` stays held until that service reports, then `finished()` runs. OK.
 Manual: repeat steps 2, 4, 5 above; also open Settings, close it, then Share… and cancel: focus returns to the previous app.
+
+### V2-05 fix round (3063afe, 641882d, b882b15) - PASS
+Build, 125 tests (3 full runs), release build green.
+- Cap: 16384 px per side and 100 MP checked in the form (`limitError(for:)`, per image in the batch, Pixels and Percent) and in `convert` (throws `Failed`, no file left). Tests cover both.
+- Form: `.id(images.map(\.id))` rebuilds it on reopen; sizes read in `.task` via `@concurrent` helper. Test covers the id change.
+- Merge (641882d): header `ActionsMenu` and tile `menu(for:)` both list Compress, Rename…, Share…, AirDrop, Convert To ▸, Resize ▸ (… Custom… after a separator); no duplicates or missing entries.
+- b882b15: `cancelStopsAfterCurrentImageAndKeepsFinished` is deterministic (cancels from progress at image 2, asserts exactly p0-p2 and no extra files), so cancel-early is covered at the converter level. Runner test loosened to 1...20 is fine.
+Manual: repeat V2-05 steps 9 and 10 (Custom… reopen shows new size; 400 % on a large photo shows "Too large", form stays open).
