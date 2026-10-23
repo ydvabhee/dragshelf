@@ -21,6 +21,7 @@ Every task's implicit ACs (QA checks always):
 | T-13 | Responsive shelf: fit-to-content + scroll, movable + remembered position, O(1) dedupe | M3 | T-07, T-08 | US-2, US-3 | DONE (2026-10-20) |
 | T-15 | Drag out: ⌘-drag moves file items (plain drag copies) | M4 | T-10 | US-4 | DONE (2026-10-20) |
 | T-16 | UI polish: no focus ring/outline, inset scroll bar, user-resizable shelf | M4 | T-13, T-14 | US-3, US-10 | DONE (2026-10-20) |
+| T-19 | Branding: call the shelf "DragShelf" in UI text | M4 | T-16 | US-8 | TODO |
 | T-17 | Recent drag-outs (last 5) + ⌘Z undo | M4 | T-16 | US-4, US-6 | TODO |
 | T-18 | Contextual hints (one line, shown a few times) | M4 | T-17 | US-3, US-10 | TODO |
 | T-10 | Settings window + launch at login | M4 | T-06, T-08, T-09 | US-9 | DONE (2026-10-20) |
@@ -168,6 +169,7 @@ Milestone M4. Depends on: T-16. Source: user idea 2026-10-20 (validated): items 
 - AC-7: Unit tests: entry recording per batch, cap 5, ⌘Z order, restore with dedupe, missing skipped, cache dir lifetime.
 
 ## T-18 Contextual hints (one line, shown a few times)
+Branding: follow T-19 rule ("DragShelf", not "the shelf", in hint text where it names the panel).
 Milestone M4. Depends on: T-17. Source: user request 2026-10-20 ("add hints for the user"). Rule: never a popup/modal; never more than one hint line at a time; never during an active drag; each hint auto-retires.
 - AC-1: Hints use the single footer line slot (same place as the promo line; a hint takes priority over a promo). Style: `.secondary` caption, leading `lightbulb` SF Symbol, small ✕ to dismiss that hint forever.
 - AC-2: Hint set (each shown at most 3 times, then never again; tracked in UserDefaults):
@@ -181,6 +183,16 @@ Milestone M4. Depends on: T-17. Source: user request 2026-10-20 ("add hints for 
 - AC-4: Settings → "Show tips" toggle (default on) + "Reset tips" button.
 - AC-5: VoiceOver reads the hint line; Reduce Motion → no slide, fade only.
 - AC-6: Unit tests: hint eligibility + show-count retirement + priority over promo + never during drag.
+
+## T-19 Branding: call the shelf "DragShelf" in UI text
+Milestone M4. Depends on: T-16. Source: user request 2026-10-23 ("status bar says Show Shelf, change it to Show DragShelf, use this as branding").
+Rule (applies to all later tasks too): commands, titles, tooltips and VoiceOver labels that name the floating panel say **DragShelf**; generic nouns inside longer sentences may say "DragShelf" too, never a bare "Shelf" as a name.
+- AC-1: Menu bar menu: "Show DragShelf" / "Hide DragShelf", "Reset DragShelf Position", "Quit DragShelf" (unchanged). Keyboard shortcut display unchanged.
+- AC-2: Panel header title when empty: "DragShelf" (was "Shelf"); with items keeps the count ("3 Items").
+- AC-3: Header buttons: "Clear DragShelf" (label + `.help`), hints "Removes every item and hides DragShelf" / "Hides DragShelf; items stay".
+- AC-4: Settings: toggle "Show DragShelf when dragging"; section "Shelf" → "DragShelf"; button "Reset DragShelf Position"; footers say "DragShelf" where they named the shelf ("…under DragShelf…", "…items leave DragShelf once dropped elsewhere. Drag the DragShelf header to move it.").
+- AC-5: README usage table and Settings list updated to the new names; CHANGELOG `[Unreleased]` → Changed line.
+- AC-6: No identifier/key/type renames (strings only); tests that assert strings updated; build/test/release green.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
