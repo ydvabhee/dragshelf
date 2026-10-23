@@ -188,6 +188,11 @@ final class DragOutHandleView: NSView {
             item.representedObject = action
             item.isEnabled = store.actions.canRun(action, on: store.selectedItems)
         }
+        // V2-02: Share… (picker under this tile) and AirDrop; items stay on the shelf.
+        menu.addItem(withTitle: "Share…", action: #selector(share), keyEquivalent: "").isEnabled =
+            !Sharer.items(for: store.selectedItems).isEmpty
+        menu.addItem(withTitle: "AirDrop", action: #selector(airDrop), keyEquivalent: "").isEnabled =
+            Sharer.canAirDrop(store.selectedItems)
         // V2-03: Convert To ▸ and Resize ▸, disabled when the selection has no image items.
         for (title, actions) in [("Convert To", ShelfAction.conversions), ("Resize", ShelfAction.resizes)] {
             let sub = NSMenu()
@@ -214,6 +219,8 @@ final class DragOutHandleView: NSView {
         guard let store, let action = sender.representedObject as? ShelfAction else { return }
         store.actions.run(action, on: store.selectedItems, in: store)
     }
+    @objc private func share() { store.map { Sharer.shared.share($0.selectedItems, anchor: self) } }
+    @objc private func airDrop() { store.map { Sharer.shared.airDrop($0.selectedItems) } }
     @objc private func removeSelection() { store.map { $0.remove(ids: $0.selection) } }
 
     override func mouseDown(with event: NSEvent) {
