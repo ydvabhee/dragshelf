@@ -2,6 +2,7 @@
 
 **A floating shelf for drag and drop on macOS.** Start dragging anything, and the shelf slides in. Drop your files on it, switch to the target app at your own pace, then drag them out where they need to go.
 
+[![Latest release](https://img.shields.io/github/v/release/ydvabhee/dragshelf?label=release)](https://github.com/ydvabhee/dragshelf/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
@@ -34,7 +35,19 @@ DragShelf removes the rush. The shelf holds your files for as long as you need, 
 
 ## Install
 
-There's no signed release yet; notarized builds are coming. For now, build from source:
+### Download
+
+**[⬇ Download DragShelf.dmg (latest)](https://github.com/ydvabhee/dragshelf/releases/latest/download/DragShelf.dmg)**. Every version is listed on the [releases page](https://github.com/ydvabhee/dragshelf/releases), and the changes in each one are in the [changelog](CHANGELOG.md).
+
+1. Open the DMG and drag **DragShelf** into **Applications**.
+2. Preview builds aren't notarized yet, so the first time you open DragShelf, macOS will block it:
+   - On **macOS 15 or later**, try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+   - On **macOS 14**, right-click DragShelf in Applications, choose **Open**, then click **Open** again.
+
+   Developer ID signed, notarized builds are coming.
+3. DragShelf runs in the menu bar (tray icon) and has no Dock icon. Turn on **Launch at login** in Settings to keep it running.
+
+### Build from source
 
 ```sh
 git clone https://github.com/ydvabhee/dragshelf.git
@@ -43,7 +56,7 @@ scripts/build-app.sh release
 open build/DragShelf.app
 ```
 
-DragShelf runs in the menu bar (tray icon) and has no Dock icon. To keep it around, copy `build/DragShelf.app` to `/Applications` and turn on **Launch at login** in Settings.
+Building from source avoids the Gatekeeper prompt, because a locally built app isn't quarantined.
 
 ## Usage
 
@@ -91,7 +104,10 @@ swift build                     # debug build
 swift test                      # unit tests (Swift Testing)
 scripts/build-app.sh            # debug .app → build/DragShelf.app
 scripts/build-app.sh release    # optimized .app, ad-hoc signed
+scripts/make-dmg.sh             # release .app packaged as build/DragShelf.dmg
 ```
+
+The version lives in [`VERSION`](VERSION) and follows [Semantic Versioning](https://semver.org/). The build number is the git commit count.
 
 To work in Xcode, open `Package.swift`.
 
@@ -130,7 +146,8 @@ Issues and pull requests are welcome.
 2. `swift build`, `swift test` and `scripts/build-app.sh release` must all pass with zero warnings. The optimized build can catch compiler issues that the debug build misses.
 3. Add a unit test for any new logic.
 4. Use [Conventional Commits](https://www.conventionalcommits.org/), such as `feat: …`, `fix: …` and `docs: …`, with a short, imperative subject.
-5. UI changes should follow Apple's Human Interface Guidelines and keep VoiceOver, keyboard access and Reduce Motion working.
+5. Add a line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
+6. UI changes should follow Apple's Human Interface Guidelines and keep VoiceOver, keyboard access and Reduce Motion working.
 
 ## License
 

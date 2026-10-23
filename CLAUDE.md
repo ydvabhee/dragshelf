@@ -15,8 +15,7 @@ commits, and security notes are written normally.
 ## Git
 - Remote: `origin` = `git@github.com:ydvabhee/dragshelf.git` (GitHub user `ydvabhee`). Auth uses the
   repo-local `core.sshCommand` with `~/.ssh/id_ed25519_ydvabhee`; don't change it or the global SSH config.
-- "Ship a step" = commit, then `git push` (main + tags). Never force-push; if a push is rejected,
-  stop and report to the user.
+- "Ship a step" = commit only. **The user pushes**; never run `git push` yourself. Never force-push.
 - Identity is set in the repo config (`Abhishek Yadav <yk.abhee@gmail.com>`). Never change it,
   and never use `--global`.
 - Every agent commits its own changes at the end of each step. Conventional Commits, with the
@@ -28,6 +27,19 @@ commits, and security notes are written normally.
 - Stage specific paths, never `git add -A` blindly. Never rewrite history (no amend, rebase,
   reset --hard, or force) unless the user asks.
 - Every commit leaves the build green. Commit WIP only to a `wip/<task-id>` branch.
+
+## Versioning and releases
+- The version lives in `VERSION` (SemVer). `scripts/build-app.sh` stamps it into `CFBundleShortVersionString`; the build number is the git commit count.
+- Every user-visible `feat` or `fix` commit adds one line under `## [Unreleased]` in `CHANGELOG.md` (Keep a Changelog: Added, Changed, Fixed, Removed).
+- Bumps: `fix` only → patch; any `feat` → minor; breaking change or first stable → major (1.0.0 = first notarized release).
+- Release steps, only when the user asks:
+  1. Move Unreleased to `## [X.Y.Z] - YYYY-MM-DD` and update the compare links.
+  2. Bump `VERSION`.
+  3. Commit `chore(release): vX.Y.Z` and tag `vX.Y.Z`.
+  4. Run `scripts/make-dmg.sh`.
+  5. Ask the user to push `main` and the tag.
+  6. After the user pushes: `gh release create vX.Y.Z build/DragShelf.dmg --title "DragShelf X.Y.Z" --notes "<changelog section>"`. This needs `gh` signed in as **ydvabhee**.
+- The asset name is always `DragShelf.dmg`, so the README link `releases/latest/download/DragShelf.dmg` keeps working.
 
 ## Source of truth
 - `docs/PRD.md`: scope and acceptance criteria
