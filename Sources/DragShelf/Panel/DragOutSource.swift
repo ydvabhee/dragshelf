@@ -96,8 +96,14 @@ final class DragOutSource: NSObject, NSDraggingSource {
     func ended(operation: NSDragOperation) {
         if operation != [], !fromRecent { store.recordDragOut(items) }
         guard Self.shouldRemove(operation: operation, keepAfterDragOut: Preferences.keepAfterDrag()) else { return }
+        // Recent drag (T-20 AC-7): shelf items stay, except a `.move` of a file that is also on the shelf.
+        var removeIDs = ids
+        if fromRecent {
+            let keys = Set(items.map(ShelfStore.key(for:)))
+            removeIDs = operation == .move ? Set(store.items.filter { keys.contains(ShelfStore.key(for: $0)) }.map(\.id)) : []
+        }
         let moved = items.filter(\.isCached)
-        store.remove(ids: ids, deletingCache: false)
+        store.remove(ids: removeIDs, deletingCache: false)
         guard operation == .move else { return }
         let fm = FileManager.default
         let root = store.cache.root.standardizedFileURL.resolvingSymlinksInPath().pathComponents
@@ -169,7 +175,7 @@ final class DragOutHandleView: NSView {
         let menu = NSMenu()
         menu.addItem(withTitle: "Quick Look", action: #selector(previewSelection), keyEquivalent: "").isEnabled = !store.previewURLs.isEmpty
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Remove", action: #selector(removeSelection), keyEquivalent: "")
+        menu.addItem(withTitle: "Remove from DragShelf", action: #selector(removeSelection), keyEquivalent: "")
         menu.items.forEach { $0.target = self }
         menu.autoenablesItems = false
         return menu

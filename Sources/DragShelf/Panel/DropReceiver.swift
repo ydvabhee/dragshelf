@@ -87,6 +87,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
         let failed = onPromiseFailed
         guard Self.ingest(PasteboardReader.read(sender.draggingPasteboard), into: store,
                           onPromiseFailed: { failed?() }) else { return false }
+        store.showRecent = false
         onDrop?()
         return true
     }

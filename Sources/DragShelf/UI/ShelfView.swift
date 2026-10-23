@@ -21,8 +21,6 @@ struct ShelfView: View {
     @State private var hovered: UUID?
     /// Promo row height, measured: the grid cap leaves room for it so the panel never exceeds `maxHeight`.
     @State private var footerHeight: CGFloat = 0
-    /// Clock button: the Recent list replaces the grid (T-17 AC-3).
-    @State private var showRecent = false
 
     static let defaultWidth: CGFloat = 288
     private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
@@ -42,7 +40,7 @@ struct ShelfView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            if showRecent && !store.recent.isEmpty {
+            if store.showRecent && !store.recent.isEmpty {
                 ScrollView { RecentList(store: store) }
                     .frame(maxHeight: max(0, maxHeight - Self.headerHeight - (promo == nil ? 0 : footerHeight)))
                     .fixedSize(horizontal: false, vertical: true)
@@ -72,8 +70,8 @@ struct ShelfView: View {
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.15),
                    value: store.items)
         // Back to the grid when items arrive (a restore, a drop) or Recent empties.
-        .onChange(of: store.items.count) { old, new in if new > old { showRecent = false } }
-        .onChange(of: store.recent.isEmpty) { _, empty in if empty { showRecent = false } }
+        .onChange(of: store.items.count) { old, new in if new > old { store.showRecent = false } }
+        .onChange(of: store.recent.isEmpty) { _, empty in if empty { store.showRecent = false } }
     }
 
     private var header: some View {
@@ -87,7 +85,7 @@ struct ShelfView: View {
                 .disabled(store.items.isEmpty)
                 .overlay { DragOutHandle(store: store) }
 
-                Text(showRecent && !store.recent.isEmpty ? "Recent"
+                Text(store.showRecent && !store.recent.isEmpty ? "Recent"
                      : store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
                     .font(.headline)
                     .foregroundStyle(.secondary)
@@ -96,23 +94,24 @@ struct ShelfView: View {
                 Spacer(minLength: 0)
 
                 if !store.recent.isEmpty {
-                    Button { showRecent.toggle() } label: {
+                    Button { store.showRecent.toggle() } label: {
                         Label("Recent drags", systemImage: "clock.arrow.circlepath")
                     }
                     .help("Recent drags")
-                    .foregroundStyle(showRecent ? Color.accentColor : Color.primary)
-                    .accessibilityAddTraits(showRecent ? .isSelected : [])
-                    .accessibilityHint(showRecent ? "Shows DragShelf items again" : "Lists recent drags out to restore or drag again")
+                    .foregroundStyle(store.showRecent ? Color.accentColor : Color.primary)
+                    .accessibilityAddTraits(store.showRecent ? .isSelected : [])
+                    .accessibilityHint(store.showRecent ? "Shows DragShelf items again" : "Lists recent drags out to restore or drag again")
                 }
 
-                Button {
+                Button("Clear") {
                     store.clear()
                     onClose()
-                } label: {
-                    Label("Clear DragShelf", systemImage: "trash")
                 }
-                .help("Clear DragShelf")
-                .accessibilityHint("Removes every item and hides DragShelf")
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .help("Remove all items from DragShelf. Your files stay where they are.")
+                .accessibilityLabel("Clear DragShelf")
+                .accessibilityHint("Removes all items from DragShelf; files are not deleted")
                 .disabled(store.items.isEmpty)
 
                 Button(action: onClose) {

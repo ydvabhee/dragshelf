@@ -9,7 +9,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - App icon: a file card dropping into a tray, on a blue macOS-style squircle.
 - Recent drags: the last 5 drag outs sit under a clock button in the DragShelf header; click one to put it back or drag it out again. ⌘Z (or "Undo Drag Out" in the menu bar) restores the latest.
 
+### Fixed
+- Dragging a row from Recent no longer removes items from the shelf.
+
 ### Changed
+- Header "Clear" is now a text button (no trash icon); the context menu says "Remove from DragShelf". Both leave your files untouched.
+- Menu bar icon now matches the app icon (file card dropping into a tray).
+- Recent list resets to the grid each time DragShelf shows or receives a drop.
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
 ## [0.1.0] - 2026-10-23

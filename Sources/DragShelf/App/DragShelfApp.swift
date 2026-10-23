@@ -7,7 +7,7 @@ struct DragShelfApp: App {
     @AppStorage(Preferences.showPromos) private var showPromos = true
 
     var body: some Scene {
-        MenuBarExtra("DragShelf", systemImage: "tray.and.arrow.down") {
+        MenuBarExtra {
             Button(appDelegate.panelController.isShown ? "Hide DragShelf" : "Show DragShelf") {
                 appDelegate.panelController.toggle()
             }
@@ -31,6 +31,8 @@ struct DragShelfApp: App {
             Divider()
             Button("Quit DragShelf") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
         }
         Settings {
             SettingsView(onResetPosition: { appDelegate.panelController.resetPosition() })

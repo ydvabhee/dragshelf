@@ -47,7 +47,7 @@ Get the latest **`DragShelf.dmg`** from the **[Releases page](https://github.com
    - On **macOS 14**, right-click DragShelf in Applications, choose **Open**, then click **Open** again.
 
    Developer ID signed, notarized builds are coming.
-3. DragShelf runs in the menu bar (tray icon) and has no Dock icon. Turn on **Launch at login** in Settings to keep it running.
+3. DragShelf runs in the menu bar (the app icon as a monochrome glyph) and has no Dock icon. Turn on **Launch at login** in Settings to keep it running.
 
 ### Build from source
 
@@ -70,7 +70,7 @@ Building from source avoids the Gatekeeper prompt, because a locally built app i
 | Move out | Hold **⌘** while dragging a file out |
 | Select several | ⌘-click, ⇧-click, or the arrow keys |
 | Preview | Select an item and press **Space** |
-| Remove | Hover and click ✕, right-click and choose **Remove**, or press **Delete** |
+| Remove | Hover and click ✕, right-click and choose **Remove from DragShelf**, or press **Delete** |
 | Copy to clipboard | Select items and press **⌘C** |
 | Move the shelf | Drag its header |
 | Resize the shelf | Drag its bottom or side edges |

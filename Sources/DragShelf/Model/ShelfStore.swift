@@ -24,6 +24,8 @@ final class ShelfStore {
     /// Last drag outs, newest first, at most `recentLimit`. Memory only (OQ-03); their cache dirs are kept.
     private(set) var recent: [RecentEntry] = []
     static let recentLimit = 5
+    /// Clock button: the Recent list replaces the grid. Reset on show and on any drop (T-20 AC-8).
+    var showRecent = false
     /// Bumped by `clear()`; async work (file promises) started before a clear must not land after it.
     @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored let cache: ItemCache

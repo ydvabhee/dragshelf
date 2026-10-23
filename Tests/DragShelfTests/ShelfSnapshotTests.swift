@@ -49,4 +49,22 @@ func shelfSnapshots() throws {
             try png.write(to: out.appendingPathComponent("shelf-\(name)-\(scheme).png"))
         }
     }
+
+    // Menu bar glyph at 18 pt and 36 px (template tinted black / white on light / dark bars).
+    for (scheme, bg, fg) in [("light", NSColor(white: 0.95, alpha: 1), NSColor.black), ("dark", NSColor(white: 0.17, alpha: 1), NSColor.white)] {
+        let size = NSSize(width: 18, height: 18)
+        let rep = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 72, pixelsHigh: 36, bitsPerSample: 8,
+                                                samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        bg.setFill(); NSRect(x: 0, y: 0, width: 72, height: 36).fill()
+        let tinted = NSImage(size: size, flipped: false) { r in
+            MenuBarIcon.image.draw(in: r); fg.set(); r.fill(using: .sourceAtop); return true
+        }
+        tinted.draw(in: NSRect(x: 9, y: 9, width: 18, height: 18))   // 18 pt at 1x
+        tinted.draw(in: NSRect(x: 36, y: 0, width: 36, height: 36))  // 36 px
+        NSGraphicsContext.restoreGraphicsState()
+        try #require(rep.representation(using: .png, properties: [:])).write(to: out.appendingPathComponent("menubar-\(scheme).png"))
+    }
 }
