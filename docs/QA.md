@@ -355,3 +355,13 @@ Manual: cold launch, menu bar glyph shows and tints in light and dark; on macOS 
 ### Re-verify duplicate-only drop resets Recent (9f36a66)
 Auto: build, 80 tests, release build green. `showRecent = false` now sits right after `accepts(sender)`, so accepted duplicate-only drops return to the grid; rejected drops (accepts false, self-drop) return before it and leave Recent alone. `duplicateOnlyDropLeavesRecentView` sets `showRecent = true` after the first drop, then drops the same URL again (ingest returns false as a duplicate). On the old code the reset ran only after a successful ingest, so the assert fails. Verified by reading the diff, not by a scratch run. No "trippl" in Sources/Tests; HotKey logger subsystem is `PromoConfig.selfBundleID`.
 Manual: open Recent, drag an item already on the shelf in from Finder: view returns to the grid. Drag the shelf's own item back onto itself while in Recent: stays in Recent.
+
+## T-21 Cache hygiene sweep (6ec8b05) - FAIL (1)
+Build, 85 tests, release build green.
+- FAIL: in-flight guard is mtime-only (10 s). A slow file promise (Photos/iCloud video, big Mail attachment) leaves its empty `root/<UUID>/` dir untouched >10 s; a sweep (show, drag end, 30 min timer) then deletes it mid-transfer, so the item is lost / receive errors. Fix: store keeps an in-flight dir set (add in `DropReceiver.receive`, remove in `finishPromise`/onFail), sweep excludes it; same for image prepare. Keep mtime grace as extra.
+- OK: `cacheDir(of:)` resolves symlinks and prefix-checks root; sweep deletes only names listed under root. Overlapping sweeps: second `removeItem` is a harmless no-op. Eviction pops Recent then recomputes kept set, consistent. `Task.detached` captures only Sendable (`ItemCache`, `[URL]`). Fs work off main (ADR-016).
+- Minor: timer is not invalidated on quit (process exit ends it; harmless).
+Manual:
+1. Drag a large iCloud-only Photos video onto the shelf, open/close the shelf repeatedly for >15 s before it lands. Item must still land.
+2. Drop images, clear Recent, wait/trigger sweep: `~/Library/Caches/com.abhishekyadav.DragShelf/Shelf` has no orphan dirs.
+3. Item on shelf + Recent entry older than 24 h: dir removed only after item leaves shelf.
