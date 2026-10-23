@@ -287,3 +287,20 @@ Manual (user runs):
 2. Empty panel header reads "DragShelf"; with 3 items reads "3 Items".
 3. Hover trash: tooltip "Clear DragShelf". VoiceOver on trash: label "Clear DragShelf", hint "Removes every item and hides DragShelf". Hide button hint "Hides DragShelf; items stay".
 4. Settings: "Show DragShelf when dragging", section "DragShelf", button "Reset DragShelf Position", footers say DragShelf. No bare "Shelf" anywhere.
+
+## T-17 Recent drag-outs + Cmd-Z undo (d3e269c) - PASS
+Auto: build (0 warnings), 65 tests, release build green. Cache lifetime reviewed: `release` keeps any dir used by a shelf item or Recent entry; `clear()` wipes with `keeping:` Recent dirs; entry falling off or Clear Recent frees unreferenced dirs; Clear bumps `generation`, Recent untouched. Self-drop of a Recent row is rejected (`draggingSource is DragOutSource`). Menu Cmd-Z only fires while the menu is open, so no double restore with the panel key.
+Review notes (no blockers):
+- `DragOutSource.ended`: a Recent-row drag still runs the shelf removal. Only matters if an item with the same id is also on the shelf (keep-after-drag was toggled). Skip removal for `fromRecent` unless `.move`.
+- `showRecent` survives hide/show: reopening may show the list instead of the grid. Reset on show.
+- Dropping only duplicates onto the panel while the list is shown does not switch back to the grid (item count unchanged).
+
+Manual (user runs):
+1. Drag 1 file out to Finder (copy). Header gets the clock button. Drag 3 files with "drag all": one Recent entry "3 files · just now". Esc-cancel a drag: no new entry.
+2. Drag 6 batches out one by one: clock list shows 5 rows, newest first, oldest gone.
+3. Panel focused: Cmd-Z restores the newest entry's items to the shelf and removes that entry. Repeat: walks back. Empty Recent: Cmd-Z does nothing (beep), no double restore. Menu bar "Undo Drag Out" (Cmd-Z shown) shows the panel and restores; greyed out when Recent is empty.
+4. Click the clock: list replaces the grid, header says "Recent". Click clock again: grid returns. Click a row: items restored, grid returns. Drop a new file on the panel while the list shows: grid returns with it.
+5. Drag a row to Finder (copy, then Cmd for move). Shelf unchanged, entry stays. Drop a row back onto the panel: ignored. After a Cmd-move the row shows "Missing" / "n missing", dimmed and not draggable when nothing is left.
+6. Drag out a pasted image or promised file, then "Clear": Recent still has it, restore and drag work. "Clear Recent" in the list: entries gone; check `~/Library/Caches/<bundle id>` has no orphan dirs. Quit: cache empty.
+7. Auto-show (drag from Finder, drop nothing): panel hides as before. With the list open, panel height fits content, stays within screen, scrolls with 5 rows on a small display. Panel never takes focus from the frontmost app on any click.
+8. VoiceOver: clock button "Recent drags"; rows read "3 files, 2 minutes ago" with actions Restore and the default action; Light and Dark mode look right.
