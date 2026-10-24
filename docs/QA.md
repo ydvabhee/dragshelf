@@ -509,3 +509,12 @@ Manual:
 5. Clear (x): menu item has no shortcut, hotkey dead, hint tip not shown, Reset button restores.
 6. Start recording, close Settings, reopen: not stuck recording; typing elsewhere unaffected.
 7. Switch keyboard to French AZERTY: field and menu show the key you pressed (fails today).
+
+### V2-09 fix round (d6c8cd0) - PASS
+Build, 133 tests, release build green.
+- Re-register: one path, `RecorderView.active` didSet (done, Esc, Delete, click outside, close, dismantle). `apply` registers the new key first while paused; the later no-arg re-register is a no-op (`shortcut == current`). Refused new key: the saved one comes back. Clear: `hotKeyOn` false, nothing re-registered. Double registration not possible (`register` guards equal).
+- Re-register failure (another app grabbed it): result is dropped but `current` stays nil, so the "used by another app" line shows (`hotKeyEnabled && !recording && current == nil`).
+- UCKeyTranslate: `kUCKeyActionDisplay` + `kUCKeyTranslateNoDeadKeysMask`, fresh dead-key state each call, 4-char buffer, empty/control output falls back to "Key n". French layout test passes (Q key shows A). Dead key such as ´ shows the standalone character.
+- `isolated deinit` compiles on Swift 6.3 (target macOS 14). It only removes the monitor and observer, which is main-safe; it does not re-register (dismantle does).
+- Low: `ß` uppercases to "SS" (name.count 2), so that key gets no menu shortcut. Re-register runs inside `updateNSView`, mutating `@Observable` state during a view update; watch the console for "Modifying state during view update". Close observer is skipped if the view has no window when recording starts.
+Manual: repeat V2-09 steps 1, 6, 7 above. Also: record, then have another app take the shortcut before leaving the field: the red message shows. French layout: press the dead key ´ as the key: field shows a sensible label.
