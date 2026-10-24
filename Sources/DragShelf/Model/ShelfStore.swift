@@ -9,7 +9,8 @@ private let log = Logger(subsystem: PromoConfig.selfBundleID, category: "cache")
 struct RecentEntry: Identifiable, Hashable {
     let id = UUID()
     let date: Date
-    let items: [ShelfItem]
+    /// `var`: re-pointed when a pinned copy it references moves (V2-10 AC-6).
+    var items: [ShelfItem]
 }
 
 @Observable
@@ -111,7 +112,10 @@ final class ShelfStore {
         if pinnedIDs.contains(id), let stored = storedForPin(item) {
             swap(at: i, to: stored)
             release([item])
-            if let dir = pinDir(of: old), dir != pinDir(of: stored) { try? FileManager.default.removeItem(at: dir) }
+            if let dir = pinDir(of: old), dir != pinDir(of: stored) {
+                repointRecent(old, to: stored)
+                try? FileManager.default.removeItem(at: dir)
+            }
             savePins()
         }
         return true
@@ -175,8 +179,10 @@ final class ShelfStore {
                         continue
                     }
                 }
-                swap(at: i, to: ShelfItem(id: id, kind: .file(dest.appendingPathComponent(url.lastPathComponent)),
-                                          isCached: true, contentHash: item.contentHash))
+                let moved = ShelfItem(id: id, kind: .file(dest.appendingPathComponent(url.lastPathComponent)),
+                                      isCached: true, contentHash: item.contentHash)
+                swap(at: i, to: moved)
+                repointRecent(item, to: moved)
             }
             bookmarks[id] = nil
             pinnedIDs.remove(id)
@@ -203,6 +209,17 @@ final class ShelfStore {
         } catch {
             log.error("pin failed: \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// Recent rows that point at `old`'s file follow it to `new` when a pinned copy moves (unpin) or is replaced
+    /// (rename), so they never show "Missing" for a file that still exists (V2-10 AC-6).
+    private func repointRecent(_ old: ShelfItem, to new: ShelfItem) {
+        for i in recent.indices {
+            for j in recent[i].items.indices where recent[i].items[j].kind == old.kind {
+                let row = recent[i].items[j]
+                recent[i].items[j] = ShelfItem(id: row.id, kind: new.kind, isCached: new.isCached, contentHash: row.contentHash)
+            }
         }
     }
 

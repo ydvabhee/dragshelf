@@ -5,7 +5,7 @@ private let log = Logger(subsystem: PromoConfig.selfBundleID, category: "pins")
 
 /// Pinned items on disk (V2-08): `root/pinned.json` plus stored copies in `root/<UUID>/<name>`.
 /// `root` lives in Application Support, never under the cache root, so the launch/quit wipe and the T-21 sweep never
-/// see it. Injectable so tests never touch the user's folder.
+/// see it. Injectable; under a test runner the default is a fresh temp dir, so tests never touch the user's folder.
 struct PinStore {
     let root: URL
 
@@ -14,9 +14,16 @@ struct PinStore {
     }
 
     static var defaultRoot: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        // V2-10 AC-8: a test that forgets to inject a root still never writes Application Support.
+        if isTesting {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfTests-Pinned-\(UUID().uuidString)", isDirectory: true)
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.abhishekyadav.DragShelf/Pinned", isDirectory: true)
     }
+
+    /// True inside `swift test` (XCTest or Swift Testing): the runner gets the `.xctest` bundle path as an argument.
+    static let isTesting = ProcessInfo.processInfo.arguments.contains { $0.contains(".xctest") }
 
     var manifest: URL { root.appendingPathComponent("pinned.json") }
     var backup: URL { root.appendingPathComponent("pinned.json.bad") }
@@ -32,8 +39,10 @@ struct PinStore {
     struct Invalid: Error {}
 
     /// Pinned items in manifest order and the bookmarks of the originals. No manifest → empty. A corrupt, unknown-version
-    /// or invalid manifest is moved to `pinned.json.bad` and loading starts empty; stored copies are never deleted here.
-    /// Stale bookmarks are refreshed and the manifest is rewritten.
+    /// or invalid manifest is moved to `pinned.json.bad` (or `.bad.1`, `.bad.2`, … so the first backup is kept) and
+    /// loading starts empty; stored copies are then never deleted. After a clean load, `<UUID>/` dirs the manifest does
+    /// not reference (a pin or rename interrupted before its save) are removed. Stale bookmarks are refreshed and the
+    /// manifest is rewritten.
     func load() -> (items: [ShelfItem], bookmarks: [UUID: Data]) {
         guard let data = try? Data(contentsOf: manifest) else { return ([], [:]) }
         var items: [ShelfItem] = [], bookmarks: [UUID: Data] = [:], refreshed = false
@@ -69,9 +78,18 @@ struct PinStore {
             }
         } catch {
             log.error("pinned.json unreadable (\(error.localizedDescription, privacy: .public)); kept as pinned.json.bad")
-            try? FileManager.default.removeItem(at: backup)
-            try? FileManager.default.moveItem(at: manifest, to: backup)
+            var dest = backup, n = 0
+            while FileManager.default.fileExists(atPath: dest.path) {
+                n += 1
+                dest = root.appendingPathComponent("pinned.json.bad.\(n)")
+            }
+            try? FileManager.default.moveItem(at: manifest, to: dest)
             return ([], [:])
+        }
+        let kept = Set(items.compactMap { if case .file(let url) = $0.kind { dir(of: url)?.lastPathComponent } else { nil } })
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        where UUID(uuidString: name) != nil && !kept.contains(name) {
+            try? FileManager.default.removeItem(at: root.appendingPathComponent(name, isDirectory: true))
         }
         if refreshed { save(items, bookmarks: bookmarks) }
         return (items, bookmarks)

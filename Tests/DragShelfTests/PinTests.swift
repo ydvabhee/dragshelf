@@ -162,14 +162,66 @@ private func exists(_ path: String?) -> Bool { path.map(FileManager.default.file
 @Test func corruptManifestIsBackedUpAndStartsEmpty() throws {
     let env = Env(); defer { env.cleanup() }
     try FileManager.default.createDirectory(at: env.pins.root, withIntermediateDirectories: true)
-    for bad in ["{not json", #"{"version":2,"items":[]}"#,
-                #"{"version":1,"items":[{"id":"\#(UUID())","item":{"copy":{"_0":"../../etc/passwd"}}}]}"#] {
+    // A stored copy beside a bad manifest is never touched (V2-10 AC-7).
+    let orphan = env.pins.root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+    let bads = ["{not json", #"{"version":2,"items":[]}"#,
+                #"{"version":1,"items":[{"id":"\#(UUID())","item":{"copy":{"_0":"../../etc/passwd"}}}]}"#]
+    for (n, bad) in bads.enumerated() {
         try Data(bad.utf8).write(to: env.pins.manifest)
         let store = env.relaunch()
         #expect(store.items.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: env.pins.manifest.path))
-        #expect(try String(contentsOf: env.pins.backup, encoding: .utf8) == bad)
+        // The first backup is kept; later ones are numbered (V2-10 AC-7).
+        let backup = n == 0 ? env.pins.backup : env.pins.root.appendingPathComponent("pinned.json.bad.\(n)")
+        #expect(try String(contentsOf: backup, encoding: .utf8) == bad)
     }
+    #expect(try String(contentsOf: env.pins.backup, encoding: .utf8) == bads[0])
+    #expect(FileManager.default.fileExists(atPath: orphan.path))
+}
+
+@Test func cleanLoadRemovesOrphanedStoredCopies() throws {
+    let env = Env(); defer { env.cleanup() }
+    let store = env.store()
+    let image = try env.cached(store)
+    store.add(image)
+    store.pin([image])
+    let storedURL = try #require(store.items[0].kind.url)
+    let kept = try #require(env.pins.dir(of: storedURL))
+    let orphan = try env.pins.store(try env.file("Lost.txt"))
+    let other = env.pins.root.appendingPathComponent("notes", isDirectory: true)
+    try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+    #expect(env.relaunch().items.count == 1)
+    #expect(FileManager.default.fileExists(atPath: kept.path))
+    #expect(!FileManager.default.fileExists(atPath: orphan.deletingLastPathComponent().path))
+    #expect(FileManager.default.fileExists(atPath: other.path)) // only <UUID>/ dirs are ours
+}
+
+@Test func recentFollowsPinnedCopyOnUnpinAndRename() throws {
+    let env = Env(); defer { env.cleanup() }
+    let store = env.store()
+    let image = try env.cached(store)
+    store.add(image)
+    store.pin([image])
+    store.recordDragOut([store.items[0]])
+    // Rename: the pinned copy is stored again under the new name; Recent follows it.
+    let clone = ShelfItem(id: image.id, kind: .file(try env.cached(store, "Renamed.png").kind.url!), isCached: true)
+    store.replace(id: image.id, with: clone)
+    #expect(store.recent[0].items[0].kind == store.items[0].kind)
+    // Unpin: the copy moves into the cache; Recent follows it again and the file exists.
+    store.unpin([image.id])
+    let row = store.recent[0].items[0]
+    #expect(row.kind == store.items[0].kind && row.isCached && ShelfStore.exists(row))
+    // Removing the shelf item keeps the file Recent still uses.
+    store.remove(ids: [image.id])
+    #expect(ShelfStore.exists(row))
+}
+
+@Test func defaultPinRootIsNeverApplicationSupportUnderTests() {
+    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    #expect(PinStore.isTesting)
+    #expect(!PinStore().root.path.hasPrefix(appSupport.path))
+    #expect(!ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory)).pins.root.path.hasPrefix(appSupport.path))
 }
 
 @Test func renamedPinnedCopyIsStoredAgain() throws {
