@@ -160,3 +160,31 @@ private func scrollViews(in view: NSView) -> [NSScrollView] {
     #expect(one < .milliseconds(1), "add at N=5000 took \(one)")
     #expect(!store.add(ShelfItem(kind: .file(urls[0]))))
 }
+
+/// V3-01: the pet's play floor adds its band on top of the default / saved size and the minimum (saved sizes never
+/// include it), and the shelf grows by exactly the band.
+@Test func petFloorAddsToLayout() throws {
+    let f = PetController.floorHeight
+    let d = ShelfPanelController.limits(saved: nil, in: visible, floor: f)
+    #expect(d.maxHeight == min(ShelfView.maxContentHeight, (visible.height / 2).rounded()) + f)
+    let user = ShelfPanelController.limits(saved: NSSize(width: 420, height: 500), in: visible, floor: f)
+    #expect(user.width == 420 && user.maxHeight == 500 + f)
+    let tiny = ShelfPanelController.limits(saved: NSSize(width: 10, height: 10), in: visible, floor: f)
+    #expect(tiny.maxHeight == ShelfView.minSize.height + f)
+    let huge = ShelfPanelController.limits(saved: NSSize(width: 9000, height: 9000), in: visible, floor: f)
+    #expect(huge.maxHeight == visible.height)
+
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfTests-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = ShelfStore(cache: ItemCache(root: root))
+    for i in 0..<4 { store.add(ShelfItem(kind: .text("item \(i)"))) }
+    let suite = "DragShelfTests-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let pet = PetController(shelf: NSPanel(), store: store, defaults: defaults)
+    let without = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600)).fittingSize.height
+    let with = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600 + f, pet: pet)).fittingSize.height
+    #expect(abs(with - without - f) < 0.5, "\(without) \(with)")
+    let empty = ShelfStore(cache: ItemCache(root: root))
+    #expect(NSHostingView(rootView: ShelfView(store: empty, pet: pet)).fittingSize.height >= ShelfView.minHeight + f)
+}

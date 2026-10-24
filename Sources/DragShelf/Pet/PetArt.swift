@@ -1,8 +1,9 @@
 import SwiftUI
 
 // The shelf pet's look (V3-01): original soft-clay chibi characters drawn in code. Matte shapes shaded with
-// gradients (top-left light, darker underside), a soft contact shadow, pastel palette.
-// Canvas is `PetArt.size`; y grows down and `PetArt.ground` is the shelf's top edge.
+// gradients (top-left light, darker underside), a soft rim and contact shadow, warm pastel palette.
+// Canvas is `PetArt.size`; y grows down and `PetArt.ground` is the play floor's surface (top of the front lip).
+// Side poses are drawn facing right; the view mirrors the whole pet for left.
 
 /// Which character lives on the shelf. Each species draws every `PetPose`; behavior (`PetBrain`) is shared.
 /// Only the cat exists so far; planned: penguin, baby dino, bee (flies: will need an altitude in the brain).
@@ -18,10 +19,9 @@ enum PetArt {
     static let ink = Color(red: 0.36, green: 0.27, blue: 0.22)
     static let paper = Color(red: 1.0, green: 0.98, blue: 0.95)
 
-    /// Draws `species` in `pose` into a `size` canvas. `step` = animation frame, `progress` = 0…1 through the pose.
-    static func draw(_ ctx: GraphicsContext, species: PetSpecies, pose: PetPose, step: Int, progress: Double) {
+    static func draw(_ ctx: GraphicsContext, species: PetSpecies, frame: PetFrame) {
         switch species {
-        case .cat: drawCat(ctx, pose: pose, step: step, progress: progress)
+        case .cat: drawCat(ctx, frame)
         }
     }
 }
@@ -33,9 +33,9 @@ struct Clay {
     var light, base, shade: Color
 
     private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
-    static let cream = Clay(light: rgb(1.0, 0.985, 0.955), base: rgb(0.975, 0.905, 0.815), shade: rgb(0.87, 0.75, 0.63))
+    static let cream = Clay(light: rgb(1.0, 0.965, 0.91), base: rgb(0.96, 0.865, 0.745), shade: rgb(0.82, 0.67, 0.52))
     /// Far-side limbs: same fur, in shadow.
-    static let creamShadow = Clay(light: rgb(0.93, 0.86, 0.77), base: rgb(0.88, 0.79, 0.68), shade: rgb(0.76, 0.63, 0.51))
+    static let creamShadow = Clay(light: rgb(0.92, 0.83, 0.72), base: rgb(0.87, 0.76, 0.63), shade: rgb(0.74, 0.60, 0.46))
     static let caramel = Clay(light: rgb(0.99, 0.84, 0.66), base: rgb(0.92, 0.70, 0.49), shade: rgb(0.78, 0.55, 0.37))
     static let pink = Clay(light: rgb(1.0, 0.85, 0.87), base: rgb(0.96, 0.69, 0.74), shade: rgb(0.87, 0.53, 0.61))
     static let yarn = Clay(light: rgb(1.0, 0.80, 0.86), base: rgb(0.94, 0.57, 0.68), shade: rgb(0.76, 0.39, 0.52))
@@ -43,6 +43,7 @@ struct Clay {
 
 private let eyeInk = Color(red: 0.24, green: 0.18, blue: 0.15)
 private let mouthInk = Color(red: 0.45, green: 0.30, blue: 0.26)
+private let shadowInk = Color(red: 0.30, green: 0.20, blue: 0.14)
 
 private func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
 
@@ -50,28 +51,22 @@ private func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat)
     Path(ellipseIn: CGRect(x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2))
 }
 
-/// A thick round-capped stroke as a fillable shape (limbs, tails).
+/// A thick round-capped stroke as a fillable shape.
 private func limb(_ points: CGPoint..., width: CGFloat) -> Path {
     var p = Path()
     p.addLines(points)
     return p.strokedPath(StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
 }
 
-private func curve(_ width: CGFloat, _ build: (inout Path) -> Void) -> Path {
-    var p = Path()
-    build(&p)
-    return p.strokedPath(StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-}
-
 /// Fills the union of `parts` as one clay piece: radial light from the top left, darker toward the bottom right,
-/// a faint rim so it reads on white. `lift` casts a soft shadow onto whatever is behind it.
+/// a soft rim so it reads on a white shelf. `lift` casts a soft shadow onto whatever is behind it.
 private func clay(_ ctx: GraphicsContext, _ parts: [Path], _ c: Clay, lift: Bool = false) {
     guard var shape = parts.first else { return }
     for p in parts.dropFirst() { shape = shape.union(p) }
     if lift {
         ctx.drawLayer { l in
             l.addFilter(.blur(radius: 1.4))
-            l.fill(shape.offsetBy(dx: 0.6, dy: 1.6), with: .color(Color(red: 0.4, green: 0.25, blue: 0.15).opacity(0.22)))
+            l.fill(shape.offsetBy(dx: 0.6, dy: 1.6), with: .color(shadowInk.opacity(0.24)))
         }
     }
     let b = shape.boundingRect
@@ -80,10 +75,10 @@ private func clay(_ ctx: GraphicsContext, _ parts: [Path], _ c: Clay, lift: Bool
                          .init(color: c.shade, location: 1)]),
         center: pt(b.minX + b.width * 0.36, b.minY + b.height * 0.3), startRadius: 0,
         endRadius: max(b.width, b.height) * 1.0))
-    ctx.stroke(shape, with: .color(c.shade.opacity(0.45)), lineWidth: 0.6)
+    ctx.stroke(shape, with: .color(c.shade.opacity(0.6)), lineWidth: 0.7)
 }
 
-/// Soft blurred spot (highlights, blush, bib).
+/// Soft blurred spot (highlights, blush, shadows).
 private func glow(_ ctx: GraphicsContext, _ path: Path, _ color: Color, blur: CGFloat) {
     ctx.drawLayer { l in
         l.addFilter(.blur(radius: blur))
@@ -91,10 +86,9 @@ private func glow(_ ctx: GraphicsContext, _ path: Path, _ color: Color, blur: CG
     }
 }
 
-/// Soft shadow where the pet touches the shelf edge.
+/// Soft shadow where the pet touches the floor.
 private func contactShadow(_ ctx: GraphicsContext, x: CGFloat, halfWidth: CGFloat, strength: Double = 1) {
-    glow(ctx, ellipse(x, PetArt.ground + 0.6, halfWidth, 2.2),
-         Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.30 * strength), blur: 1.6)
+    glow(ctx, ellipse(x, PetArt.ground + 0.6, halfWidth, 2.2), shadowInk.opacity(0.34 * strength), blur: 1.6)
 }
 
 private func heart(_ ctx: GraphicsContext, at c: CGPoint, size s: CGFloat) {
@@ -112,58 +106,80 @@ private func heart(_ ctx: GraphicsContext, at c: CGPoint, size s: CGFloat) {
     clay(ctx, [p], .pink)
 }
 
-private enum Face { case happy, sleepy, open, yawn(CGFloat) }
+private enum Face { case happy, sleepy, open, sad, yawn(CGFloat) }
 
-/// Chibi face: dot eyes with a sparkle or closed "^ ^" / sleepy arcs, blush, tiny nose and mouth.
-/// Local coordinates: (0, 0) = middle of the face.
-private func face(_ ctx: GraphicsContext, _ f: Face) {
-    for s: CGFloat in [-1, 1] {
-        glow(ctx, ellipse(11.2 * s, 6.2, 3.6, 2.2), Color(red: 0.98, green: 0.55, blue: 0.62).opacity(0.55), blur: 1)
+/// Chibi face: dot eyes with a sparkle or closed "^ ^" / sleepy arcs, blush, tiny nose, "ω" mouth, whiskers.
+/// Local coordinates: (0, 0) = middle of the face. `turn` (-1…1) turns the head: features slide toward that
+/// side and the far side narrows (3/4 view).
+private func face(_ ctx: GraphicsContext, _ f: Face, turn k: CGFloat = 0) {
+    func fx(_ x: CGFloat) -> CGFloat { x * (1 - 0.3 * abs(k)) + 4 * k }
+    /// 1 on the near side, shrinking on the far side.
+    func near(_ s: CGFloat) -> CGFloat { 1 - 0.35 * max(0, -s * k) }
+    for s: CGFloat in [-1, 1] where s * k > -0.6 {
+        glow(ctx, ellipse(fx(11.2 * s), 6.2, 3.6 * near(s), 2.2), Color(red: 0.98, green: 0.55, blue: 0.62).opacity(0.55), blur: 1)
     }
     let arc = StrokeStyle(lineWidth: 1.6, lineCap: .round)
     for s: CGFloat in [-1, 1] {
-        let ex = 7.2 * s, ey: CGFloat = 1.6
+        let ex = fx(7.2 * s), ey: CGFloat = 1.6, w = 2.6 * near(s)
         var p = Path()
         switch f {
         case .happy:
-            p.move(to: pt(ex - 2.6, ey + 1))
-            p.addQuadCurve(to: pt(ex + 2.6, ey + 1), control: pt(ex, ey - 2.6))
+            p.move(to: pt(ex - w, ey + 1))
+            p.addQuadCurve(to: pt(ex + w, ey + 1), control: pt(ex, ey - 2.6))
             ctx.stroke(p, with: .color(eyeInk), style: arc)
         case .sleepy, .yawn:
-            p.move(to: pt(ex - 2.6, ey - 0.6))
-            p.addQuadCurve(to: pt(ex + 2.6, ey - 0.6), control: pt(ex, ey + 2.4))
+            p.move(to: pt(ex - w, ey - 0.6))
+            p.addQuadCurve(to: pt(ex + w, ey - 0.6), control: pt(ex, ey + 2.4))
             ctx.stroke(p, with: .color(eyeInk), style: arc)
         case .open:
-            ctx.fill(ellipse(ex, ey, 2.2, 2.7), with: .color(eyeInk))
-            ctx.fill(ellipse(ex + 0.75, ey - 1, 0.85, 0.85), with: .color(.white))
+            ctx.fill(ellipse(ex, ey, 2.2 * near(s), 2.7), with: .color(eyeInk))
+            ctx.fill(ellipse(ex + 0.75 * near(s), ey - 1, 0.85, 0.85), with: .color(.white))
             ctx.fill(ellipse(ex - 0.8, ey + 1.1, 0.4, 0.4), with: .color(.white.opacity(0.8)))
+        case .sad:
+            // Eyes looking down, little worried brows.
+            ctx.fill(ellipse(ex, ey + 1, 1.8 * near(s), 2.1), with: .color(eyeInk))
+            ctx.fill(ellipse(ex + 0.5, ey + 0.2, 0.6, 0.6), with: .color(.white))
+            var brow = Path()
+            // Inner ends raised: worried, not cross.
+            brow.move(to: pt(ex - 2 * s, ey - 4.9))
+            brow.addLine(to: pt(ex + 1.8 * s, ey - 3.7))
+            ctx.stroke(brow, with: .color(eyeInk.opacity(0.7)), style: StrokeStyle(lineWidth: 1, lineCap: .round))
         }
     }
+    let nx = fx(0)
     var nose = Path()
-    nose.move(to: pt(-1.6, 4.6))
-    nose.addQuadCurve(to: pt(1.6, 4.6), control: pt(0, 4.1))
-    nose.addQuadCurve(to: pt(0, 6.1), control: pt(1.1, 5.7))
-    nose.addQuadCurve(to: pt(-1.6, 4.6), control: pt(-1.1, 5.7))
+    nose.move(to: pt(nx - 1.6, 4.6))
+    nose.addQuadCurve(to: pt(nx + 1.6, 4.6), control: pt(nx, 4.1))
+    nose.addQuadCurve(to: pt(nx, 6.1), control: pt(nx + 1.1, 5.7))
+    nose.addQuadCurve(to: pt(nx - 1.6, 4.6), control: pt(nx - 1.1, 5.7))
     ctx.fill(nose, with: .color(Color(red: 0.93, green: 0.55, blue: 0.62)))
     let whisker = StrokeStyle(lineWidth: 0.7, lineCap: .round)
     for s: CGFloat in [-1, 1] {
+        let len = 5 * near(s) * near(s)
         for (y0, y1) in [(3.6, 2.4), (5.4, 5.6), (7.2, 8.6)] as [(CGFloat, CGFloat)] {
             var w = Path()
-            w.move(to: pt(13.6 * s, y0))
-            w.addLine(to: pt(18.6 * s, y1))
+            let x0 = fx(13.6 * s)
+            w.move(to: pt(x0, y0))
+            w.addLine(to: pt(x0 + len * s, y1))
             ctx.stroke(w, with: .color(mouthInk.opacity(0.45)), style: whisker)
         }
     }
     let ink = StrokeStyle(lineWidth: 1.0, lineCap: .round, lineJoin: .round)
-    if case .yawn(let open) = f, open > 0.05 {
-        let mouth = ellipse(0, 8.4 + 1.4 * open, 2.2 + 0.8 * open, 1.0 + 2.4 * open)
+    switch f {
+    case .yawn(let open) where open > 0.05:
+        let mouth = ellipse(nx, 8.4 + 1.4 * open, 2.2 + 0.8 * open, 1.0 + 2.4 * open)
         ctx.fill(mouth, with: .color(Color(red: 0.55, green: 0.28, blue: 0.32)))
-        ctx.fill(ellipse(0, 9.4 + 2.6 * open, 1.4 + 0.5 * open, 0.8 + 0.7 * open), with: .color(Color(red: 0.95, green: 0.60, blue: 0.66)))
-    } else {
+        ctx.fill(ellipse(nx, 9.4 + 2.6 * open, 1.4 + 0.5 * open, 0.8 + 0.7 * open), with: .color(Color(red: 0.95, green: 0.60, blue: 0.66)))
+    case .sad:
         var mouth = Path()
-        mouth.move(to: pt(-2.6, 6.8))
-        mouth.addQuadCurve(to: pt(0, 6.4), control: pt(-1.4, 8.6))
-        mouth.addQuadCurve(to: pt(2.6, 6.8), control: pt(1.4, 8.6))
+        mouth.move(to: pt(nx - 2, 8.4))
+        mouth.addQuadCurve(to: pt(nx + 2, 8.4), control: pt(nx, 6.9))
+        ctx.stroke(mouth, with: .color(mouthInk), style: ink)
+    default:
+        var mouth = Path()
+        mouth.move(to: pt(nx - 2.6, 6.8))
+        mouth.addQuadCurve(to: pt(nx, 6.4), control: pt(nx - 1.4, 8.6))
+        mouth.addQuadCurve(to: pt(nx + 2.6, 6.8), control: pt(nx + 1.4, 8.6))
         ctx.stroke(mouth, with: .color(mouthInk), style: ink)
     }
 }
@@ -189,7 +205,7 @@ private func catEar(_ a: CGPoint, _ tip: CGPoint, _ b: CGPoint) -> (Path, Path) 
 }
 
 /// Chunky leg: wide where it leaves the body (`hip`, buried in it), narrowing to `foot`, ending in a bean paw a
-/// little wider than the leg. `dir` = the way the toes point (+1 right). Paw bottom = `foot.y + 3`.
+/// little wider than the leg. `dir` = the way the toes point (+1 right). Paw bottom ≈ `foot.y + 3`.
 private func catLeg(_ hip: CGPoint, _ foot: CGPoint, dir: CGFloat = 1, hipWidth: CGFloat = 8.5,
                     footWidth: CGFloat = 5.8) -> Path {
     let dx = foot.x - hip.x, dy = foot.y - hip.y, len = max(0.01, hypot(dx, dy))
@@ -215,7 +231,7 @@ private func toeBeans(_ ctx: GraphicsContext, at c: CGPoint) {
 /// face. `body`, `ears`, `faceAt`, `sheen` are in blob-local coordinates mapped by `local`; `attached` is not.
 private func catBlob(_ ctx: GraphicsContext, local: CGAffineTransform = .identity, body: [Path],
                      ears: [(CGPoint, CGPoint, CGPoint)], attached: [Path] = [], faceAt: CGPoint,
-                     faceScale: CGFloat = 1, face f: Face, sheen: CGPoint) {
+                     faceScale: CGFloat = 1, face f: Face, turn: CGFloat = 0, sheen: CGPoint) {
     let shapes = ears.map { catEar($0.0, $0.1, $0.2) }
     clay(ctx, (body + shapes.map(\.0)).map { $0.applying(local) } + attached, .cream)
     for (_, inner) in shapes { ctx.fill(inner.applying(local), with: .color(Clay.pink.base.opacity(0.55))) }
@@ -225,7 +241,7 @@ private func catBlob(_ ctx: GraphicsContext, local: CGAffineTransform = .identit
     fc.concatenate(local)
     fc.translateBy(x: faceAt.x, y: faceAt.y)
     fc.scaleBy(x: faceScale, y: faceScale)
-    face(fc, f)
+    face(fc, f, turn: turn)
 }
 
 /// Thick clay tail along `build`'s spine.
@@ -247,10 +263,12 @@ private func beanPaw(_ ctx: GraphicsContext, _ x: CGFloat, _ y: CGFloat, _ c: Cl
 }
 
 /// Sitting loaf (front view): tucked haunches with back feet at the sides, two bean paws under the chest.
-/// `dy` lowers it (peek); `paw` raises the right front paw (0…1 = swipe down).
-private func catSitting(_ ctx: GraphicsContext, face f: Face, dy: CGFloat = 0, stretchUp: CGFloat = 0,
-                        tailSway: CGFloat = 0, paw raised: Double? = nil, paws: Bool = true) {
-    let g = PetArt.ground + dy, top = g - 41 - stretchUp
+/// `dy` lowers it (behind the lip); `squash` flattens it (sniff); `paw` raises the right front paw (0…1 = swipe
+/// down); `ears` lifts (+, alert) or droops (−) them; `ball` puts the yarn ball in its mouth.
+private func catSitting(_ ctx: GraphicsContext, face f: Face, turn: CGFloat = 0, dy: CGFloat = 0, stretchUp: CGFloat = 0,
+                        squash: CGFloat = 0, tailSway: CGFloat = 0, paw raised: Double? = nil, paws: Bool = true,
+                        ears lift: CGFloat = 0, ball: Bool = false) {
+    let g = PetArt.ground + dy, top = g - 41 - stretchUp + squash
     catTail(ctx) { t in
         t.move(to: pt(40, g - 6))
         t.addQuadCurve(to: pt(51, g - 12), control: pt(52, g - 3))
@@ -259,12 +277,14 @@ private func catSitting(_ ctx: GraphicsContext, face f: Face, dy: CGFloat = 0, s
     }
     // Back feet peek out under the haunches.
     clay(ctx, [ellipse(17.5, g - 2.4, 4.2, 2.6), ellipse(46.5, g - 2.4, 4.2, 2.6)], .creamShadow)
-    catBlob(ctx, body: [Path(roundedRect: CGRect(x: 16, y: top, width: 32, height: g - top - 2), cornerRadius: 16,
-                             style: .continuous),
-                        ellipse(32, g - 10, 16, 9.5), ellipse(20.5, g - 8.5, 7.5, 7), ellipse(43.5, g - 8.5, 7.5, 7)],
-            ears: [(pt(19, top + 8), pt(20.5, top - 4.5), pt(28, top + 2)),
-                   (pt(45, top + 8), pt(43.5, top - 4.5), pt(36, top + 2))],
-            faceAt: pt(32, top + 15), face: f, sheen: pt(24, top + 7))
+    let wide = squash * 0.5, droop = max(0, -lift)
+    let faceY = top + 15 + squash * 0.4
+    catBlob(ctx, body: [Path(roundedRect: CGRect(x: 16 - wide, y: top, width: 32 + 2 * wide, height: g - top - 2),
+                             cornerRadius: 16, style: .continuous),
+                        ellipse(32, g - 10, 16 + wide, 9.5), ellipse(20.5, g - 8.5, 7.5, 7), ellipse(43.5, g - 8.5, 7.5, 7)],
+            ears: [(pt(19 - wide, top + 8), pt(20.5 - wide - droop * 1.5, top - 4.5 - lift), pt(28, top + 2)),
+                   (pt(45 + wide, top + 8), pt(43.5 + wide + droop * 1.5, top - 4.5 - lift), pt(36, top + 2))],
+            faceAt: pt(32, faceY), face: f, turn: turn, sheen: pt(24, top + 7))
     // Haunch curves: soft shading, no line.
     for s: CGFloat in [-1, 1] {
         var arc = Path()
@@ -273,6 +293,7 @@ private func catSitting(_ ctx: GraphicsContext, face f: Face, dy: CGFloat = 0, s
         glow(ctx, arc.strokedPath(StrokeStyle(lineWidth: 1.4, lineCap: .round)), Clay.cream.shade.opacity(0.35), blur: 0.8)
     }
     glow(ctx, ellipse(32, g - 10, 7, 5), .white.opacity(0.35), blur: 2)
+    if ball { drawYarn(ctx, center: pt(32 + 4 * turn, faceY + 11), radius: 4.6, shadow: false) }
     guard paws else { return }
     beanPaw(ctx, 27.5, g - 2.6)
     if let a = raised {
@@ -287,11 +308,12 @@ private func catSitting(_ ctx: GraphicsContext, face f: Face, dy: CGFloat = 0, s
 /// One leg of a side-view cat in body-local coordinates: hip, foot, near (true) or far side.
 private typealias SideLeg = (hip: CGPoint, foot: CGPoint, near: Bool)
 
-/// Side-view loaf facing right, centred at `center`, tilted by `tilt`. Far legs sit behind and a shade darker;
-/// near legs are part of the body shape.
-private func catSide(_ ctx: GraphicsContext, center: CGPoint, tilt: Double = 0, face f: Face, legs: [SideLeg],
-                     tail: (inout Path) -> Void) {
+/// Side-view loaf facing right, centred at `center`, tilted by `tilt`, squashed by `squash` (crouch). Far legs sit
+/// behind and a shade darker; near legs are part of the body shape. The head looks where it walks (`turn`).
+private func catSide(_ ctx: GraphicsContext, center: CGPoint, tilt: Double = 0, squash: CGFloat = 1, face f: Face,
+                     turn: CGFloat = 1, legs: [SideLeg], ball: Bool = false, tail: (inout Path) -> Void) {
     let local = CGAffineTransform(translationX: center.x, y: center.y).rotated(by: tilt * .pi / 180)
+        .scaledBy(x: 1 + (1 - squash) * 0.3, y: squash)
     clay(ctx, legs.filter { !$0.near }.map { catLeg($0.hip, $0.foot, hipWidth: 8, footWidth: 5.4).applying(local) },
          .creamShadow)
     catTail(ctx, tail)
@@ -300,26 +322,39 @@ private func catSide(_ ctx: GraphicsContext, center: CGPoint, tilt: Double = 0, 
                    ellipse(9, -3, 13, 13)],
             ears: [(pt(1.5, -11.5), pt(3.5, -21.5), pt(10, -14.5)), (pt(20.5, -9.5), pt(17.5, -20.5), pt(12.5, -14.5))],
             attached: legs.filter(\.near).map { catLeg($0.hip, $0.foot).applying(local) },
-            faceAt: pt(10, -2), faceScale: 0.88, face: f, sheen: pt(-6, -8))
+            faceAt: pt(10, -2), faceScale: 0.88, face: f, turn: turn, sheen: pt(-6, -8))
+    if ball { drawYarn(ctx, center: pt(10 + 4 * turn, 8.5).applying(local), radius: 4.6, shadow: false) }
 }
 
-private func drawCat(_ ctx: GraphicsContext, pose: PetPose, step: Int, progress: Double) {
+private func drawCat(_ ctx: GraphicsContext, _ fr: PetFrame) {
     let g = PetArt.ground
-    switch pose {
-    case .sit, .purr:
+    let step = fr.step, progress = fr.progress, turn = CGFloat(fr.turn)
+    var behindLip = ctx
+    behindLip.clip(to: Path(CGRect(x: -20, y: -20, width: PetArt.size.width + 40, height: g + 20)))
+    switch fr.pose {
+    case .sit, .look, .perk, .sad:
+        contactShadow(ctx, x: 32, halfWidth: 20)
+        let f: Face = fr.pose == .sit ? .happy : fr.pose == .sad ? .sad : .open
+        catSitting(ctx, face: f, turn: turn, tailSway: step % 2 == 0 ? 0 : 1.5,
+                   ears: fr.pose == .perk ? 2.5 : fr.pose == .sad ? -3 : 0)
+
+    case .purr:
         contactShadow(ctx, x: 32, halfWidth: 20)
         var c = ctx
-        if pose == .purr {
-            // Happy sway from the bottom.
-            c.translateBy(x: 32, y: g)
-            c.rotate(by: .degrees(step % 2 == 0 ? -3 : 3))
-            c.translateBy(x: -32, y: -g)
-        }
+        // Leans in, swaying from the bottom.
+        c.translateBy(x: 32, y: g)
+        c.rotate(by: .degrees(step % 2 == 0 ? -4 : 3))
+        c.translateBy(x: -32, y: -g)
         catSitting(c, face: .happy, tailSway: step % 2 == 0 ? 0 : 1.5)
-        if pose == .purr {
-            let rise = CGFloat(progress) * 5
-            heart(ctx, at: pt(54, 14 - rise), size: 9)
-            heart(ctx, at: pt(60, 6 - rise), size: 6)
+        let rise = CGFloat(progress) * 5
+        heart(ctx, at: pt(54, 14 - rise), size: 9)
+        heart(ctx, at: pt(60, 6 - rise), size: 6)
+
+    case .sniff:
+        contactShadow(ctx, x: 32, halfWidth: 21)
+        catSitting(ctx, face: .sleepy, squash: 5 + (step % 2 == 0 ? 0 : 0.6))
+        for i in 0..<2 {
+            ctx.stroke(ellipse(25 + CGFloat(i) * 14, g - 4, 1.4, 1), with: .color(Clay.cream.shade.opacity(0.6)), lineWidth: 0.7)
         }
 
     case .yawn:
@@ -329,39 +364,59 @@ private func drawCat(_ ctx: GraphicsContext, pose: PetPose, step: Int, progress:
 
     case .bat:
         contactShadow(ctx, x: 33, halfWidth: 21)
-        catSitting(ctx, face: .open, paw: progress)
+        catSitting(ctx, face: .open, turn: 0.3, paw: progress)
 
-    case .walk:
-        // Soft trot: diagonal pairs (near front + far rear, far front + near rear) swing together; the pair
-        // passing forward lifts. Body dips while both pairs are spread.
+    case .walk, .run, .carry:
+        // Trot: diagonal pairs (near front + far rear, far front + near rear) swing together; the pair passing
+        // forward lifts. Run: longer reach, more bounce.
+        let running = fr.pose == .run
         let f = step % 4
-        let swing: [CGFloat] = [3.5, 0, -3.5, 0]
-        let a = swing[f], b = -a
-        let liftA: CGFloat = f == 3 ? 2.2 : 0, liftB: CGFloat = f == 1 ? 2.2 : 0
-        let bob: CGFloat = f % 2 == 0 ? 0.8 : -0.8
-        let groundY = 20 - bob - 3 // Local foot line (paw bottom on the edge).
+        let reach: CGFloat = running ? 5.5 : 3.5
+        let a = [reach, 0, -reach, 0][f], b = -a
+        let lift: CGFloat = running ? 3.2 : 2.2
+        let liftA: CGFloat = f == 3 ? lift : 0, liftB: CGFloat = f == 1 ? lift : 0
+        let bob: CGFloat = (f % 2 == 0 ? 0.8 : -0.8) * (running ? 1.8 : 1)
+        let groundY = 20 - bob - 3
         contactShadow(ctx, x: 31, halfWidth: 20)
-        catSide(ctx, center: pt(31, g - 20 + bob), face: .open, legs: [
-            (pt(14, 8), pt(14 + b + 1, groundY - liftB), false),  // far front
-            (pt(-10, 8), pt(-10 + a + 1, groundY - liftA), false), // far rear
-            (pt(11, 8), pt(11 + a, groundY - liftA), true),        // near front
-            (pt(-13, 8), pt(-13 + b, groundY - liftB), true),      // near rear
-        ]) { t in
+        catSide(ctx, center: pt(31, g - 20 + bob), tilt: running ? -3 : 0, face: .open, turn: turn, legs: [
+            (pt(14, 8), pt(14 + b + 1, groundY - liftB), false),
+            (pt(-10, 8), pt(-10 + a + 1, groundY - liftA), false),
+            (pt(11, 8), pt(11 + a, groundY - liftA), true),
+            (pt(-13, 8), pt(-13 + b, groundY - liftB), true),
+        ], ball: fr.pose == .carry) { t in
             let sway: CGFloat = [0, 1, 0, -1][f]
-            t.move(to: pt(13, g - 18 + bob))
-            t.addQuadCurve(to: pt(6 + sway, g - 31), control: pt(3, g - 20))
-            t.addQuadCurve(to: pt(12 + sway * 1.5, g - 38), control: pt(6 + sway, g - 38))
+            if running {
+                t.move(to: pt(12, g - 20 + bob))
+                t.addQuadCurve(to: pt(1, g - 28 + sway), control: pt(5, g - 21))
+                t.addQuadCurve(to: pt(2, g - 34 + sway), control: pt(-1, g - 32))
+            } else {
+                t.move(to: pt(13, g - 18 + bob))
+                t.addQuadCurve(to: pt(6 + sway, g - 31), control: pt(3, g - 20))
+                t.addQuadCurve(to: pt(12 + sway * 1.5, g - 38), control: pt(6 + sway, g - 38))
+            }
+        }
+
+    case .crouch:
+        // Low and ready: butt wiggles, tail tip flicks.
+        let w = step % 2 == 0 ? 0.0 : 1.0
+        contactShadow(ctx, x: 32, halfWidth: 22)
+        catSide(ctx, center: pt(32, g - 15), tilt: 5 + 2 * w, squash: 0.84, face: .open, turn: turn, legs: [
+            (pt(13, 7), pt(17, 14), false), (pt(-12, 6), pt(-10, 15), false),
+            (pt(10, 7), pt(14, 15), true), (pt(-15, 6), pt(-13, 15.5), true),
+        ]) { t in
+            let flick = CGFloat(w) * 3
+            t.move(to: pt(14, g - 18))
+            t.addQuadCurve(to: pt(5, g - 22), control: pt(9, g - 17))
+            t.addQuadCurve(to: pt(1 - flick, g - 29 + flick), control: pt(1, g - 24))
         }
 
     case .pounce:
         // Stretch arc: front paws reach forward and down, back legs push off behind.
         let lift = CGFloat(sin(progress * .pi)) * 9
         contactShadow(ctx, x: 32, halfWidth: 20 - lift * 0.7, strength: 1 - Double(lift) / 18)
-        catSide(ctx, center: pt(32, g - 21 - lift), tilt: -8, face: .open, legs: [
-            (pt(14, 6), pt(24, 13), false),
-            (pt(-10, 6), pt(-21, 14), false),
-            (pt(11, 7), pt(21, 15), true),
-            (pt(-13, 7), pt(-24, 13), true),
+        catSide(ctx, center: pt(32, g - 21 - lift), tilt: -8, face: .open, turn: turn, legs: [
+            (pt(14, 6), pt(24, 13), false), (pt(-10, 6), pt(-21, 14), false),
+            (pt(11, 7), pt(21, 15), true), (pt(-13, 7), pt(-24, 13), true),
         ]) { t in
             t.move(to: pt(13, g - 20 - lift))
             t.addQuadCurve(to: pt(2, g - 30 - lift), control: pt(5, g - 21 - lift))
@@ -369,7 +424,7 @@ private func drawCat(_ ctx: GraphicsContext, pose: PetPose, step: Int, progress:
         }
 
     case .stretch:
-        // Play bow: front legs flat forward with paws on the edge, rear up, tail high.
+        // Play bow: front legs flat forward with paws on the floor, rear up, tail high.
         let k = CGFloat(sin(min(1, progress * 1.4) * .pi / 2))
         contactShadow(ctx, x: 34, halfWidth: 23)
         let local = CGAffineTransform(translationX: 30, y: g - 16).rotated(by: Double(12 + 6 * k) * .pi / 180)
@@ -385,7 +440,33 @@ private func drawCat(_ ctx: GraphicsContext, pose: PetPose, step: Int, progress:
                        ellipse(11, 1, 12.5, 11.5)],
                 ears: [(pt(3.5, -7.5), pt(4.5, -16.5), pt(11, -10.5)), (pt(20.5, -5.5), pt(18.5, -15.5), pt(14.5, -10.5))],
                 attached: [catLeg(pt(40, g - 7), pt(56 + 3 * k, g - 3.2)), catLeg(pt(16, g - 15), pt(14, g - 3.2))],
-                faceAt: pt(12, 2), faceScale: 0.84, face: .sleepy, sheen: pt(-8, -4))
+                faceAt: pt(12, 2), faceScale: 0.84, face: .sleepy, turn: 0.5, sheen: pt(-8, -4))
+
+    case .backRoll:
+        // On its back, all four paws up hugging the yarn ball, rocking.
+        let rock = sin(progress * 4 * .pi) * 7
+        contactShadow(ctx, x: 33, halfWidth: 22)
+        var c = ctx
+        c.translateBy(x: 32, y: g - 4)
+        c.rotate(by: .degrees(rock))
+        c.translateBy(x: -32, y: -(g - 4))
+        catTail(c) { t in
+            t.move(to: pt(48, g - 5))
+            t.addQuadCurve(to: pt(58, g - 10), control: pt(56, g - 3))
+            t.addQuadCurve(to: pt(55, g - 19), control: pt(61, g - 16))
+        }
+        clay(c, [catLeg(pt(44, g - 13), pt(48, g - 25), hipWidth: 7.5, footWidth: 5.2)], .creamShadow)
+        catBlob(c, body: [Path(roundedRect: CGRect(x: 14, y: g - 18, width: 38, height: 17), cornerRadius: 8.5, style: .continuous),
+                          ellipse(19, g - 14, 12.5, 12)],
+                ears: [(pt(8, g - 22), pt(2.5, g - 30), pt(14, g - 25.5)), (pt(7, g - 10), pt(0, g - 11), pt(7.5, g - 16))],
+                attached: [catLeg(pt(39, g - 13), pt(40, g - 26), hipWidth: 7.5, footWidth: 5.4)],
+                faceAt: pt(20, g - 14), faceScale: 0.84, face: .happy, sheen: pt(30, g - 15))
+        glow(c, ellipse(36, g - 11, 9, 4), .white.opacity(0.45), blur: 1.6)
+        drawYarn(c, center: pt(31, g - 30), radius: 6, spin: progress * 6, shadow: false)
+        clay(c, [catLeg(pt(26, g - 15), pt(26, g - 27), hipWidth: 7.5, footWidth: 5.4),
+                 catLeg(pt(34, g - 15), pt(35.5, g - 28), hipWidth: 7.5, footWidth: 5.4)], .cream, lift: true)
+        toeBeans(c, at: pt(26.5, g - 28.5))
+        toeBeans(c, at: pt(36, g - 29.5))
 
     case .sleep:
         // Flattened mochi loaf, eyes closed, tail wrapped in front.
@@ -406,13 +487,17 @@ private func drawCat(_ ctx: GraphicsContext, pose: PetPose, step: Int, progress:
                 .foregroundStyle(Clay.caramel.shade.opacity(i == z ? 0.95 : 0.5)), at: pt(p.x, p.y - CGFloat(z)))
         }
 
+    case .hide:
+        // Ducked behind the front lip: only the ear tips show.
+        catSitting(behindLip, face: .open, dy: 39.5 * CGFloat(progress), paws: false)
+
     case .peek:
-        // Behind the shelf edge: only what is above it shows; paws hook over the edge.
-        let rise = CGFloat(min(1, progress * 2.5))
-        var clipped = ctx
-        clipped.clip(to: Path(CGRect(x: 0, y: 0, width: PetArt.size.width, height: g)))
-        catSitting(clipped, face: .open, dy: 16 + 22 * (1 - rise), paws: false)
-        if rise > 0.6 {
+        // Pops up from behind the lip: peeks with paws over it, then climbs up.
+        let p = CGFloat(progress)
+        let dy = p < 0.45 ? 39.5 - 23.5 * (p / 0.45) : 16 * (1 - (p - 0.45) / 0.55)
+        if p > 0.45 { contactShadow(ctx, x: 32, halfWidth: 20, strength: Double((p - 0.45) / 0.55)) }
+        catSitting(behindLip, face: .open, dy: dy, paws: false)
+        if p > 0.3 && p < 0.8 {
             beanPaw(ctx, 23, g + 0.8)
             beanPaw(ctx, 41, g + 0.8)
         }
@@ -421,12 +506,9 @@ private func drawCat(_ ctx: GraphicsContext, pose: PetPose, step: Int, progress:
 
 // MARK: Toys
 
-/// Clay yarn ball resting on the edge (`center` = its middle), with a loose thread.
+/// Clay yarn ball (`center` = its middle) with a loose thread; `spin` rotates the wound strands as it rolls.
 func drawYarn(_ ctx: GraphicsContext, center c: CGPoint, radius r: CGFloat = 7, spin: Double = 0, shadow: Bool = true) {
-    if shadow {
-        glow(ctx, ellipse(c.x, c.y + r + 0.4, r * 0.9, 1.6),
-             Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.3), blur: 1.2)
-    }
+    if shadow { glow(ctx, ellipse(c.x, c.y + r + 0.4, r * 0.9, 1.6), shadowInk.opacity(0.3), blur: 1.2) }
     var thread = Path()
     thread.move(to: pt(c.x - r * 0.7, c.y + r * 0.7))
     thread.addQuadCurve(to: pt(c.x - r * 1.8, c.y + r * 0.95), control: pt(c.x - r * 1.2, c.y + r * 1.35))
@@ -452,25 +534,24 @@ func drawYarn(_ ctx: GraphicsContext, center c: CGPoint, radius r: CGFloat = 7, 
     glow(ctx, ellipse(c.x - r * 0.35, c.y - r * 0.4, r * 0.35, r * 0.22), .white.opacity(0.6), blur: 0.8)
 }
 
-/// The pet as a view; `facingRight == false` mirrors it.
+/// The pet as a view; `facingRight == false` mirrors the whole pet.
 struct PetSprite: View {
     var species = PetSpecies.cat
-    var pose: PetPose
-    var step = 0
-    var progress = 0.0
+    var frame: PetFrame
     var facingRight = true
 
     var body: some View {
-        Canvas { ctx, _ in PetArt.draw(ctx, species: species, pose: pose, step: step, progress: progress) }
+        Canvas { ctx, _ in PetArt.draw(ctx, species: species, frame: frame) }
             .frame(width: PetArt.size.width, height: PetArt.size.height)
             .scaleEffect(x: facingRight ? 1 : -1, y: 1)
     }
 }
 
+/// The yarn ball as a view, centred in a 22 pt square.
 struct YarnView: View {
     var spin = 0.0
     var body: some View {
-        Canvas { ctx, size in drawYarn(ctx, center: CGPoint(x: size.width - 8, y: size.height / 2), spin: spin) }
-            .frame(width: 30, height: 16)
+        Canvas { ctx, size in drawYarn(ctx, center: CGPoint(x: size.width / 2, y: size.height / 2 - 1), spin: spin) }
+            .frame(width: 22, height: 22)
     }
 }
