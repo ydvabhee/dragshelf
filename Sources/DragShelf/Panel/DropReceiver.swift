@@ -21,6 +21,8 @@ final class DropReceiver<Content: View>: NSHostingView<Content>, NSMenuItemValid
     var onPromiseFailed: (@MainActor () -> Void)?
     /// Source of Cmd-V and the Paste menu item; tests inject a private named pasteboard (V2-06).
     var pasteboard: NSPasteboard = .general
+    /// Clears "Nothing to paste" after 3 s; cancelled by the next paste (V2-07 AC-5).
+    private(set) var messageTimer: Task<Void, Never>?
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -83,12 +85,14 @@ final class DropReceiver<Content: View>: NSHostingView<Content>, NSMenuItemValid
         let incoming = PasteboardReader.read(pasteboard)
         guard !incoming.isEmpty else {
             store.actions.message = "Nothing to paste"
-            Task { @MainActor in  // subtle: fades after a moment unless something else replaced it
-                try? await Task.sleep(for: .seconds(3))
+            messageTimer?.cancel()  // a repeat paste restarts the 3 s instead of inheriting the old timer's end
+            messageTimer = Task { @MainActor in  // subtle: fades after a moment unless something else replaced it
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 if store.actions.message == "Nothing to paste" { store.actions.message = nil }
             }
             return false
         }
+        messageTimer?.cancel()
         store.actions.message = nil
         store.showRecent = false
         store.resizing = nil

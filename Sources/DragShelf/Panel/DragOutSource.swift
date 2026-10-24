@@ -27,7 +27,14 @@ final class DragOutSource: NSObject, NSDraggingSource {
         }
     }
 
-    /// Cmd-C: same writers as drag out.
+    /// Drag out: text also becomes a `.txt` file promise, so the drop target decides (V2-07 AC-1).
+    static func dragWriter(for item: ShelfItem) -> any NSPasteboardWriting {
+        if case .text(let text) = item.kind { return TextPromiseProvider(text: text) }
+        return writer(for: item)
+    }
+
+    /// Cmd-C: text stays a plain string (V2-07 AC-1: a temp-file URL beside it would make some editors paste an
+    /// attachment instead of the text).
     static func copy(_ items: [ShelfItem], to pb: NSPasteboard = .general) {
         guard !items.isEmpty else { return }
         pb.clearContents()
@@ -39,7 +46,7 @@ final class DragOutSource: NSObject, NSDraggingSource {
         guard !items.isEmpty else { return }
         let p = view.convert(event.locationInWindow, from: nil)
         let dragItems = items.enumerated().map { i, item in
-            let d = NSDraggingItem(pasteboardWriter: writer(for: item))
+            let d = NSDraggingItem(pasteboardWriter: dragWriter(for: item))
             let offset = CGFloat(min(i, 4)) * 4
             d.setDraggingFrame(NSRect(x: p.x - 32 + offset, y: p.y - 32 - offset, width: 64, height: 64),
                                contents: icon(for: item))
@@ -208,6 +215,18 @@ final class DragOutHandleView: NSView {
             parent.submenu = sub
             parent.isEnabled = sub.items.contains(where: \.isEnabled)
         }
+        // V2-07: only when the selection has text items / plain-text files.
+        if store.selectedItems.contains(where: { if case .text = $0.kind { true } else { false } }) {
+            menu.addItem(withTitle: "Save as .txt", action: #selector(saveAsText), keyEquivalent: "")
+        }
+        let textFiles = store.selectedItems.filter(TextFile.isPlainText)
+        if !textFiles.isEmpty {
+            let item = menu.addItem(withTitle: "Use as Text", action: #selector(useAsText), keyEquivalent: "")
+            if !textFiles.contains(where: { if case .file(let url) = $0.kind { TextFile.fits(url) } else { false } }) {
+                item.isEnabled = false
+                item.toolTip = "File is too large"
+            }
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Remove from DragShelf", action: #selector(removeSelection), keyEquivalent: "")
         menu.items.forEach { $0.target = self }
@@ -222,6 +241,8 @@ final class DragOutHandleView: NSView {
     }
     @objc private func share() { store.map { Sharer.shared.share($0.selectedItems, anchor: self) } }
     @objc private func airDrop() { store.map { Sharer.shared.airDrop($0.selectedItems) } }
+    @objc private func saveAsText() { store.map { $0.saveAsText($0.selectedItems) } }
+    @objc private func useAsText() { store.map { $0.useAsText($0.selectedItems) } }
     @objc private func removeSelection() { store.map { $0.remove(ids: $0.selection) } }
 
     override func mouseDown(with event: NSEvent) {
