@@ -19,6 +19,8 @@ struct ShelfItem: Identifiable, Hashable {
     let searchKey: String
     /// Image file by extension (Images filter); computed once like `searchKey`.
     let isImage: Bool
+    /// Directory that is not a package (Finder rule: `.app`, `.pages` count as files); computed once, kept if the folder goes missing.
+    let isFolder: Bool
 
     init(id: UUID = UUID(), kind: Kind, isCached: Bool = false, contentHash: SHA256.Digest? = nil) {
         self.id = id
@@ -29,13 +31,17 @@ struct ShelfItem: Identifiable, Hashable {
         case .file(let url):
             searchKey = Self.fold(url.lastPathComponent)
             isImage = ImageConverter.isImage(url)
+            let v = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+            isFolder = v?.isDirectory == true && v?.isPackage != true
         case .url(let url):
             searchKey = Self.fold(url.absoluteString.removingPercentEncoding ?? url.absoluteString)
             isImage = false
+            isFolder = false
         case .text(let text):
             // ponytail: only the first 20 000 characters are searchable (keeps a huge text drop cheap); raise if needed.
             searchKey = Self.fold(String(text.prefix(20_000)))
             isImage = false
+            isFolder = false
         }
     }
 

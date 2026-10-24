@@ -262,7 +262,7 @@ Milestone M7. Source: user 2026-10-24. Supersedes OQ-04.
 ## V2-10 Search and filter
 Milestone M7. Source: user 2026-10-24.
 - AC-1: ⌘F (panel key) or a `magnifyingglass` header button reveals a search field in the header; typing filters tiles live (case/diacritic-insensitive) by name, URL text, and text content. Esc clears and hides the field; empty field = all.
-- AC-2: Filter menu next to the field: All · Files · Images · Links · Text · Pinned (checkmark on active). Header count shows "3 of 12" while filtered.
+- AC-2: Filter menu next to the field: All · Files · Folders · Images · Links · Text · Pinned (checkmark on active). Header count shows "3 of 12" while filtered.
 - AC-3: Drag All, Clear, select-all, arrow keys, Quick Look act on visible (filtered) items only; Clear confirms nothing extra (pinned still kept).
 - AC-4: Drops while filtered still add items; filter stays; new item visible only if it matches (header shows count change). Search state resets on hide.
 - AC-5: Performance: filtering 5000 items < 16 ms (precomputed lowercase/folded search key per item). Tests: matching rules, filter kinds, visible-only actions, perf.

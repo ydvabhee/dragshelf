@@ -289,7 +289,7 @@ final class ShelfStore {
     // MARK: Search and filter (V2-10)
 
     enum Filter: String, CaseIterable {
-        case all = "All", files = "Files", images = "Images", links = "Links", text = "Text", pinned = "Pinned"
+        case all = "All", files = "Files", folders = "Folders", images = "Images", links = "Links", text = "Text", pinned = "Pinned"
     }
 
     /// Search field shown in the header (⌘F or the magnifying glass).
@@ -310,7 +310,8 @@ final class ShelfStore {
         return items.filter { item in
             let kindMatches = switch (filter, item.kind) {
             case (.all, _): true
-            case (.files, .file): !item.isImage
+            case (.files, .file): !item.isImage && !item.isFolder
+            case (.folders, .file): item.isFolder
             case (.images, .file): item.isImage
             case (.links, .url), (.text, .text): true
             case (.pinned, _): pinnedIDs.contains(item.id)

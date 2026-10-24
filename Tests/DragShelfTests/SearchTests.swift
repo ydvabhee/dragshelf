@@ -34,6 +34,7 @@ private func names(_ items: [ShelfItem]) -> [String] { items.map(\.displayName) 
     let store = tempStore()
     defer { try? FileManager.default.removeItem(at: store.pins.root.deletingLastPathComponent()) }
     let doc = file("a.pdf"), image = file("b.PNG"), folder = file("Folder")
+    // (nonexistent paths are plain files; real folders are covered in folderVsPackageVsFile)
     let link = ShelfItem(kind: .url(URL(string: "https://a.com")!)), text = ShelfItem(kind: .text("hello"))
     [doc, image, folder, link, text].forEach { store.add($0) }
     let expected: [ShelfStore.Filter: [ShelfItem]] = [
@@ -128,4 +129,28 @@ private func names(_ items: [ShelfItem]) -> [String] { items.map(\.displayName) 
     store.filter = .all
     worst = max(worst, ContinuousClock().measure { _ = store.visibleItems })
     #expect(worst < .milliseconds(16), "worst \(worst)")
+}
+
+@Test func folderVsPackageVsFile() throws {
+    let fm = FileManager.default
+    let dir = fm.temporaryDirectory.appendingPathComponent("FolderTests-\(UUID().uuidString)", isDirectory: true)
+    defer { try? fm.removeItem(at: dir) }
+    let folder = dir.appendingPathComponent("Docs", isDirectory: true), app = dir.appendingPathComponent("X.app", isDirectory: true)
+    let plain = dir.appendingPathComponent("a.txt")
+    try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    try fm.createDirectory(at: app.appendingPathComponent("Contents"), withIntermediateDirectories: true)
+    try Data("<plist version=\"1.0\"><dict/></plist>".utf8).write(to: app.appendingPathComponent("Contents/Info.plist"))
+    try Data("x".utf8).write(to: plain)
+    let f = ShelfItem(kind: .file(folder)), a = ShelfItem(kind: .file(app)), t = ShelfItem(kind: .file(plain))
+    #expect(f.isFolder && !a.isFolder && !t.isFolder)
+
+    let store = tempStore()
+    defer { try? fm.removeItem(at: store.pins.root.deletingLastPathComponent()) }
+    [f, a, t].forEach { store.add($0) }
+    store.filter = .files
+    #expect(store.visibleItems == [a, t])
+    store.filter = .folders
+    #expect(store.visibleItems == [f])
+    try fm.removeItem(at: folder) // missing folder keeps its last known kind
+    #expect(store.visibleItems == [f])
 }
