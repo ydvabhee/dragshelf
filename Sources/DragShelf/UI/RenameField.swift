@@ -92,6 +92,20 @@ struct RenameField: NSViewRepresentable {
     }
 }
 
+extension NSTextField {
+    /// A click anywhere else in the panel ends editing (the tiles' drag handles never take first responder).
+    /// Returns the event monitor; remove it with `NSEvent.removeMonitor`.
+    func endEditingOnClickElsewhere() -> Any? {
+        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            if let self, let window = self.window, event.window === window,
+               !self.bounds.contains(self.convert(event.locationInWindow, from: nil)) {
+                window.makeFirstResponder(nil)
+            }
+            return event
+        }
+    }
+}
+
 final class RenameTextField: NSTextField {
     /// Base-name range selected when editing starts.
     var selection: NSRange?
@@ -100,14 +114,7 @@ final class RenameTextField: NSTextField {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window != nil, monitor == nil else { return }
-        // A click anywhere else in the panel ends editing (the tiles' drag handles never take first responder).
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
-            if let self, let window = self.window, event.window === window,
-               !self.bounds.contains(self.convert(event.locationInWindow, from: nil)) {
-                window.makeFirstResponder(nil)
-            }
-            return event
-        }
+        monitor = endEditingOnClickElsewhere()
         NotificationCenter.default.addObserver(self, selector: #selector(windowResignedKey),
                                                name: NSWindow.didResignKeyNotification, object: window)
         // After this layout pass: the field needs its frame before it can take focus.

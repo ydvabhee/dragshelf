@@ -287,6 +287,7 @@ final class ShelfPanelController {
         panel.makeFirstResponder(nil) // Commits an open rename field (V2-04 AC-2).
         store.hints.visible = false
         store.actions.message = nil
+        store.resetSearch() // V2-10 AC-4
         panel.closePreview()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = false }

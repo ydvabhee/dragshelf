@@ -69,19 +69,36 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
             store.resizing = nil
             return true
         }
-        // Rename field editing (V2-04): every key goes to the text, Esc and Return included.
+        // Rename or search field editing (V2-04, V2-10): every key goes to the text, Esc and Return included
+        // (the search field's own delegate handles those).
         if firstResponder is NSText { return false }
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        // Cmd-Z: bring back the last drag out (T-17 AC-2); empty Recent passes through (system beep).
-        if modifiers == .command, event.charactersIgnoringModifiers == "z" { return store.undoDragOut() }
+        if modifiers == .command {
+            switch event.charactersIgnoringModifiers {
+            // Cmd-Z: bring back the last drag out (T-17 AC-2); empty Recent passes through (system beep).
+            case "z": return store.undoDragOut()
+            // Cmd-F: show and focus the search field (V2-10 AC-1); nothing to search on an empty shelf.
+            case "f":
+                guard !store.items.isEmpty else { return false }
+                store.showRecent = false
+                store.isSearching = true
+                store.searchFocus += 1
+                return true
+            case "a": // Cmd-A: select every visible item (V2-10 AC-3).
+                store.selectAll()
+                return true
+            default: return false
+            }
+        }
         guard modifiers.isEmpty else { return false }
         switch Int(event.keyCode) {
-        case kVK_Escape: isPreviewVisible ? closePreview() : onCancel?()
+        case kVK_Escape: // Quick Look first, then an open search (clears it), then the panel.
+            if isPreviewVisible { closePreview() } else if store.isSearching { store.resetSearch() } else { onCancel?() }
         case kVK_Space: isPreviewVisible ? closePreview() : openPreview()
         case kVK_Return: // Finder: Return renames the one selected file (V2-04 AC-1).
             guard store.actions.canRun(.rename, on: store.selectedItems) else { return false }
             store.actions.run(.rename, on: store.selectedItems, in: store)
-        case kVK_Delete, kVK_ForwardDelete: store.remove(ids: store.selection)
+        case kVK_Delete, kVK_ForwardDelete: store.remove(ids: store.selectedIDs)
         case kVK_LeftArrow: store.moveSelection(by: -1)
         case kVK_RightArrow: store.moveSelection(by: 1)
         case kVK_UpArrow: store.moveSelection(by: -ShelfView.columnCount(width: frame.width))

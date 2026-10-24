@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Search and filter: press ⌘F or click the magnifying glass to search DragShelf by name, link, or text (case and accents don't matter), and pick All, Files, Images, Links, Text, or Pinned from the filter menu. The header shows "3 of 12"; Drag All, Clear, ⌘A, arrows, Quick Look and ⌘C act on the shown items. Esc clears the search, and it resets when DragShelf hides.
 - Pin items: right-click an item and choose "Pin" to keep it on DragShelf. Pinned items sit first with a small pin badge, stay after Clear and drag out, and come back after you quit. Pinned files are always copied out (⌘ does not move them); "Unpin" puts the item back to normal.
 - Text and .txt: drag a text item into a text field to insert the text, or onto Finder or the Desktop to get a real "<first line>.txt" file (the app you drop on decides). Right-click a text item for "Save as .txt", or a plain-text file (up to 1 MB) for "Use as Text".
 - Paste: press ⌘V on DragShelf, right-click empty space and choose Paste, or use "Paste to DragShelf" in the menu bar to add what is on your clipboard (files, links, text, images) like a drop. "Nothing to paste" shows when there is nothing usable.

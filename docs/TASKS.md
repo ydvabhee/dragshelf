@@ -342,7 +342,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-07 | Text ↔ .txt (dual drag-out, Use as Text, Save as .txt) | M7 | V2-06 | US-4 | DONE (2026-10-24) |
 | V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | DONE (2026-10-24) |
 | V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | DONE (2026-10-24) |
-| V2-10 | Search and filter | M7 | V2-08 | US-6 | TODO |
+| V2-10 | Search and filter | M7 | V2-08 | US-6 | QA |
 | V3-01 | Shelf pet: cat with personalities, preview + opt-in | M8 (v0.3.0) | v0.2.0 release | US-18 | BACKLOG |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
