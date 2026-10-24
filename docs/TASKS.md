@@ -269,6 +269,7 @@ Milestone M7. Source: user 2026-10-24.
 - AC-6 (carried from V2-08 QA): Recent entries that point at a pinned copy are re-pointed when the item is unpinned or renamed (no "Missing" row for a file that still exists).
 - AC-7 (carried from V2-08 QA): orphan cleanup in `PinStore`: on load, `Pinned/<UUID>/` dirs not referenced by the manifest are removed (only when the manifest loaded cleanly — never after a corrupt/newer manifest); a second corruption keeps the first backup (`pinned.json.bad.1`, …).
 - AC-8 (carried from V2-08 QA): tests can never write to the real Application Support folder — `ShelfStore`/`PinStore` default root is unavailable under XCTest/Swift Testing (e.g. precondition when running tests without an injected root) or tests use a shared helper that always injects one.
+- Follow-up (from Folders filter QA, low): store `isFolder` in the pin manifest so a missing pinned folder still filters as Folders; move the add-time `isDirectory/isPackage` read off main for slow network volumes.
 
 ## V3-01 Shelf pet: cat with personalities, preview + opt-in
 Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 (validated). Original character only (never copy third-party art); drawn in code like the app icon.
