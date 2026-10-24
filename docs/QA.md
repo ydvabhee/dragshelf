@@ -493,3 +493,19 @@ Build, 125 tests (3 full runs), release build green.
 - Merge (641882d): header `ActionsMenu` and tile `menu(for:)` both list Compress, Rename…, Share…, AirDrop, Convert To ▸, Resize ▸ (… Custom… after a separator); no duplicates or missing entries.
 - b882b15: `cancelStopsAfterCurrentImageAndKeepsFinished` is deterministic (cancels from progress at image 2, asserts exactly p0-p2 and no extra files), so cancel-early is covered at the converter level. Runner test loosened to 1...20 is fine.
 Manual: repeat V2-05 steps 9 and 10 (Custom… reopen shows new size; 400 % on a large photo shows "Too large", form stays open).
+
+## V2-09 Custom global shortcut (7fe343d) - FAIL (2)
+Build, 131 tests, release build green. AC-1..5 met on paper; Carbon mapping (⌃⌥⇧⌘, fn/caps dropped), validation, persistence, old default migration (no key = ⌃⌥⌘D, `hotKeyEnabled` false stays off, invalid stored = default), failed register keeps previous, Clear = off, hint gated on `hotKeyOn`, ADR-016 (Carbon handler on main via `assumeIsolated`) all OK.
+- Finding (med) `HotKey.swift:35,60,67` key names are US-ANSI. AZERTY/Dvorak shows and menu-binds the wrong letter. Fix: build the label from the current layout (`TISCopyCurrentASCIICapableKeyboardLayoutInputSource` + `UCKeyTranslate`, keyCode to char, uppercase); keep the table only for non-printing keys. Robust choice: UCKeyTranslate, since the label and the menu `KeyEquivalent` are then derived at display time (also follows a layout switch). `charactersIgnoringModifiers` at record time would go stale after a layout change.
+- Finding (med) `SettingsView.swift` recorder: Carbon fires before the local monitor, so pressing the active shortcut while recording toggles the shelf and is never recorded. Fix: `HotKey.shared.unregister()` when recording starts; on finish/cancel re-register (apply does it; cancel/Esc/click-outside must re-register the saved shortcut if `hotKeyEnabled`). Also hide the "used by another app" line while `recording` (it reads `current == nil`).
+- Low `SettingsView.swift` `RecorderView`: monitor removed on done, cancel, click outside, dismantle, window nil; no `deinit` safety net, and a closed-but-kept Settings window stays in recording state. Fix: remove monitor in `deinit`; stop recording on `NSWindow.willCloseNotification`.
+- Low `HotKey.swift`: keypad keys show "Key 82"; hint shows the shortcut even if Carbon refused it at launch. Fix: add keypad names; gate hint on `HotKey.shared.current != nil`.
+- Low: no test for recorder/monitor lifecycle or hotkey-while-recording.
+Manual:
+1. Settings > General: click field, press ⌃⌥⌘D (the active one): shelf must not toggle, field records it (fails today).
+2. Record ⌃⌥⌘J: menu shows ⌃⌥⌘J, hotkey works, relaunch keeps it. Hint (after 2 menu shows) names it.
+3. Record ⇧⌘K; record ⌃F5; record ⌘Space (system taken): inline "used by another app", old one still works.
+4. Press plain A, then ⇧A: "Use at least one of ⌘, ⌃, or ⌥." Esc cancels. Delete clears.
+5. Clear (x): menu item has no shortcut, hotkey dead, hint tip not shown, Reset button restores.
+6. Start recording, close Settings, reopen: not stuck recording; typing elsewhere unaffected.
+7. Switch keyboard to French AZERTY: field and menu show the key you pressed (fails today).
