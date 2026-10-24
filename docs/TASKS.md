@@ -227,6 +227,44 @@ Milestone M6. Depends on: V2-03. Source: user 2026-10-23 ("add a custom resize f
 - AC-6: Output reuses V2-03 pipeline (same format as source, metadata stripped, orientation applied, color profile kept, per-image failure skip, progress, cancel, in-flight dir); name "<base> (<W>×<H>).<ext>" with the actual output size; collisions via uniqueName.
 - AC-7: Unit tests: aspect-lock math, fit-in-box for mixed aspect batch, single-dimension constraint, percent, upscale allowed for custom only, validation bounds, output names.
 
+## V2-06 Paste clipboard into DragShelf
+Milestone M7. Source: user 2026-10-24. Reuse `PasteboardReader` + `DropReceiver.ingest` (same dedupe, image hashing, file promises n/a, uniqueName).
+- AC-1: ⌘V while the panel is key adds the general pasteboard's items (files, folders, URLs, text, image data) exactly like a drop; ignored while a text field (rename/resize/search) has focus (field gets the paste).
+- AC-2: Right-click on empty grid area → "Paste" (disabled when the pasteboard has nothing usable). Menu bar menu: "Paste to DragShelf" (shows the panel, adds items, panel not key, app not activated).
+- AC-3: Nothing usable → subtle one-line footer message "Nothing to paste". Recent view switches back to grid (like a drop).
+- AC-4: Unit tests via a private named pasteboard: files/URL/text/image paste paths, dedupe, empty pasteboard.
+
+## V2-07 Text ↔ .txt (dual drag-out, Use as Text, Save as .txt)
+Milestone M7. Source: user 2026-10-24 ("UI should be user friendly and not confusing"). Principle: the receiving app decides; no toggles.
+- AC-1: Dragging a text item out writes both `NSString` and a file promise (`NSFilePromiseProvider`, `.txt`, UTF-8) — text fields receive text, Finder/Desktop receive a real "<first line, ≤ 60 chars, sanitized>.txt" (not a .textClipping). Same for ⌘C (string + file URL of a temp .txt only if cheap; else string only — note choice).
+- AC-2: `.txt`/plain-text file item → context menu "Use as Text" adds a text item with its contents (UTF-8/UTF-16 detected; ≤ 1 MB, else disabled with tooltip "File is too large").
+- AC-3: Text item → context menu "Save as .txt" adds a cached `.txt` file item (name from first line, uniqueName). Original text item stays.
+- AC-4: ADR-016 for the file-promise provider delegate (writes off main). Tests: name sanitizing, encoding detection, size limit, promise writes exact bytes.
+
+## V2-08 Pin items (persist across Clear, drag out, quit)
+Milestone M7. Source: user 2026-10-24. Supersedes OQ-03 for pinned items only (unpinned still cleared on quit).
+- AC-1: Context menu "Pin" / "Unpin" (and Recent untouched). Pinned items render first, with a small `pin.fill` badge; VoiceOver "Pinned".
+- AC-2: Pinned items are never removed by Clear, drag out (copy or ⌘-move: move is disabled for pinned file originals — they copy), auto-hide rules unchanged. "Clear" tooltip mentions pinned items stay.
+- AC-3: Persistence in Application Support (`~/Library/Application Support/com.abhishekyadav.DragShelf/Pinned/`): original files stored as bookmark data (resolve on launch; stale → refresh; unresolvable → Missing style); cached items (images, promises, text, zips, converted) copied into the Pinned folder (not the cache, so launch wipe and T-21 sweep never touch it); text stored as UTF-8. Manifest JSON (versioned, strict decode). Unpin of a stored copy deletes it.
+- AC-4: Cache sweep (T-21) and launch/quit wipe ignore the Pinned folder; dedupe keys include pinned items.
+- AC-5: Tests: pin/unpin, survives clear, survives simulated relaunch (new store from manifest), bookmark of moved file resolves, unpin frees stored copy, manifest corruption handled.
+
+## V2-09 Custom global shortcut (Settings recorder)
+Milestone M7. Source: user 2026-10-24. Supersedes OQ-04.
+- AC-1: Settings → General: shortcut recorder field (Apple-style: click → "Type shortcut", shows symbols like ⌃⌥⌘D), Clear and "Reset to ⌃⌥⌘D" buttons.
+- AC-2: Requires ≥ 1 of ⌘ ⌃ ⌥ (⇧-only or no-modifier rejected with inline message); Esc cancels recording.
+- AC-3: Registers via Carbon immediately; if registration fails (taken) → inline "This shortcut is used by another app" and keep previous one. Persisted (UserDefaults: keyCode + modifiers); menu "Show DragShelf" shows the current shortcut; T-18 hint text uses the current shortcut.
+- AC-4: No Accessibility/Input Monitoring permission (record with a local key monitor while the Settings field is focused only).
+- AC-5: Tests: modifier validation, persistence round-trip, display string, register-failure keeps old.
+
+## V2-10 Search and filter
+Milestone M7. Source: user 2026-10-24.
+- AC-1: ⌘F (panel key) or a `magnifyingglass` header button reveals a search field in the header; typing filters tiles live (case/diacritic-insensitive) by name, URL text, and text content. Esc clears and hides the field; empty field = all.
+- AC-2: Filter menu next to the field: All · Files · Images · Links · Text · Pinned (checkmark on active). Header count shows "3 of 12" while filtered.
+- AC-3: Drag All, Clear, select-all, arrow keys, Quick Look act on visible (filtered) items only; Clear confirms nothing extra (pinned still kept).
+- AC-4: Drops while filtered still add items; filter stays; new item visible only if it matches (header shows count change). Search state resets on hide.
+- AC-5: Performance: filtering 5000 items < 16 ms (precomputed lowercase/folded search key per item). Tests: matching rules, filter kinds, visible-only actions, perf.
+
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
 - AC-1: Launch at login toggle calls `SMAppService.mainApp.register/unregister`; toggle reflects real status after relaunch.
@@ -284,6 +322,11 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | DONE (2026-10-23) |
 | V2-04 | Rename shelf items | M6 | V2-01 | US-12 | DONE (2026-10-23) |
 | V2-05 | Custom image resize (Pixels/Percent, aspect lock) | M6 | V2-03 | US-14 | DONE (2026-10-23) |
+| V2-06 | Paste clipboard into DragShelf | M7 | V2-05 | US-2 | TODO |
+| V2-07 | Text ↔ .txt (dual drag-out, Use as Text, Save as .txt) | M7 | V2-06 | US-4 | TODO |
+| V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | TODO |
+| V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | TODO |
+| V2-10 | Search and filter | M7 | V2-08 | US-6 | TODO |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
 V2-02 is the riskiest UI (AirDrop from a non-activating panel), so it goes early. V2-04 last: text editing in the panel touches focus.
