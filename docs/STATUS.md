@@ -1,13 +1,15 @@
 # DragShelf — Status & Handoff (paused 2026-10-20)
 
-## ▶ Resume here (paused 2026-10-24)
+## ▶ Resume here (updated 2026-10-24)
 1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude`, then say **"continue DragShelf from docs/STATUS.md"**.
-2. Done: all v1 tasks except T-12 (signing, blocked on Developer ID); v2 Shelf Actions V2-01..V2-05 (zip, share/AirDrop, convert/resize, rename, custom resize).
-3. Next batch (user-approved 2026-10-24, specs in TASKS.md), in this order:
-   - **V2-06 Paste** — partly written on branch `wip/V2-06` (commit 64190ca: DragShelfApp, DropReceiver, ShelfPanelController; no tests/CHANGELOG yet). Resume: `git merge --squash wip/V2-06` onto main (or cherry-pick), finish ACs + tests, then QA; delete the wip branch after.
-   - **V2-09 Custom shortcut** — not started; can run in parallel in a worktree (HotKey/Settings files only).
-   - **V2-07 Text ↔ .txt**, then **V2-08 Pin**, then **V2-10 Search/filter** — sequential (shared core files).
-4. Then ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is large).
+2. Done: all v1 except T-12 (Developer ID); v2 V2-01..V2-07, V2-09.
+3. Queue (user-approved 2026-10-24, "Ship + Housekeeping", no new features):
+   1. **V2-08 Pin** (in progress) → QA.
+   2. **V2-10 Search and filter** → QA.
+   3. **Architect docs sync** (ARCHITECTURE.md for V2-01..V2-10).
+   4. **Release test checklist** (`docs/RELEASE-CHECKLIST.md`: manual-only checks from QA.md).
+   5. **Cut v0.2.0**: CHANGELOG `[Unreleased]` → `[0.2.0]`, VERSION 0.2.0, `chore(release): v0.2.0`, tag, `scripts/make-dmg.sh`; user pushes + uploads DMG.
+4. Not now (user declined 2026-10-24): update check, Merge PDFs, OCR, auto-show options.
 
 ## Build / run
 - SwiftPM only (ADR-013; `xcodebuild` broken on this Mac until `sudo xcodebuild -runFirstLaunch`).
