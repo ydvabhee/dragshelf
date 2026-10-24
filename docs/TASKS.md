@@ -266,6 +266,9 @@ Milestone M7. Source: user 2026-10-24.
 - AC-3: Drag All, Clear, select-all, arrow keys, Quick Look act on visible (filtered) items only; Clear confirms nothing extra (pinned still kept).
 - AC-4: Drops while filtered still add items; filter stays; new item visible only if it matches (header shows count change). Search state resets on hide.
 - AC-5: Performance: filtering 5000 items < 16 ms (precomputed lowercase/folded search key per item). Tests: matching rules, filter kinds, visible-only actions, perf.
+- AC-6 (carried from V2-08 QA): Recent entries that point at a pinned copy are re-pointed when the item is unpinned or renamed (no "Missing" row for a file that still exists).
+- AC-7 (carried from V2-08 QA): orphan cleanup in `PinStore`: on load, `Pinned/<UUID>/` dirs not referenced by the manifest are removed (only when the manifest loaded cleanly — never after a corrupt/newer manifest); a second corruption keeps the first backup (`pinned.json.bad.1`, …).
+- AC-8 (carried from V2-08 QA): tests can never write to the real Application Support folder — `ShelfStore`/`PinStore` default root is unavailable under XCTest/Swift Testing (e.g. precondition when running tests without an injected root) or tests use a shared helper that always injects one.
 
 ## V3-01 Shelf pet: cat with personalities, preview + opt-in
 Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 (validated). Original character only (never copy third-party art); drawn in code like the app icon.
@@ -337,7 +340,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-05 | Custom image resize (Pixels/Percent, aspect lock) | M6 | V2-03 | US-14 | DONE (2026-10-23) |
 | V2-06 | Paste clipboard into DragShelf | M7 | V2-05 | US-2 | DONE (2026-10-24) |
 | V2-07 | Text ↔ .txt (dual drag-out, Use as Text, Save as .txt) | M7 | V2-06 | US-4 | DONE (2026-10-24) |
-| V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | QA |
+| V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | DONE (2026-10-24) |
 | V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | DONE (2026-10-24) |
 | V2-10 | Search and filter | M7 | V2-08 | US-6 | TODO |
 | V3-01 | Shelf pet: cat with personalities, preview + opt-in | M8 (v0.3.0) | v0.2.0 release | US-18 | BACKLOG |
