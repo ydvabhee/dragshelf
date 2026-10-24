@@ -21,6 +21,8 @@ final class ShelfPanelController {
     @ObservationIgnored private var droppedOnShelf = false
     @ObservationIgnored private var dragActive = false
     @ObservationIgnored private var hideTask: Task<Void, Never>?
+    /// Shelf pet on the top edge (V3-01); set in init.
+    @ObservationIgnored private var pet: PetController!
 
     /// Gap below the menu bar / notch, and the entry slide distance.
     static let topInset: CGFloat = 12
@@ -45,6 +47,7 @@ final class ShelfPanelController {
         panel.onCancel = { [weak self] in self?.hide() }
         panel.onUserResize = { [weak self] ended in ended ? self?.userResized() : self?.liveResized() }
         panel.minSize = ShelfView.minSize
+        pet = PetController(shelf: panel, store: store)
     }
 
     /// Top center of `visible`, top edge fixed so content growth extends downward (AC-9).
@@ -111,7 +114,7 @@ final class ShelfPanelController {
 
     /// Frame on `screen` for content `size`: saved spot if any, else top center (T-08 AC-9).
     private func frame(size: NSSize, on screen: NSScreen) -> NSRect {
-        let visible = screen.visibleFrame
+        let visible = PetController.reserve(screen.visibleFrame)
         if let o = Self.saved(Self.offsetsKey, screen: Self.id(of: screen)) {
             return Self.frame(size: size, offset: CGPoint(x: o[0], y: o[1]), in: visible)
         }
@@ -187,6 +190,7 @@ final class ShelfPanelController {
         dragActive = true
         store.isDragging = true
         droppedOnShelf = false
+        pet.dragSessionStarted()
         show(reason: .autoDrag, at: point)
     }
 
@@ -235,6 +239,7 @@ final class ShelfPanelController {
         // Hotkey: key panel so arrows, Space, Cmd-C, Esc work without the mouse (T-11 AC-4).
         // Menu and auto-show stay non-key (T-14 AC-X). None activates the app.
         if reason == .hotkey { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
+        pet.shelfDidShow()
         // Shadow again once the 0.96→1 scale settles: one taken mid-spring is smaller than the glass (T-16 AC-2).
         withAnimation(.spring(duration: 0.35, bounce: 0.15), completionCriteria: .removed) { isShown = true }
             completion: { [weak self] in self?.panel.invalidateShadow() }
@@ -288,6 +293,7 @@ final class ShelfPanelController {
         store.hints.visible = false
         store.actions.message = nil
         panel.closePreview()
+        pet.shelfDidHide()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = false }
         NSAnimationContext.runAnimationGroup({ context in

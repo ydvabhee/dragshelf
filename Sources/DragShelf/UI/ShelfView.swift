@@ -157,6 +157,7 @@ struct ShelfView: View {
 
                 Spacer(minLength: 0)
 
+                PetBallButton()
                 ActionsMenu(store: store)
 
                 if !store.recent.isEmpty {
@@ -244,6 +245,7 @@ struct ShelfView: View {
                                       isPinned: store.isPinned(item.id),
                                       onRemove: { store.remove(ids: [item.id]) },
                                       onQuickLook: { onQuickLook(item.id) })
+                            .petWiggle(item.id)
                             .overlay {
                                 DragOutHandle(store: store, id: item.id, onHover: { inside in
                                     if inside { hovered = item.id } else if hovered == item.id { hovered = nil }

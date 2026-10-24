@@ -75,6 +75,7 @@ struct SettingsView: View {
                 Text("A one-line tip under DragShelf now and then. Each tip shows up to 3 times.")
                     .foregroundStyle(.secondary)
             }
+            PetSettingsSection()
             Section {
                 Toggle("Show other apps from the developer", isOn: $showPromos)
             } header: {
