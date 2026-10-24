@@ -595,3 +595,13 @@ Manual:
 6. Unpin the image: it goes after the pinned group; its `<UUID>` dir leaves Pinned. Remove it: gone from disk.
 7. Rename a pinned image: the new name survives relaunch; only one copy dir in Pinned.
 8. Settings → shortcut field: click, record, Esc, click away. Console shows no "Modifying state during view update"; the shortcut works after each.
+
+## V2-10 Folders filter (c0aac20, e163290): PASS
+- Build debug, 166 tests, release build: green.
+- Order All·Files·Folders·Images·Links·Text·Pinned. Folder = isDirectory && !isPackage, set once in `ShelfItem.init`; rename/replace/re-point build a new item, so it refreshes. Files excludes folders; `.app` stays Files. Missing folder keeps kind (test). Filter pass reads only the stored Bool (perf test <16 ms). Caption "Files, folders, links, and text".
+- Low: `resourceValues` runs synchronously in `init` on the add path (main). Slow or stalled network volume can block add. Fix: compute off-main or lazily, or reuse the drop's already-read values.
+- Low: a pinned folder missing at relaunch (PinStore.swift:73) is built as non-folder, so it shows under Files, not Folders, until found again.
+Manual:
+1. Drop a folder, an `.app`, a PDF, an image. Folders shows only the folder; Files shows `.app` and PDF.
+2. Rename the folder: still in Folders. Delete it on disk: stays in Folders as Missing.
+3. Empty shelf caption reads "Files, folders, links, and text".
