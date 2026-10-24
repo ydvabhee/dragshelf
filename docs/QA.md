@@ -511,3 +511,21 @@ Manual:
 5. Clipboard empty, Cmd-V: "Nothing to paste" under the header, gone after about 3 s. Repeat twice quickly: message stays visible about 3 s after the last one (low finding: gone early).
 6. In Recent view, Cmd-V or Paste: returns to the grid.
 7. Hide the shelf, copy a file, menu bar "Paste to DragShelf": shelf appears, item added, front app keeps focus (no Dock activation, panel not key). Empty clipboard: shelf appears with "Nothing to paste".
+
+## V2-07 Text and .txt round trip (d469511) - PASS
+Build, tests (137), release build green.
+- AC-1: `TextPromiseProvider` offers `.string` first plus a `.txt` promise. Cmd-C stays string only (choice noted in code). AC-2/3: Use as Text (BOM detection, 1 MB cap, tooltip), Save as .txt (`uniqueName`, text stays). AC-4: ADR-016 holds: nonisolated, `@unchecked Sendable`, only lets read, writes on its own `OperationQueue`, completion handler called on success and error. AC-5: timer Task kept, cancelled on repeat paste and on a successful paste.
+- Drag-out removal and Recent behavior unchanged (only the writer changed).
+- Med `TextFile.swift` `writePromiseTo`: `.withoutOverwriting` fails the promise if "<name>.txt" exists in the drop folder. Unclear whether AppKit/Finder uniquifies the receiver-chosen URL. Fix: write to a unique sibling ("X 2.txt") in `url`'s folder when it exists.
+- Low: header Actions menu has no Use as Text / Save as .txt. ACs say context menu only, so OK.
+- Low: UTF-16 without BOM decodes as UTF-8/Latin-1 garbage. Acceptable.
+Manual:
+1. Add text "Hello world" (paste). Drag onto Desktop and into a Finder folder: a real "Hello world.txt" appears (not a .textClipping). Open it: exact text. If a .textClipping appears, string-first type order is the cause (report it).
+2. Drag the same text onto a TextEdit/Notes/Slack text field: text is inserted, no attachment.
+3. Drag into a folder that already holds "Hello world.txt": drop succeeds with a unique name, original untouched (med finding if it fails or errors).
+4. Text with a long first line, "a/b:c", leading dots, emoji, or only blank lines: names are sane, max 60 chars, blank gives "Text.txt".
+5. Right-click a text item: "Save as .txt" adds a file item "<first line>.txt"; repeat gives "... 2.txt"; text item stays.
+6. Right-click a .txt/.md file: "Use as Text" adds the text item; repeat selects the existing one. A file > 1 MB: item grayed, tooltip "File is too large". UTF-16 file with BOM reads correctly.
+7. Drag a text item out then check Recent and removal behave as before (removed or kept per the setting).
+8. Cmd-C a text item, paste in a text field: plain text.
+9. Cmd-V with empty clipboard twice, 2 s apart: message stays 3 s after the last.
