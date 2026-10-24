@@ -556,6 +556,28 @@ Build, 133 tests, release build green.
 - Low: `ß` uppercases to "SS" (name.count 2), so that key gets no menu shortcut. Re-register runs inside `updateNSView`, mutating `@Observable` state during a view update; watch the console for "Modifying state during view update". Close observer is skipped if the view has no window when recording starts.
 Manual: repeat V2-09 steps 1, 6, 7 above. Also: record, then have another app take the shortcut before leaving the field: the red message shows. French layout: press the dead key ´ as the key: field shows a sensible label.
 
+## V2-10 Search and filter (51b1d54, 08794a3) + V2-08 carries (a4bb392) - PASS
+Build, 164 tests, release build green. Tests use temp roots; real Application Support untouched.
+- Visible-only: Drag All, Clear (filtered), Delete key, select-all, arrows, Shift range, Quick Look, copy, Actions menu use `visibleItems`/`selectedItems`. A hidden item in `selection` (action output) is ignored. Pinned never removed (`remove` subtracts `pinnedIDs`). Tests cover it.
+- Keys: field focused → panel skips every key (`firstResponder is NSText`), so ⌘V/⌘C/⌘A work in the field. ⌘F ignored while the resize form is open. Esc: field clears and hides; next Esc hides the panel. Return/↓ in the field hand focus to the grid, so rename Return is separate.
+- Match key: folded once per item value (add, rename, replace, re-point); links percent-decoded; text capped at 20 000 chars.
+- AC-7: orphan dirs removed only after a clean decode; corrupt/newer manifest returns before cleanup; `.bad`, `.bad.1`, ... keep the first backup.
+- AC-8: `PinStore.isTesting` = any launch arg contains `.xctest`; passes under `swift test`. Real app is launched without such args, so it uses Application Support.
+- Low: filtered Clear does not cancel a running action or bump `generation` (plain Clear does), so a zip finishing after it still adds its output. Fix: call `store.actions.cancel()` in the filtered branch.
+- Low: ⌘C guard checks raw `selection`; if only hidden items are selected it copies an empty list. Fix: guard on `selectedItems`.
+- Low: `isTesting` matches any arg containing `.xctest` (an opened path such as `foo.xctest` would pass it). Fix: match the last path component suffix or `XCTestConfigurationFilePath`.
+- Low: `ItemCache.defaultRoot` (Caches) has no test guard. Fix: same `isTesting` check.
+Manual:
+1. Drop 6 mixed items (file, image, link, text, 2 pinned). ⌘F: field appears focused; type a name part: tiles filter live, header reads "n of 6". Try capital letters and an accented letter.
+2. Filter menu: Files, Images, Links, Text, Pinned each show the right tiles; checkmark on the active one.
+3. Filtered: ⌘A selects only shown tiles; arrows and Shift-click stay in them; Space previews only shown files.
+4. Filtered: drag the header handle (Drag All) into Finder: only shown items arrive. ⌘C then paste in Finder: same.
+5. Filtered: Clear removes only the shown items; pinned and hidden stay; panel stays open. Clear the filter: the rest is there.
+6. Filtered: drop a new file that does not match: it is added, filter stays, count changes. Drop a matching one: it shows.
+7. Type in the field: ⌘V pastes text into the field, not a new item. Esc clears and hides the field; Esc again hides the panel.
+8. Open Resize ▸ Custom…: ⌘F does nothing. Rename a file (Return) while filtered: tile keeps matching by the new name.
+9. Hide and reopen the panel: search field gone, all items shown. Pin, rename, then unpin an item that is in Recent: the Recent row still opens the file (no "Missing").
+
 ## V2-08 Pin items (749ce0d) + recorder defer (12272c5) - PASS
 Build, 155 tests, release build green. Tests use temp roots for cache and Pinned (`PinTests.Env`); real `~/Library/Application Support/com.abhishekyadav.DragShelf` does not exist after the run.
 - Data safety: no path deletes or moves an original. `replace` removes only `pins.dir(of:)` = `root/<UUID>` found via symlink-resolved prefix match; `unpin` moves only that dir into the cache; `release`/`wipe`/`sweep` act only on cache-root children. Rename of a pinned copy clones (`canRenameInPlace` false outside the cache). Cache wipe (launch, quit, Clear) lists only the cache root, which is disjoint from Pinned.
