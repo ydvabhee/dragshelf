@@ -4,8 +4,8 @@
 1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude`, then say **"continue DragShelf from docs/STATUS.md"**.
 2. Done: all v1 except T-12 (Developer ID); v2 V2-01..V2-07, V2-09.
 3. Queue (user-approved 2026-10-24, "Ship + Housekeeping", no new features):
-   1. **V2-08 Pin** (in progress) → QA.
-   2. **V2-10 Search and filter** → QA.
+   1. ~~V2-08 Pin~~ DONE. 2. ~~V2-10 Search~~ DONE.
+   - **V3-01 Shelf pet**: trial branch in a worktree; user tries it locally before deciding. Release steps below ON HOLD until the user decides.
    3. **Architect docs sync** (ARCHITECTURE.md for V2-01..V2-10).
    4. **Release test checklist** (`docs/RELEASE-CHECKLIST.md`: manual-only checks from QA.md).
    5. **Cut v0.2.0**: CHANGELOG `[Unreleased]` → `[0.2.0]`, VERSION 0.2.0, `chore(release): v0.2.0`, tag, `scripts/make-dmg.sh`; user pushes + uploads DMG.
