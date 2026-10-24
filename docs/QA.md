@@ -556,6 +556,25 @@ Build, 133 tests, release build green.
 - Low: `ß` uppercases to "SS" (name.count 2), so that key gets no menu shortcut. Re-register runs inside `updateNSView`, mutating `@Observable` state during a view update; watch the console for "Modifying state during view update". Close observer is skipped if the view has no window when recording starts.
 Manual: repeat V2-09 steps 1, 6, 7 above. Also: record, then have another app take the shortcut before leaving the field: the red message shows. French layout: press the dead key ´ as the key: field shows a sensible label.
 
+## V2-10 Search and filter (51b1d54, 08794a3, fa321c0) + V2-08 carries (a4bb392) - PASS
+Build, 164 tests, release build green. Tests use temp roots; real Application Support untouched.
+- Visible-only: Drag All, Clear (filtered), Delete key, select-all, arrows, Shift range, Quick Look, copy, Actions menu use `visibleItems`/`selectedItems`. A hidden item in `selection` (action output) is ignored. Pinned never removed (`remove` subtracts `pinnedIDs`). Tests cover it.
+- Keys: field focused → panel skips every key (`firstResponder is NSText`), so ⌘V/⌘C/⌘A work in the field. ⌘F ignored while the resize form is open. Esc: field clears and hides; next Esc hides the panel. Return/↓ in the field hand focus to the grid, so rename Return is separate.
+- Match key: folded once per item value (add, rename, replace, re-point); links percent-decoded; text capped at 20 000 chars.
+- AC-7: orphan dirs removed only after a clean decode; corrupt/newer manifest returns before cleanup; `.bad`, `.bad.1`, ... keep the first backup.
+- AC-8: `PinStore.isTesting` = any launch arg contains `.xctest`; passes under `swift test`. Real app is launched without such args, so it uses Application Support.
+- Fix round (fa321c0) re-verified, 165 tests green: filtered Clear cancels the running job; ⌘C guard uses `selectedItems`; `TestRun.detect` returns false when `Bundle.main.bundlePath` ends in `.app` (before any arg or env check), else true on `XCTestConfigurationFilePath` or an arg path component ending `.xctest`. `swift test` runs from the swiftpm helper or xctest binary, whose bundle path is a plain directory, so tests get temp roots; the real app always gets the real roots. `ItemCache` default root has the same guard. Only gap: tests hosted inside an `.app` (Xcode app host) would use real roots; this package has none.
+Manual:
+1. Drop 6 mixed items (file, image, link, text, 2 pinned). ⌘F: field appears focused; type a name part: tiles filter live, header reads "n of 6". Try capital letters and an accented letter.
+2. Filter menu: Files, Images, Links, Text, Pinned each show the right tiles; checkmark on the active one.
+3. Filtered: ⌘A selects only shown tiles; arrows and Shift-click stay in them; Space previews only shown files.
+4. Filtered: drag the header handle (Drag All) into Finder: only shown items arrive. ⌘C then paste in Finder: same.
+5. Filtered: Clear removes only the shown items; pinned and hidden stay; panel stays open. Clear the filter: the rest is there.
+6. Filtered: drop a new file that does not match: it is added, filter stays, count changes. Drop a matching one: it shows.
+7. Type in the field: ⌘V pastes text into the field, not a new item. Esc clears and hides the field; Esc again hides the panel.
+8. Open Resize ▸ Custom…: ⌘F does nothing. Rename a file (Return) while filtered: tile keeps matching by the new name.
+9. Hide and reopen the panel: search field gone, all items shown. Pin, rename, then unpin an item that is in Recent: the Recent row still opens the file (no "Missing").
+
 ## V2-08 Pin items (749ce0d) + recorder defer (12272c5) - PASS
 Build, 155 tests, release build green. Tests use temp roots for cache and Pinned (`PinTests.Env`); real `~/Library/Application Support/com.abhishekyadav.DragShelf` does not exist after the run.
 - Data safety: no path deletes or moves an original. `replace` removes only `pins.dir(of:)` = `root/<UUID>` found via symlink-resolved prefix match; `unpin` moves only that dir into the cache; `release`/`wipe`/`sweep` act only on cache-root children. Rename of a pinned copy clones (`canRenameInPlace` false outside the cache). Cache wipe (launch, quit, Clear) lists only the cache root, which is disjoint from Pinned.
@@ -576,3 +595,13 @@ Manual:
 6. Unpin the image: it goes after the pinned group; its `<UUID>` dir leaves Pinned. Remove it: gone from disk.
 7. Rename a pinned image: the new name survives relaunch; only one copy dir in Pinned.
 8. Settings → shortcut field: click, record, Esc, click away. Console shows no "Modifying state during view update"; the shortcut works after each.
+
+## V2-10 Folders filter (c0aac20, e163290): PASS
+- Build debug, 166 tests, release build: green.
+- Order All·Files·Folders·Images·Links·Text·Pinned. Folder = isDirectory && !isPackage, set once in `ShelfItem.init`; rename/replace/re-point build a new item, so it refreshes. Files excludes folders; `.app` stays Files. Missing folder keeps kind (test). Filter pass reads only the stored Bool (perf test <16 ms). Caption "Files, folders, links, and text".
+- Low: `resourceValues` runs synchronously in `init` on the add path (main). Slow or stalled network volume can block add. Fix: compute off-main or lazily, or reuse the drop's already-read values.
+- Low: a pinned folder missing at relaunch (PinStore.swift:73) is built as non-folder, so it shows under Files, not Folders, until found again.
+Manual:
+1. Drop a folder, an `.app`, a PDF, an image. Folders shows only the folder; Files shows `.app` and PDF.
+2. Rename the folder: still in Folders. Delete it on disk: stays in Folders as Missing.
+3. Empty shelf caption reads "Files, folders, links, and text".

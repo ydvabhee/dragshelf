@@ -24,11 +24,19 @@ struct ShelfView: View {
     @State private var hovered: UUID?
     /// Action caption height, measured like the footer.
     @State private var captionHeight: CGFloat = 0
+    /// Search row height (V2-10), measured like the caption.
+    @State private var searchHeight: CGFloat = 0
 
-    /// Grid / Recent height cap: what `maxHeight` leaves after header, caption, and the footer row.
+    /// Grid / Recent height cap: what `maxHeight` leaves after header, search row, caption, and the footer row.
     private var contentCap: CGFloat {
-        max(0, maxHeight - Self.headerHeight - (store.actions.message == nil ? 0 : captionHeight) - Self.footerRowHeight)
+        max(0, maxHeight - Self.headerHeight - (showsSearch ? searchHeight : 0)
+            - (store.actions.message == nil ? 0 : captionHeight) - Self.footerRowHeight)
     }
+
+    /// Recent replaces the grid.
+    private var showsRecent: Bool { store.showRecent && !store.recent.isEmpty }
+    /// Search applies to the grid only: hidden (state kept) while Recent or the resize form shows.
+    private var showsSearch: Bool { store.isSearching && store.resizing == nil && !showsRecent }
 
     /// One footer line: a hint wins over a promo (T-18 AC-1).
     enum Footer: Equatable { case hint(HintEngine.Hint), promo(Promo) }
@@ -56,8 +64,10 @@ struct ShelfView: View {
     }
 
     var body: some View {
+        let visible = store.visibleItems
         VStack(spacing: 0) {
-            header
+            header(visible)
+            if showsSearch { searchRow }
             // Last action's result or error, one line (V2-01 AC-4, AC-7).
             if let message = store.actions.message {
                 Text(message)
@@ -74,14 +84,16 @@ struct ShelfView: View {
             if let images = store.resizing {
                 ResizeForm(store: store, items: images)
                     .id(images.map(\.id)) // Custom… again with other images: fresh sizes and fields
-            } else if store.showRecent && !store.recent.isEmpty {
+            } else if showsRecent {
                 ScrollView { RecentList(store: store) }
                     .frame(maxHeight: contentCap)
                     .fixedSize(horizontal: false, vertical: true)
             } else if store.items.isEmpty {
                 emptyState
+            } else if visible.isEmpty {
+                noMatches
             } else {
-                grid
+                grid(visible)
             }
             // Own row under the grid: never over tiles. Hidden during any drag; the row keeps its height so the
             // panel does not resize under the pointer (a hover at the bottom edge would otherwise flicker).
@@ -121,7 +133,7 @@ struct ShelfView: View {
         .onChange(of: store.recent.isEmpty) { _, empty in if empty { store.showRecent = false } }
     }
 
-    private var header: some View {
+    private func header(_ visible: [ShelfItem]) -> some View {
         ShelfGlassContainer {
             HStack(spacing: 8) {
                 Button {} label: {
@@ -129,7 +141,7 @@ struct ShelfView: View {
                 }
                 .help("Drag all items")
                 .accessibilityHint("Drag into another app to drop every item")
-                .disabled(store.items.isEmpty)
+                .disabled(visible.isEmpty)
                 .overlay { DragOutHandle(store: store) }
 
                 if let action = store.actions.running {
@@ -148,14 +160,31 @@ struct ShelfView: View {
                     .help("Cancel")
                     .accessibilityHint("Stops \(action.title.lowercased()) and adds nothing")
                 } else {
-                    Text(store.resizing != nil ? "Resize" : store.showRecent && !store.recent.isEmpty ? "Recent"
-                         : store.items.isEmpty ? "DragShelf" : "^[\(store.items.count) Item](inflect: true)")
+                    Text(store.resizing != nil ? "Resize" : showsRecent ? "Recent"
+                         : store.items.isEmpty ? "DragShelf"
+                         : store.isFiltering ? "\(visible.count) of \(store.items.count)" // V2-10 AC-2
+                         : "^[\(store.items.count) Item](inflect: true)")
                         .font(.headline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 0)
+
+                if !store.items.isEmpty && store.resizing == nil && !showsRecent {
+                    Button {
+                        if store.isSearching { store.resetSearch() } else {
+                            store.isSearching = true
+                            store.searchFocus += 1
+                        }
+                    } label: {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
+                    .help(store.isSearching ? "Close search" : "Search DragShelf (⌘F)")
+                    .foregroundStyle(store.isSearching ? Color.accentColor : Color.primary)
+                    .accessibilityAddTraits(store.isSearching ? .isSelected : [])
+                    .accessibilityHint(store.isSearching ? "Clears the search and shows all items" : "Shows a search field to filter items")
+                }
 
                 PetBallButton()
                 ActionsMenu(store: store)
@@ -171,6 +200,12 @@ struct ShelfView: View {
                 }
 
                 Button("Clear") {
+                    // Filtered (V2-10 AC-3): only the shown items go (pinned stay); the panel and filter stay.
+                    // A running job is cancelled like a plain Clear, so its output never lands after.
+                    if store.isFiltering {
+                        store.actions.cancel()
+                        return store.remove(ids: Set(visible.map(\.id)))
+                    }
                     store.clear()
                     onClose()
                     // After the hide: the tip waits for the next show instead of flashing out (T-20 AC-5).
@@ -178,10 +213,12 @@ struct ShelfView: View {
                 }
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
-                .help("Remove all items except pinned. Your files stay where they are.")
+                .help(store.isFiltering ? "Remove the shown items except pinned. Your files stay where they are."
+                      : "Remove all items except pinned. Your files stay where they are.")
                 .accessibilityLabel("Clear DragShelf")
-                .accessibilityHint("Removes all items except pinned ones from DragShelf; files are not deleted")
-                .disabled(store.items.allSatisfy { store.isPinned($0.id) })
+                .accessibilityHint(store.isFiltering ? "Removes the shown items except pinned ones; files are not deleted"
+                                   : "Removes all items except pinned ones from DragShelf; files are not deleted")
+                .disabled(visible.allSatisfy { store.isPinned($0.id) })
 
                 Button(action: onClose) {
                     Label("Close", systemImage: "xmark")
@@ -199,6 +236,49 @@ struct ShelfView: View {
         .background { WindowDragArea(onMoved: onMoved, onDoubleClick: onResetPosition) }
     }
 
+    /// Search field and filter menu under the header (V2-10 AC-1, AC-2).
+    private var searchRow: some View {
+        HStack(spacing: 8) {
+            SearchField(store: store)
+            ShelfGlassContainer {
+                Menu {
+                    Picker("Show", selection: Bindable(store).filter) {
+                        ForEach(ShelfStore.Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Label("Filter", systemImage: store.filter == .all ? "line.3.horizontal.decrease.circle"
+                          : "line.3.horizontal.decrease.circle.fill")
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .labelStyle(.iconOnly)
+                .shelfButtonStyle()
+                .foregroundStyle(store.filter == .all ? Color.primary : Color.accentColor)
+                .help("Show: \(store.filter.rawValue)")
+                .accessibilityValue(store.filter.rawValue)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { searchHeight = $0 }
+    }
+
+    /// Search or filter matches nothing; the items are still there (V2-10).
+    private var noMatches: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 26, weight: .light))
+                .foregroundStyle(.secondary)
+            Text("No matches")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 16)
+        .accessibilityElement(children: .combine)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 6) {
             Image(systemName: "tray.and.arrow.down")
@@ -208,7 +288,7 @@ struct ShelfView: View {
             Text("Drop here")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Files, links, and text")
+            Text("Files, folders, links, and text")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -233,12 +313,12 @@ struct ShelfView: View {
         .transition(.opacity)
     }
 
-    private var grid: some View {
+    private func grid(_ visible: [ShelfItem]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.columnSpacing, alignment: .top),
                                          count: Self.columnCount(width: width)), spacing: 12) {
-                    ForEach(store.items) { item in
+                    ForEach(visible) { item in
                         ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
                                       isMissing: store.missing(id: item.id),
                                       isRenaming: store.renamingID == item.id,

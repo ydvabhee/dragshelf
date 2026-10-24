@@ -258,7 +258,7 @@ final class DragOutHandleView: NSView {
         let selected = store.selectedItems
         if selected.allSatisfy({ store.isPinned($0.id) }) { store.unpin(Set(selected.map(\.id))) } else { store.pin(selected) }
     }
-    @objc private func removeSelection() { store.map { $0.remove(ids: $0.selection) } }
+    @objc private func removeSelection() { store.map { $0.remove(ids: $0.selectedIDs) } }
 
     override func mouseDown(with event: NSEvent) {
         mouseDown = event

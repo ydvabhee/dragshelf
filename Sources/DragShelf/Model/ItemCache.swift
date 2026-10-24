@@ -1,5 +1,19 @@
 import Foundation
 
+/// True only inside `swift test` / Xcode tests, so default roots never point at the user's folders (V2-10 AC-8).
+nonisolated enum TestRun {
+    static let active = detect(bundlePath: Bundle.main.bundlePath, arguments: ProcessInfo.processInfo.arguments,
+                               environment: ProcessInfo.processInfo.environment)
+
+    /// The app bundle is never a test run, whatever its arguments. Otherwise: Xcode's test config variable, or a
+    /// runner argument with a `.xctest` bundle in its path (`swift test` passes `…/X.xctest/Contents/MacOS/X`).
+    static func detect(bundlePath: String, arguments: [String], environment: [String: String]) -> Bool {
+        guard !bundlePath.hasSuffix(".app") else { return false }
+        return environment["XCTestConfigurationFilePath"] != nil
+            || arguments.dropFirst().contains { URL(fileURLWithPath: $0).pathComponents.contains { $0.hasSuffix(".xctest") } }
+    }
+}
+
 /// Cache dirs for materialized items. `root` is injectable so tests never touch ~/Library/Caches.
 nonisolated struct ItemCache: Sendable {
     let root: URL
@@ -9,7 +23,11 @@ nonisolated struct ItemCache: Sendable {
     }
 
     static var defaultRoot: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        // Like `PinStore.defaultRoot`: a test that forgets to inject a root never touches the user's cache.
+        if TestRun.active {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfTests-Cache-\(UUID().uuidString)", isDirectory: true)
+        }
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.abhishekyadav.DragShelf/Shelf", isDirectory: true)
     }
 

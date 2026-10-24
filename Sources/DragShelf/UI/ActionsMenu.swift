@@ -1,13 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// Header "Actions" menu (V2-01): applies to the selection, or to all items when nothing is selected.
+/// Header "Actions" menu (V2-01): applies to the selection, or to all visible items when nothing is selected (V2-10).
 /// The tile context menu lists the same `ShelfAction.allCases` (AppKit menu in `DragOutHandleView`).
 struct ActionsMenu: View {
     let store: ShelfStore
 
     var body: some View {
-        let targets = store.selectedItems.isEmpty ? store.items : store.selectedItems
+        let targets = store.selectedItems.isEmpty ? store.visibleItems : store.selectedItems
         Menu {
             ForEach(ShelfAction.allCases, id: \.self) { action in
                 Button(action.title) { store.actions.run(action, on: targets, in: store) }
@@ -35,7 +35,7 @@ struct ActionsMenu: View {
         .menuIndicator(.hidden)
         .help(store.selection.isEmpty ? "Actions for all items" : "Actions for the selected items")
         .accessibilityHint(store.selection.isEmpty ? "Applies to all items" : "Applies to the selected items")
-        .disabled(store.items.isEmpty || store.actions.running != nil)
+        .disabled(store.visibleItems.isEmpty || store.actions.running != nil)
     }
 }
 

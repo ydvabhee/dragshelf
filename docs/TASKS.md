@@ -262,13 +262,14 @@ Milestone M7. Source: user 2026-10-24. Supersedes OQ-04.
 ## V2-10 Search and filter
 Milestone M7. Source: user 2026-10-24.
 - AC-1: ⌘F (panel key) or a `magnifyingglass` header button reveals a search field in the header; typing filters tiles live (case/diacritic-insensitive) by name, URL text, and text content. Esc clears and hides the field; empty field = all.
-- AC-2: Filter menu next to the field: All · Files · Images · Links · Text · Pinned (checkmark on active). Header count shows "3 of 12" while filtered.
+- AC-2: Filter menu next to the field: All · Files · Folders · Images · Links · Text · Pinned (checkmark on active). Header count shows "3 of 12" while filtered.
 - AC-3: Drag All, Clear, select-all, arrow keys, Quick Look act on visible (filtered) items only; Clear confirms nothing extra (pinned still kept).
 - AC-4: Drops while filtered still add items; filter stays; new item visible only if it matches (header shows count change). Search state resets on hide.
 - AC-5: Performance: filtering 5000 items < 16 ms (precomputed lowercase/folded search key per item). Tests: matching rules, filter kinds, visible-only actions, perf.
 - AC-6 (carried from V2-08 QA): Recent entries that point at a pinned copy are re-pointed when the item is unpinned or renamed (no "Missing" row for a file that still exists).
 - AC-7 (carried from V2-08 QA): orphan cleanup in `PinStore`: on load, `Pinned/<UUID>/` dirs not referenced by the manifest are removed (only when the manifest loaded cleanly — never after a corrupt/newer manifest); a second corruption keeps the first backup (`pinned.json.bad.1`, …).
 - AC-8 (carried from V2-08 QA): tests can never write to the real Application Support folder — `ShelfStore`/`PinStore` default root is unavailable under XCTest/Swift Testing (e.g. precondition when running tests without an injected root) or tests use a shared helper that always injects one.
+- Follow-up (from Folders filter QA, low): store `isFolder` in the pin manifest so a missing pinned folder still filters as Folders; move the add-time `isDirectory/isPackage` read off main for slow network volumes.
 
 ## V3-01 Shelf pet: cat with personalities, preview + opt-in
 Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 (validated). Original character only (never copy third-party art); drawn in code like the app icon.
@@ -279,7 +280,9 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - Accessibility: Reduce Motion → static/sleeping; VoiceOver: single "Pet" element (petting action), no noise.
 - Behaviors (cat): appear 2–5 s after items land (hop onto top edge or peek from behind), walk along the top edge, sit, groom, stretch, yawn, sleep (zzz), peek, bat a tile (tile wiggles), sit on a tile. Ball toy: `🧶` button adds a yarn ball; user drags it left/right; pet chases, pounces, rolls it back. Petting: click → purr + ♥; click while asleep → wakes and stretches. Right-click pet → "Send home" (turns pet off).
 - Personality system (data-driven, unit-testable): species = art + animation set; personality = weights (energy, curiosity, sleepiness, mischief, shyness). v0.3.0 personalities: Playful, Lazy, Curious, Shy, Mischievous. Mood modifiers: time of day, petting (happier → visits more), shelf activity.
-- Later (not v0.3.0): dog and other species (reuse personalities), more tricks, seasonal touches.
+- Art style (user 2026-10-24): soft clay 3D chibi — rounded chunky bodies, matte clay shading via gradients, blush cheeks, dot/closed-eye smiles, soft contact shadow; original designs drawn in code.
+- Species lineup (user picks 2026-10-24): **Cat** (v0.3.0), **Penguin** (v0.3.0 — waddle, belly-slide, flap), **Baby dino** (v0.3.x — stomp, "rawr!" bubble, tail wag, spikes peek from behind the shelf), **Bee** (v0.3.x — flies/hovers, visits tiles, naps on a tile; needs a flight movement system). Optional ideas: Hedgehog (curls into the ball), Octopus (holds several tiles). Settings: choose pet + "Surprise me" (rotates weekly).
+- Later: more tricks, seasonal touches.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
@@ -342,7 +345,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-07 | Text ↔ .txt (dual drag-out, Use as Text, Save as .txt) | M7 | V2-06 | US-4 | DONE (2026-10-24) |
 | V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | DONE (2026-10-24) |
 | V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | DONE (2026-10-24) |
-| V2-10 | Search and filter | M7 | V2-08 | US-6 | TODO |
+| V2-10 | Search and filter | M7 | V2-08 | US-6 | DONE (2026-10-24) |
 | V3-01 | Shelf pet: cat with personalities, preview + opt-in | M8 (v0.3.0) | v0.2.0 release | US-18 | QA (trial branch) |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.

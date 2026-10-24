@@ -9,7 +9,8 @@ private let log = Logger(subsystem: PromoConfig.selfBundleID, category: "cache")
 struct RecentEntry: Identifiable, Hashable {
     let id = UUID()
     let date: Date
-    let items: [ShelfItem]
+    /// `var`: re-pointed when a pinned copy it references moves (V2-10 AC-6).
+    var items: [ShelfItem]
 }
 
 @Observable
@@ -111,7 +112,10 @@ final class ShelfStore {
         if pinnedIDs.contains(id), let stored = storedForPin(item) {
             swap(at: i, to: stored)
             release([item])
-            if let dir = pinDir(of: old), dir != pinDir(of: stored) { try? FileManager.default.removeItem(at: dir) }
+            if let dir = pinDir(of: old), dir != pinDir(of: stored) {
+                repointRecent(old, to: stored)
+                try? FileManager.default.removeItem(at: dir)
+            }
             savePins()
         }
         return true
@@ -175,8 +179,10 @@ final class ShelfStore {
                         continue
                     }
                 }
-                swap(at: i, to: ShelfItem(id: id, kind: .file(dest.appendingPathComponent(url.lastPathComponent)),
-                                          isCached: true, contentHash: item.contentHash))
+                let moved = ShelfItem(id: id, kind: .file(dest.appendingPathComponent(url.lastPathComponent)),
+                                      isCached: true, contentHash: item.contentHash)
+                swap(at: i, to: moved)
+                repointRecent(item, to: moved)
             }
             bookmarks[id] = nil
             pinnedIDs.remove(id)
@@ -203,6 +209,17 @@ final class ShelfStore {
         } catch {
             log.error("pin failed: \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// Recent rows that point at `old`'s file follow it to `new` when a pinned copy moves (unpin) or is replaced
+    /// (rename), so they never show "Missing" for a file that still exists (V2-10 AC-6).
+    private func repointRecent(_ old: ShelfItem, to new: ShelfItem) {
+        for i in recent.indices {
+            for j in recent[i].items.indices where recent[i].items[j].kind == old.kind {
+                let row = recent[i].items[j]
+                recent[i].items[j] = ShelfItem(id: row.id, kind: new.kind, isCached: new.isCached, contentHash: row.contentHash)
+            }
         }
     }
 
@@ -269,10 +286,65 @@ final class ShelfStore {
         release(gone)
     }
 
-    var selectedItems: [ShelfItem] { items.filter { selection.contains($0.id) } }
+    // MARK: Search and filter (V2-10)
+
+    enum Filter: String, CaseIterable {
+        case all = "All", files = "Files", folders = "Folders", images = "Images", links = "Links", text = "Text", pinned = "Pinned"
+    }
+
+    /// Search field shown in the header (⌘F or the magnifying glass).
+    var isSearching = false
+    /// Bumped to (re)focus the search field (⌘F while it is already shown).
+    var searchFocus = 0
+    var query = "" { didSet { pruneSelection() } }
+    var filter = Filter.all { didSet { pruneSelection() } }
+
+    /// Folded, trimmed `query`; empty = no text filter.
+    private var foldedQuery: String { ShelfItem.fold(query.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    var isFiltering: Bool { filter != .all || !foldedQuery.isEmpty }
+
+    /// What the grid shows and what Drag All, Clear, select-all, arrows, Quick Look and ⌘C act on (AC-3).
+    var visibleItems: [ShelfItem] {
+        let q = foldedQuery, filter = filter
+        guard filter != .all || !q.isEmpty else { return items }
+        return items.filter { item in
+            let kindMatches = switch (filter, item.kind) {
+            case (.all, _): true
+            case (.files, .file): !item.isImage && !item.isFolder
+            case (.folders, .file): item.isFolder
+            case (.images, .file): item.isImage
+            case (.links, .url), (.text, .text): true
+            case (.pinned, _): pinnedIDs.contains(item.id)
+            default: false
+            }
+            return kindMatches && (q.isEmpty || item.searchKey.contains(q))
+        }
+    }
+
+    /// Hide: back to all items, field hidden (AC-4). Esc in or after the field does the same (AC-1).
+    func resetSearch() {
+        isSearching = false
+        query = ""
+        filter = .all
+    }
+
+    /// Tiles a search or filter hides leave the selection.
+    private func pruneSelection() {
+        guard !selection.isEmpty, isFiltering else { return }
+        let visible = Set(visibleItems.map(\.id))
+        if !selection.isSubset(of: visible) { selection.formIntersection(visible) }
+    }
+
+    /// Selected items the user can see: a new hidden item (an action output) may be in `selection`.
+    var selectedItems: [ShelfItem] { visibleItems.filter { selection.contains($0.id) } }
+    var selectedIDs: Set<UUID> { Set(selectedItems.map(\.id)) }
+
+    /// ⌘A: selects every visible item.
+    func selectAll() { selection = Set(visibleItems.map(\.id)) }
 
     /// Finder-style click: plain selects one, Cmd toggles, Shift selects the range from the anchor.
     func select(_ id: UUID, command: Bool, shift: Bool) {
+        let items = visibleItems
         if shift, let anchor, let from = items.firstIndex(where: { $0.id == anchor }),
            let to = items.firstIndex(where: { $0.id == id }) {
             selection = Set(items[min(from, to)...max(from, to)].map(\.id))
@@ -285,6 +357,7 @@ final class ShelfStore {
     /// Arrow keys: selects the tile `delta` away (±1 left/right, ±columns up/down); none selected → first.
     /// Down onto a shorter last row lands on the last item; any other move off the grid is ignored.
     func moveSelection(by delta: Int) {
+        let items = visibleItems
         guard !items.isEmpty else { return }
         let current = selection.isEmpty ? nil
             : items.firstIndex { $0.id == anchor && selection.contains($0.id) } ?? items.lastIndex { selection.contains($0.id) }
@@ -297,14 +370,14 @@ final class ShelfStore {
 
     /// Ids a tile action (Remove, Quick Look) applies to: the selection if the tile is in it, else the tile.
     func targetIDs(for id: UUID) -> Set<UUID> {
-        selection.contains(id) ? selection : [id]
+        selection.contains(id) ? selectedIDs : [id]
     }
 
-    /// Dragging a selected tile drags the whole selection; an unselected tile drags alone; `nil` = all.
+    /// Dragging a selected tile drags the whole selection; an unselected tile drags alone; `nil` = all visible.
     /// Missing files never drag.
     func dragItems(for id: UUID?) -> [ShelfItem] {
         let ids = id.map(targetIDs(for:))
-        return items.filter { (ids?.contains($0.id) ?? true) && !missing(id: $0.id) }
+        return visibleItems.filter { (ids?.contains($0.id) ?? true) && !missing(id: $0.id) }
     }
 
     /// Selected, present files: what Quick Look shows.

@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 - Shelf pet (trial, off by default): turn on Settings → Pet → "Show pet" and a soft clay cat ("Mochi", renameable) lives on the top edge of DragShelf. It walks, naps, stretches, peeks and bats tiles (just a wiggle; items never change), hides while you drag, and sleeps when idle. Click to pet it, right-click to send it home, and use the yarn ball button to play. Pick a personality (Playful, Lazy, Curious, Shy, Mischievous, Surprise me). Reduce Motion keeps it still.
+- Search and filter: press ⌘F or click the magnifying glass to search DragShelf by name, link, or text (case and accents don't matter), and pick All, Files, Folders, Images, Links, Text, or Pinned from the filter menu. The header shows "3 of 12"; Drag All, Clear, ⌘A, arrows, Quick Look and ⌘C act on the shown items. Esc clears the search, and it resets when DragShelf hides.
 - Pin items: right-click an item and choose "Pin" to keep it on DragShelf. Pinned items sit first with a small pin badge, stay after Clear and drag out, and come back after you quit. Pinned files are always copied out (⌘ does not move them); "Unpin" puts the item back to normal.
 - Text and .txt: drag a text item into a text field to insert the text, or onto Finder or the Desktop to get a real "<first line>.txt" file (the app you drop on decides). Right-click a text item for "Save as .txt", or a plain-text file (up to 1 MB) for "Use as Text".
 - Paste: press ⌘V on DragShelf, right-click empty space and choose Paste, or use "Paste to DragShelf" in the menu bar to add what is on your clipboard (files, links, text, images) like a drop. "Nothing to paste" shows when there is nothing usable.
@@ -29,6 +30,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
 ### Fixed
+- Pinned items: a Recent drag of a pinned item no longer shows "Missing" after you unpin or rename it, leftover copies of pinned files are cleaned up at launch, and a damaged pin list keeps every backup instead of overwriting the first.
 - Rename and Compress: names that differ only in accents (typed vs. decomposed) or case now get the Finder-style number instead of colliding, and control characters or a name made too long by that number are rejected.
 - Convert To and Resize: one damaged image no longer cancels the whole batch; the rest are converted and DragShelf says how many couldn’t be.
 - Dropping only items already on DragShelf now switches Recent back to the grid.
