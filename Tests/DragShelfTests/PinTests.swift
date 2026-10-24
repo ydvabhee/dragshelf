@@ -219,8 +219,9 @@ private func exists(_ path: String?) -> Bool { path.map(FileManager.default.file
 
 @Test func defaultPinRootIsNeverApplicationSupportUnderTests() {
     let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    #expect(PinStore.isTesting)
+    #expect(TestRun.active)
     #expect(!PinStore().root.path.hasPrefix(appSupport.path))
+    #expect(ItemCache().root.path.hasPrefix(FileManager.default.temporaryDirectory.path))
     #expect(!ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory)).pins.root.path.hasPrefix(appSupport.path))
 }
 
@@ -238,6 +239,19 @@ private func exists(_ path: String?) -> Bool { path.map(FileManager.default.file
     #expect(stored.hasPrefix(env.pins.root.path) && stored.hasSuffix("Renamed.png") && exists(stored))
     #expect(!exists(oldStored) && !exists(path(clone)) && store.isPinned(image.id))
     #expect(path(env.relaunch().items[0]) == stored)
+}
+
+@Test func testRunDetection() {
+    let helper = "/usr/libexec/swift/pm/swiftpm-testing-helper"
+    let bundle = "/x/.build/debug/DragShelfPackageTests.xctest/Contents/MacOS/DragShelfPackageTests"
+    #expect(TestRun.detect(bundlePath: "/usr/libexec/swift/pm", arguments: [helper, "--test-bundle-path", bundle], environment: [:]))
+    #expect(TestRun.detect(bundlePath: "/usr/bin", arguments: ["xctest"], environment: ["XCTestConfigurationFilePath": "/tmp/c"]))
+    // The real app: never a test run, even with an `.xctest` argument or the variable set.
+    let app = "/Applications/DragShelf.app"
+    #expect(!TestRun.detect(bundlePath: app, arguments: [app + "/Contents/MacOS/DragShelf", "foo.xctest"], environment: [:]))
+    #expect(!TestRun.detect(bundlePath: app, arguments: [app], environment: ["XCTestConfigurationFilePath": "/tmp/c"]))
+    // `swift run`: a plain argument mentioning .xctest without a path component of that name is not enough.
+    #expect(!TestRun.detect(bundlePath: "/x/.build/debug", arguments: ["/x/.build/debug/DragShelf", "notes.xctest.txt"], environment: [:]))
 }
 
 private extension ShelfItem.Kind {

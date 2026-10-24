@@ -63,7 +63,7 @@ final class DropReceiver<Content: View>: NSHostingView<Content>, NSMenuItemValid
             return true
         }
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-              event.charactersIgnoringModifiers == "c", store?.selection.isEmpty == false,
+              event.charactersIgnoringModifiers == "c", store?.selectedItems.isEmpty == false, // visible only (V2-10)
               !(window?.firstResponder is NSText) // typing in a field (rename, resize form) copies its text
         else { return super.performKeyEquivalent(with: event) }
         copy(nil)

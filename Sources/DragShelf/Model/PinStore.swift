@@ -15,15 +15,12 @@ struct PinStore {
 
     static var defaultRoot: URL {
         // V2-10 AC-8: a test that forgets to inject a root still never writes Application Support.
-        if isTesting {
+        if TestRun.active {
             return FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfTests-Pinned-\(UUID().uuidString)", isDirectory: true)
         }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.abhishekyadav.DragShelf/Pinned", isDirectory: true)
     }
-
-    /// True inside `swift test` (XCTest or Swift Testing): the runner gets the `.xctest` bundle path as an argument.
-    static let isTesting = ProcessInfo.processInfo.arguments.contains { $0.contains(".xctest") }
 
     var manifest: URL { root.appendingPathComponent("pinned.json") }
     var backup: URL { root.appendingPathComponent("pinned.json.bad") }

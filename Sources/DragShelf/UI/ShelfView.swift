@@ -200,7 +200,11 @@ struct ShelfView: View {
 
                 Button("Clear") {
                     // Filtered (V2-10 AC-3): only the shown items go (pinned stay); the panel and filter stay.
-                    if store.isFiltering { return store.remove(ids: Set(visible.map(\.id))) }
+                    // A running job is cancelled like a plain Clear, so its output never lands after.
+                    if store.isFiltering {
+                        store.actions.cancel()
+                        return store.remove(ids: Set(visible.map(\.id)))
+                    }
                     store.clear()
                     onClose()
                     // After the hide: the tip waits for the next show instead of flashing out (T-20 AC-5).
