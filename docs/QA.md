@@ -555,3 +555,24 @@ Build, 133 tests, release build green.
 - `isolated deinit` compiles on Swift 6.3 (target macOS 14). It only removes the monitor and observer, which is main-safe; it does not re-register (dismantle does).
 - Low: `ß` uppercases to "SS" (name.count 2), so that key gets no menu shortcut. Re-register runs inside `updateNSView`, mutating `@Observable` state during a view update; watch the console for "Modifying state during view update". Close observer is skipped if the view has no window when recording starts.
 Manual: repeat V2-09 steps 1, 6, 7 above. Also: record, then have another app take the shortcut before leaving the field: the red message shows. French layout: press the dead key ´ as the key: field shows a sensible label.
+
+## V2-08 Pin items (749ce0d) + recorder defer (12272c5) - PASS
+Build, 155 tests, release build green. Tests use temp roots for cache and Pinned (`PinTests.Env`); real `~/Library/Application Support/com.abhishekyadav.DragShelf` does not exist after the run.
+- Data safety: no path deletes or moves an original. `replace` removes only `pins.dir(of:)` = `root/<UUID>` found via symlink-resolved prefix match; `unpin` moves only that dir into the cache; `release`/`wipe`/`sweep` act only on cache-root children. Rename of a pinned copy clones (`canRenameInPlace` false outside the cache). Cache wipe (launch, quit, Clear) lists only the cache root, which is disjoint from Pinned.
+- Manifest: atomic write, version + duplicate-id check, `copy` must be exactly `<UUID>/<name>` (no "/", ".", ".."), originals need an absolute path. A symlinked `<UUID>` dir that points out of root is never moved or deleted (`relativePath` resolves it to nil). Corrupt manifest → `pinned.json.bad`; copies kept.
+- Unpin vs T-21 sweep: the moved dir is referenced by the shelf item (`isCached`, under cache root), so `orphans()` keeps it; `doomed` is built before the delete await.
+- Drag out: `canMove` false when any pinned item is in the batch → copy only (test covers it). Remove, Clear, remove-after-drag-out skip pinned ids.
+- 12272c5: pause/resume run in main-queue order; `register` is a no-op for the current shortcut, so no double registration.
+- Low: a Recent entry that points at a pinned copy goes Missing after unpin or rename (copy moved or replaced). Only the Recent row breaks; the item and its file are fine. Fix: on unpin/rename, re-point matching Recent items, or snapshot pinned copies into the cache when recorded.
+- Low: after a corrupt or newer-version manifest, old copies stay in Pinned forever (no GC) and a second corruption overwrites the first `.bad`. Safe, just disk. Fix: optional "orphan copies" cleanup later.
+- Low: "Unpin deletes the copy" (AC-3) is done by moving it to the cache; it goes on remove, Clear, or quit. Fine.
+- Low: `ShelfStore()` still defaults `pins` to the real folder; a future test that pins without injecting would write user data. Fix: keep injecting in tests.
+Manual:
+1. Drop a Finder file, a Safari image and some text. Right-click each → Pin: they move first with a pin badge; VoiceOver reads "Pinned".
+2. Clear: pinned stay, others go; the Clear tooltip mentions pinned. With only pinned items, Clear is disabled; the hover ✕ and "Remove from DragShelf" are off for pinned.
+3. Drag a pinned file to Finder with and without ⌘: always a copy, original stays, item stays pinned.
+4. Quit and relaunch: pinned items come back in order. Check `~/Library/Application Support/com.abhishekyadav.DragShelf/Pinned/` holds `pinned.json` and one `<UUID>/` dir per cached item.
+5. Quit, move the pinned original to another folder, relaunch: item points at the new place. Delete it, relaunch: item shows Missing.
+6. Unpin the image: it goes after the pinned group; its `<UUID>` dir leaves Pinned. Remove it: gone from disk.
+7. Rename a pinned image: the new name survives relaunch; only one copy dir in Pinned.
+8. Settings → shortcut field: click, record, Esc, click away. Console shows no "Modifying state during view update"; the shortcut works after each.
