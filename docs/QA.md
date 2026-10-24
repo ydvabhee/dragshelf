@@ -516,7 +516,7 @@ Manual:
 Build, tests (137), release build green.
 - AC-1: `TextPromiseProvider` offers `.string` first plus a `.txt` promise. Cmd-C stays string only (choice noted in code). AC-2/3: Use as Text (BOM detection, 1 MB cap, tooltip), Save as .txt (`uniqueName`, text stays). AC-4: ADR-016 holds: nonisolated, `@unchecked Sendable`, only lets read, writes on its own `OperationQueue`, completion handler called on success and error. AC-5: timer Task kept, cancelled on repeat paste and on a successful paste.
 - Drag-out removal and Recent behavior unchanged (only the writer changed).
-- Med `TextFile.swift` `writePromiseTo`: `.withoutOverwriting` fails the promise if "<name>.txt" exists in the drop folder. Unclear whether AppKit/Finder uniquifies the receiver-chosen URL. Fix: write to a unique sibling ("X 2.txt") in `url`'s folder when it exists.
+- Med (fixed in 2f22efc, re-verified PASS): `.withoutOverwriting` fails the promise if "<name>.txt" exists in the drop folder. Unclear whether AppKit/Finder uniquifies the receiver-chosen URL. Fix: write to a unique sibling ("X 2.txt") in `url`'s folder when it exists.
 - Low: header Actions menu has no Use as Text / Save as .txt. ACs say context menu only, so OK.
 - Low: UTF-16 without BOM decodes as UTF-8/Latin-1 garbage. Acceptable.
 Manual:
@@ -529,3 +529,5 @@ Manual:
 7. Drag a text item out then check Recent and removal behave as before (removed or kept per the setting).
 8. Cmd-C a text item, paste in a text field: plain text.
 9. Cmd-V with empty clipboard twice, 2 s apart: message stays 3 s after the last.
+- Re-verify 2f22efc: taken name writes "X 2.txt" beside it (`Zipper.uniqueName` against the folder listing, `.withoutOverwriting` per write, retry on a race). Completion called exactly once (single call on the return of `write`). Loop bounded at 100 attempts, then returns the last error. Existing file never touched; test covers X.txt, X 2.txt, X 3.txt. Build, 137 tests, release green.
+- Manual 10: drop into a Finder folder that has "Hello world.txt": Finder shows "Hello world 2.txt" (a sibling it did not name; check it appears without a refresh and no error dialog).
