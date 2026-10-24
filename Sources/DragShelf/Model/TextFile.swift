@@ -111,14 +111,29 @@ nonisolated final class TextPromiseProvider: NSFilePromiseProvider, NSFilePromis
 
     func operationQueue(for provider: NSFilePromiseProvider) -> OperationQueue { Self.queue }
 
-    /// Never overwrites: a file already at `url` fails the promise instead of losing that file.
+    /// Never overwrites and never fails on a taken name: writes `url`, or Finder-style "X 2.txt" beside it when
+    /// that name exists. `.withoutOverwriting` on every attempt; a file created meanwhile moves on to the next name.
     func filePromiseProvider(_ provider: NSFilePromiseProvider, writePromiseTo url: URL,
                              completionHandler: @escaping ((any Error)?) -> Void) {
-        do {
-            try Data(text.utf8).write(to: url, options: .withoutOverwriting)
-            completionHandler(nil)
-        } catch {
-            completionHandler(error)
+        completionHandler(Self.write(Data(text.utf8), near: url))
+    }
+
+    /// Returns nil on success, else the error.
+    static func write(_ data: Data, near url: URL) -> (any Error)? {
+        let dir = url.deletingLastPathComponent()
+        var used = Set(((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).map(Zipper.key))
+        var lastError: (any Error)?
+        for _ in 0..<100 {
+            let dest = dir.appendingPathComponent(Zipper.uniqueName(url.lastPathComponent, used: &used))
+            do {
+                try data.write(to: dest, options: .withoutOverwriting)
+                return nil
+            } catch CocoaError.fileWriteFileExists {
+                lastError = CocoaError(.fileWriteFileExists)  // race: `used` already holds it, try the next name
+            } catch {
+                return error
+            }
         }
+        return lastError
     }
 }

@@ -90,19 +90,22 @@ private func tempDir() throws -> URL {
 @Test func providerWritesExactBytesOffMain() async throws {
     let dir = try tempDir()
     defer { try? FileManager.default.removeItem(at: dir) }
-    let text = "Grüße\r\n✓ ok", dest = dir.appendingPathComponent("out.txt")
+    let text = "Grüße\r\n✓ ok", dest = dir.appendingPathComponent("X.txt")
+    try Data("original".utf8).write(to: dest)
     let provider = TextPromiseProvider(text: text)
     let errors: [Bool] = await withCheckedContinuation { done in
         DispatchQueue.global().async {
             provider.filePromiseProvider(provider, writePromiseTo: dest) { first in
-                provider.filePromiseProvider(provider, writePromiseTo: dest) { second in  // never overwrites
+                provider.filePromiseProvider(provider, writePromiseTo: dest) { second in
                     done.resume(returning: [first != nil, second != nil])
                 }
             }
         }
     }
-    #expect(errors == [false, true])
-    #expect(try Data(contentsOf: dest) == Data(text.utf8))
+    #expect(errors == [false, false])
+    #expect(try Data(contentsOf: dest) == Data("original".utf8))  // existing file untouched
+    #expect(try Data(contentsOf: dir.appendingPathComponent("X 2.txt")) == Data(text.utf8))
+    #expect(try Data(contentsOf: dir.appendingPathComponent("X 3.txt")) == Data(text.utf8))
 }
 
 @Test @MainActor func repeatPasteCancelsMessageTimer() {
