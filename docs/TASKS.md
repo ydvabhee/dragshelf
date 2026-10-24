@@ -285,7 +285,7 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - Later: more tricks, seasonal touches.
 
 ### V3-01 next iteration (user feedback 2026-10-24, build tomorrow; trial branch `worktree-agent-a831b198b0f85dadb` @ 616fbf6)
-- REMOVE the play floor band (no darker background / floor / lip). The cat sits on the BOTTOM edge of the shelf with no extra visual area (earlier it was on the top edge; now bottom). Confirm with user: on the bottom rim inside the shelf over transparent space, vs. standing just below the shelf's bottom edge.
+- REMOVE the play floor band (no darker background / floor / lip). The cat sits on the BOTTOM edge of the shelf with no extra visual area (earlier it was on the top edge; now bottom). **Decided (user 2026-10-24): on the bottom rim INSIDE the shelf**, over transparent space — no floor, no band, no extra background.
 - Show the cat rarely: mostly sleeping; current activity level otherwise fine (don't keep it on screen/active for long).
 - REMOVE the header ball button. Instead the cat occasionally (random) brings its own ball, plays briefly, and pushes it out of the shelf (off the edge).
 - Mouse follow: when the user moves the mouse over/near the shelf, the cat wakes, runs toward the cursor, and acts cute (sit, look up, head tilt, purr). Cheap: only while the shelf is visible; no global mouse monitoring when hidden.
