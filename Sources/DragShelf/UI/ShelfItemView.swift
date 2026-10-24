@@ -8,6 +8,8 @@ struct ShelfItemView: View {
     var isMissing = false
     /// Caption hidden under the inline rename field (V2-04); its space stays.
     var isRenaming = false
+    /// Small `pin.fill` badge on the thumbnail's top-trailing corner (V2-08).
+    var isPinned = false
     var onRemove: () -> Void = {}
     var onQuickLook: () -> Void = {}
 
@@ -18,6 +20,7 @@ struct ShelfItemView: View {
             thumbnail
                 .frame(width: 64, height: 64)
                 .opacity(isMissing ? 0.4 : 1)
+                .overlay(alignment: .topTrailing) { if isPinned { pinBadge } }
             VStack(spacing: 1) {
                 Text(name)
                     .font(.caption)
@@ -47,7 +50,7 @@ struct ShelfItemView: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(typeDescription), \(name)")
-        .accessibilityValue(isMissing ? "Missing" : "")
+        .accessibilityValue([isPinned ? "Pinned" : nil, isMissing ? "Missing" : nil].compactMap(\.self).joined(separator: ", "))
         .accessibilityHint(isMissing ? "The original file was moved or deleted" : "Drag into another app, or press Space for Quick Look")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Remove", onRemove)
@@ -63,6 +66,18 @@ struct ShelfItemView: View {
         case .text:
             symbol("text.alignleft")
         }
+    }
+
+    /// Finder-tag-sized: white pin on an accent circle, like the hover remove badge on the opposite corner.
+    private var pinBadge: some View {
+        Image(systemName: "pin.fill")
+            .font(.system(size: 8, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 16, height: 16)
+            .background(Color.accentColor, in: .circle)
+            .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
+            .offset(x: 4, y: -4)
+            .accessibilityHidden(true)
     }
 
     private func symbol(_ name: String) -> some View {

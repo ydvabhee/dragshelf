@@ -76,9 +76,11 @@ final class DragOutSource: NSObject, NSDraggingSource {
         return allFiles && modifiers.contains(.command) ? [.move, .copy] : .copy
     }
 
+    /// ⌘ may move only an all-file batch with no pinned item (V2-08: a pinned file must stay where it is).
+    var canMove: Bool { items.allSatisfy { if case .file = $0.kind { !store.isPinned($0.id) } else { false } } }
+
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        let allFiles = items.allSatisfy { if case .file = $0.kind { true } else { false } }
-        return Self.mask(for: context, modifiers: NSEvent.modifierFlags, allFiles: allFiles)
+        Self.mask(for: context, modifiers: NSEvent.modifierFlags, allFiles: canMove)
     }
 
     /// False so the system badge follows our per-call mask (Cmd toggles move live).
@@ -189,6 +191,10 @@ final class DragOutHandleView: NSView {
         if !store.selection.contains(id) { store.select(id, command: false, shift: false) }
         let menu = NSMenu()
         menu.addItem(withTitle: "Quick Look", action: #selector(previewSelection), keyEquivalent: "").isEnabled = !store.previewURLs.isEmpty
+        // V2-08: Unpin when every selected item is pinned, else Pin (pins the unpinned, present ones).
+        let allPinned = store.selectedItems.allSatisfy { store.isPinned($0.id) }
+        menu.addItem(withTitle: allPinned ? "Unpin" : "Pin", action: #selector(togglePin), keyEquivalent: "").isEnabled =
+            allPinned || store.selectedItems.contains { !store.isPinned($0.id) && !store.missing(id: $0.id) }
         menu.addItem(.separator())
         for action in ShelfAction.allCases {
             let item = menu.addItem(withTitle: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
@@ -228,7 +234,11 @@ final class DragOutHandleView: NSView {
             }
         }
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Remove from DragShelf", action: #selector(removeSelection), keyEquivalent: "")
+        let remove = menu.addItem(withTitle: "Remove from DragShelf", action: #selector(removeSelection), keyEquivalent: "")
+        if allPinned {
+            remove.isEnabled = false
+            remove.toolTip = "Unpin to remove"
+        }
         menu.items.forEach { $0.target = self }
         menu.autoenablesItems = false
         return menu
@@ -243,6 +253,11 @@ final class DragOutHandleView: NSView {
     @objc private func airDrop() { store.map { Sharer.shared.airDrop($0.selectedItems) } }
     @objc private func saveAsText() { store.map { $0.saveAsText($0.selectedItems) } }
     @objc private func useAsText() { store.map { $0.useAsText($0.selectedItems) } }
+    @objc private func togglePin() {
+        guard let store else { return }
+        let selected = store.selectedItems
+        if selected.allSatisfy({ store.isPinned($0.id) }) { store.unpin(Set(selected.map(\.id))) } else { store.pin(selected) }
+    }
     @objc private func removeSelection() { store.map { $0.remove(ids: $0.selection) } }
 
     override func mouseDown(with event: NSEvent) {

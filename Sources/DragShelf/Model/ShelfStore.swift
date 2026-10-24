@@ -53,19 +53,20 @@ final class ShelfStore {
         case file(String), url(String), text(String), image(SHA256.Digest)
     }
 
-    init(cache: ItemCache = ItemCache(), hints: HintEngine = HintEngine()) {
+    init(cache: ItemCache = ItemCache(), hints: HintEngine = HintEngine(), pins: PinStore = PinStore()) {
         self.cache = cache
         self.hints = hints
+        self.pins = pins
     }
 
     /// Appends in drop order. Same file path, URL, or exact text keeps one item; returns false on duplicate.
-    /// Same `contentHash` replaces the old item (its cache dir deleted) and appends the new one.
-    /// Caller owns any cache dir of a rejected duplicate.
+    /// Same `contentHash` replaces the old item (its cache dir deleted) and appends the new one, unless the old one is
+    /// pinned (then rejected like any duplicate). Caller owns any cache dir of a rejected duplicate.
     @discardableResult
     func add(_ item: ShelfItem) -> Bool {
         let key = Self.key(for: item)
         if let old = keys[key] {
-            guard case .image = key, let i = items.firstIndex(where: { $0.id == old }) else { return false }
+            guard case .image = key, !pinnedIDs.contains(old), let i = items.firstIndex(where: { $0.id == old }) else { return false }
             let replaced = items[i]
             selection.remove(old)
             // One assignment: the shelf never looks empty mid-replace (empty → panel hides).
@@ -81,7 +82,9 @@ final class ShelfStore {
     }
 
     /// `deletingCache: false` leaves cache dirs for the clear/quit wipe (drag out: targets read files late).
+    /// Pinned items are never removed (unpin first).
     func remove(ids: Set<UUID>, deletingCache: Bool = true) {
+        let ids = ids.subtracting(pinnedIDs)
         let gone = items.filter { ids.contains($0.id) }
         items.removeAll { ids.contains($0.id) }
         keys = keys.filter { !ids.contains($0.value) }
@@ -100,12 +103,122 @@ final class ShelfStore {
     func replace(id: UUID, with item: ShelfItem) -> Bool {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return false }
         let old = items[i]
-        items[i] = item
-        keys = keys.filter { $0.value != id }
-        keys[Self.key(for: item)] = item.id
+        swap(at: i, to: item)
         missingIDs.remove(id)
         release([old])
+        // A renamed pinned item (now a clone in the cache) is stored again, then its previous stored copy goes.
+        // If storing fails, the manifest and the old copy stay as they were (the next launch shows the old name).
+        if pinnedIDs.contains(id), let stored = storedForPin(item) {
+            swap(at: i, to: stored)
+            release([item])
+            if let dir = pinDir(of: old), dir != pinDir(of: stored) { try? FileManager.default.removeItem(at: dir) }
+            savePins()
+        }
         return true
+    }
+
+    /// Puts `item` at index `i` (same id) and re-keys it.
+    private func swap(at i: Int, to item: ShelfItem) {
+        items[i] = item
+        keys = keys.filter { $0.value != item.id }
+        keys[Self.key(for: item)] = item.id
+    }
+
+    // MARK: Pin (V2-08)
+
+    /// Pinned items lead `items` (pinned group, then the rest) and survive Clear, drag out, and quit (saved in `pins`).
+    private(set) var pinnedIDs: Set<UUID> = []
+    @ObservationIgnored let pins: PinStore
+    /// Bookmark data of pinned original files, by item id.
+    @ObservationIgnored private var bookmarks: [UUID: Data] = [:]
+
+    func isPinned(_ id: UUID) -> Bool { pinnedIDs.contains(id) }
+
+    /// Launch: the saved pinned items become the shelf. Call once, before anything is added.
+    func loadPins() {
+        let loaded = pins.load()
+        items = loaded.items
+        bookmarks = loaded.bookmarks
+        pinnedIDs = Set(loaded.items.map(\.id))
+        loaded.items.forEach { keys[Self.key(for: $0)] = $0.id }
+    }
+
+    /// Pins the present items of `targets`; each joins the end of the pinned group. Cached files are cloned into the
+    /// Pinned folder (the cache dir is released), originals are saved as bookmarks. A failure skips that item (logged).
+    func pin(_ targets: [ShelfItem]) {
+        for target in targets where !pinnedIDs.contains(target.id) && Self.exists(target) {
+            guard let i = items.firstIndex(where: { $0.id == target.id }) else { continue }
+            let old = items[i]
+            guard let stored = storedForPin(old) else { continue }
+            swap(at: i, to: stored)
+            move(from: i, to: pinnedIDs.count)
+            pinnedIDs.insert(target.id)
+            release([old])
+        }
+        savePins()
+    }
+
+    /// Unpins `ids`; each goes to the top of the unpinned items. A stored copy leaves the Pinned folder: its dir moves
+    /// into the cache, so the item stays usable and is deleted like any cached item (remove, Clear, quit).
+    func unpin(_ ids: Set<UUID>) {
+        for id in ids where pinnedIDs.contains(id) {
+            guard let i = items.firstIndex(where: { $0.id == id }) else { continue }
+            let item = items[i]
+            if case .file(let url) = item.kind, let dir = pins.dir(of: url) {
+                let dest = cache.root.appendingPathComponent(dir.lastPathComponent, isDirectory: true)
+                if FileManager.default.fileExists(atPath: dir.path) {
+                    do {
+                        try FileManager.default.createDirectory(at: cache.root, withIntermediateDirectories: true)
+                        try FileManager.default.moveItem(at: dir, to: dest)
+                    } catch {
+                        log.error("unpin kept the item pinned: \(error.localizedDescription, privacy: .public)")
+                        continue
+                    }
+                }
+                swap(at: i, to: ShelfItem(id: id, kind: .file(dest.appendingPathComponent(url.lastPathComponent)),
+                                          isCached: true, contentHash: item.contentHash))
+            }
+            bookmarks[id] = nil
+            pinnedIDs.remove(id)
+            move(from: i, to: pinnedIDs.count)
+        }
+        savePins()
+    }
+
+    /// What a pinned item points at: a cached file is cloned into the Pinned folder; an original file gets a bookmark;
+    /// a stored copy, link, or text stays as it is. Nil when the clone or bookmark fails.
+    private func storedForPin(_ item: ShelfItem) -> ShelfItem? {
+        guard case .file(let url) = item.kind, pinDir(of: item) == nil else {
+            bookmarks[item.id] = nil
+            return item
+        }
+        do {
+            if item.isCached {
+                let copy = try pins.store(url)
+                bookmarks[item.id] = nil
+                return ShelfItem(id: item.id, kind: .file(copy), isCached: true, contentHash: item.contentHash)
+            }
+            bookmarks[item.id] = try url.bookmarkData()
+            return item
+        } catch {
+            log.error("pin failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private func pinDir(of item: ShelfItem) -> URL? {
+        if case .file(let url) = item.kind { pins.dir(of: url) } else { nil }
+    }
+
+    /// One assignment, so the grid animates a single move.
+    private func move(from i: Int, to j: Int) {
+        var next = items
+        next.insert(next.remove(at: i), at: j)
+        items = next
+    }
+
+    private func savePins() {
+        pins.save(items.filter { pinnedIDs.contains($0.id) }, bookmarks: bookmarks)
     }
 
     /// Finder-style "name 2.ext" when a file item named `name` is already on the shelf (case-insensitive).
@@ -240,16 +353,16 @@ final class ShelfStore {
         log.debug("cache sweep freed \(gone.reduce(0) { $0 + $1.bytes }) bytes")
     }
 
-    /// Keeps Recent and the cache dirs it still references (T-17 AC-5).
+    /// Keeps pinned items, Recent, and the cache dirs Recent still references (T-17 AC-5, V2-08).
     func clear() {
         generation += 1
         actions.cancel()
         resizing = nil
         cache.wipe(keeping: Set(recent.flatMap(\.items).compactMap(cacheDir(of:)).map(\.lastPathComponent)))
-        items.removeAll()
-        keys.removeAll()
+        items.removeAll { !pinnedIDs.contains($0.id) }
+        keys = keys.filter { pinnedIDs.contains($0.value) }
         selection.removeAll()
-        missingIDs.removeAll()
+        missingIDs.formIntersection(pinnedIDs)
     }
 
     /// File paths compare after resolving `..`, trailing slash, and symlinks (/tmp vs /private/tmp), once per add.

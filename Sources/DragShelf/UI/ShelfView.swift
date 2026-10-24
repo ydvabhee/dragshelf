@@ -177,10 +177,10 @@ struct ShelfView: View {
                 }
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
-                .help("Remove all items from DragShelf. Your files stay where they are.")
+                .help("Remove all items except pinned. Your files stay where they are.")
                 .accessibilityLabel("Clear DragShelf")
-                .accessibilityHint("Removes all items from DragShelf; files are not deleted")
-                .disabled(store.items.isEmpty)
+                .accessibilityHint("Removes all items except pinned ones from DragShelf; files are not deleted")
+                .disabled(store.items.allSatisfy { store.isPinned($0.id) })
 
                 Button(action: onClose) {
                     Label("Close", systemImage: "xmark")
@@ -241,6 +241,7 @@ struct ShelfView: View {
                         ShelfItemView(item: item, isSelected: store.selection.contains(item.id),
                                       isMissing: store.missing(id: item.id),
                                       isRenaming: store.renamingID == item.id,
+                                      isPinned: store.isPinned(item.id),
                                       onRemove: { store.remove(ids: [item.id]) },
                                       onQuickLook: { onQuickLook(item.id) })
                             .overlay {
@@ -249,7 +250,8 @@ struct ShelfView: View {
                                 }, onQuickLook: onQuickLook)
                             }
                             // Above the handle so it gets the click.
-                            .overlay(alignment: .top) { if hovered == item.id { removeBadge(item.id) } }
+                            // Pinned tiles have no remove badge: unpin first (V2-08).
+                            .overlay(alignment: .top) { if hovered == item.id && !store.isPinned(item.id) { removeBadge(item.id) } }
                             // Rename (V2-04): above the handle so it gets clicks and keys.
                             .overlay(alignment: .top) {
                                 if store.renamingID == item.id {

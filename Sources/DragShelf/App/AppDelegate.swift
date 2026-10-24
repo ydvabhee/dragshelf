@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store.cache.wipe()
+        // Pinned items live outside the cache (V2-08), so the wipe above never touches them.
+        store.loadPins()
         dragMonitor.onDragStart = { [weak self] point in self?.panelController.dragStarted(at: point) }
         dragMonitor.onDragEnd = { [weak self] in self?.panelController.dragEnded() }
         hotKey.onPress = { [weak self] in self?.panelController.toggle(reason: .hotkey) }
