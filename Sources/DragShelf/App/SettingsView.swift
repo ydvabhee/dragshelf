@@ -202,11 +202,13 @@ private struct KeyRecorder: NSViewRepresentable {
             didSet {
                 guard active != oldValue else { return }
                 stopMonitoring()
-                guard active else {
-                    if Preferences.hotKeyOn() { HotKey.shared.register(Preferences.shortcut()) }
-                    return
+                // Deferred: `updateNSView` sets `active` during a SwiftUI update, and the hotkey's `current` is
+                // @Observable. The main queue keeps pause/resume calls in order.
+                DispatchQueue.main.async { [active] in
+                    if active { HotKey.shared.unregister() }
+                    else if Preferences.hotKeyOn() { HotKey.shared.register(Preferences.shortcut()) }
                 }
-                HotKey.shared.unregister()
+                guard active else { return }
                 // Local monitors run on the main thread; they see this app's events only.
                 monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
                     guard let self, let window = self.window, event.window === window else { return event }
