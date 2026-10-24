@@ -32,6 +32,7 @@ private func names(_ items: [ShelfItem]) -> [String] { items.map(\.displayName) 
 
 @Test func filterKinds() {
     let store = tempStore()
+    defer { try? FileManager.default.removeItem(at: store.pins.root.deletingLastPathComponent()) }
     let doc = file("a.pdf"), image = file("b.PNG"), folder = file("Folder")
     let link = ShelfItem(kind: .url(URL(string: "https://a.com")!)), text = ShelfItem(kind: .text("hello"))
     [doc, image, folder, link, text].forEach { store.add($0) }
@@ -98,6 +99,7 @@ private func names(_ items: [ShelfItem]) -> [String] { items.map(\.displayName) 
 
 @Test func pinnedSurviveFilteredRemove() {
     let store = tempStore()
+    defer { try? FileManager.default.removeItem(at: store.pins.root.deletingLastPathComponent()) }
     let a = ShelfItem(kind: .text("alpha one")), b = ShelfItem(kind: .text("alpha two"))
     [a, b].forEach { store.add($0) }
     store.pin([a])
