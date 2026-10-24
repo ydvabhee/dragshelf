@@ -531,3 +531,27 @@ Manual:
 9. Cmd-V with empty clipboard twice, 2 s apart: message stays 3 s after the last.
 - Re-verify 2f22efc: taken name writes "X 2.txt" beside it (`Zipper.uniqueName` against the folder listing, `.withoutOverwriting` per write, retry on a race). Completion called exactly once (single call on the return of `write`). Loop bounded at 100 attempts, then returns the last error. Existing file never touched; test covers X.txt, X 2.txt, X 3.txt. Build, 137 tests, release green.
 - Manual 10: drop into a Finder folder that has "Hello world.txt": Finder shows "Hello world 2.txt" (a sibling it did not name; check it appears without a refresh and no error dialog).
+## V2-09 Custom global shortcut (7fe343d) - FAIL (2)
+Build, 131 tests, release build green. AC-1..5 met on paper; Carbon mapping (⌃⌥⇧⌘, fn/caps dropped), validation, persistence, old default migration (no key = ⌃⌥⌘D, `hotKeyEnabled` false stays off, invalid stored = default), failed register keeps previous, Clear = off, hint gated on `hotKeyOn`, ADR-016 (Carbon handler on main via `assumeIsolated`) all OK.
+- Finding (med) `HotKey.swift:35,60,67` key names are US-ANSI. AZERTY/Dvorak shows and menu-binds the wrong letter. Fix: build the label from the current layout (`TISCopyCurrentASCIICapableKeyboardLayoutInputSource` + `UCKeyTranslate`, keyCode to char, uppercase); keep the table only for non-printing keys. Robust choice: UCKeyTranslate, since the label and the menu `KeyEquivalent` are then derived at display time (also follows a layout switch). `charactersIgnoringModifiers` at record time would go stale after a layout change.
+- Finding (med) `SettingsView.swift` recorder: Carbon fires before the local monitor, so pressing the active shortcut while recording toggles the shelf and is never recorded. Fix: `HotKey.shared.unregister()` when recording starts; on finish/cancel re-register (apply does it; cancel/Esc/click-outside must re-register the saved shortcut if `hotKeyEnabled`). Also hide the "used by another app" line while `recording` (it reads `current == nil`).
+- Low `SettingsView.swift` `RecorderView`: monitor removed on done, cancel, click outside, dismantle, window nil; no `deinit` safety net, and a closed-but-kept Settings window stays in recording state. Fix: remove monitor in `deinit`; stop recording on `NSWindow.willCloseNotification`.
+- Low `HotKey.swift`: keypad keys show "Key 82"; hint shows the shortcut even if Carbon refused it at launch. Fix: add keypad names; gate hint on `HotKey.shared.current != nil`.
+- Low: no test for recorder/monitor lifecycle or hotkey-while-recording.
+Manual:
+1. Settings > General: click field, press ⌃⌥⌘D (the active one): shelf must not toggle, field records it (fails today).
+2. Record ⌃⌥⌘J: menu shows ⌃⌥⌘J, hotkey works, relaunch keeps it. Hint (after 2 menu shows) names it.
+3. Record ⇧⌘K; record ⌃F5; record ⌘Space (system taken): inline "used by another app", old one still works.
+4. Press plain A, then ⇧A: "Use at least one of ⌘, ⌃, or ⌥." Esc cancels. Delete clears.
+5. Clear (x): menu item has no shortcut, hotkey dead, hint tip not shown, Reset button restores.
+6. Start recording, close Settings, reopen: not stuck recording; typing elsewhere unaffected.
+7. Switch keyboard to French AZERTY: field and menu show the key you pressed (fails today).
+
+### V2-09 fix round (d6c8cd0) - PASS
+Build, 133 tests, release build green.
+- Re-register: one path, `RecorderView.active` didSet (done, Esc, Delete, click outside, close, dismantle). `apply` registers the new key first while paused; the later no-arg re-register is a no-op (`shortcut == current`). Refused new key: the saved one comes back. Clear: `hotKeyOn` false, nothing re-registered. Double registration not possible (`register` guards equal).
+- Re-register failure (another app grabbed it): result is dropped but `current` stays nil, so the "used by another app" line shows (`hotKeyEnabled && !recording && current == nil`).
+- UCKeyTranslate: `kUCKeyActionDisplay` + `kUCKeyTranslateNoDeadKeysMask`, fresh dead-key state each call, 4-char buffer, empty/control output falls back to "Key n". French layout test passes (Q key shows A). Dead key such as ´ shows the standalone character.
+- `isolated deinit` compiles on Swift 6.3 (target macOS 14). It only removes the monitor and observer, which is main-safe; it does not re-register (dismantle does).
+- Low: `ß` uppercases to "SS" (name.count 2), so that key gets no menu shortcut. Re-register runs inside `updateNSView`, mutating `@Observable` state during a view update; watch the console for "Modifying state during view update". Close observer is skipped if the view has no window when recording starts.
+Manual: repeat V2-09 steps 1, 6, 7 above. Also: record, then have another app take the shortcut before leaving the field: the red message shows. French layout: press the dead key ´ as the key: field shows a sensible label.

@@ -11,7 +11,7 @@ struct DragShelfApp: App {
             Button(appDelegate.panelController.isShown ? "Hide DragShelf" : "Show DragShelf") {
                 appDelegate.panelController.toggle()
             }
-            .keyboardShortcut("d", modifiers: [.control, .option, .command])
+            .keyboardShortcut(appDelegate.hotKey.current?.keyboardShortcut)
             Button("Paste to DragShelf") { appDelegate.panelController.paste() }
             Button("Undo Drag Out") { appDelegate.panelController.undoDragOut() }
                 .keyboardShortcut("z")
