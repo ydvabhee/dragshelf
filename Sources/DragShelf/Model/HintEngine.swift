@@ -49,6 +49,9 @@ final class HintEngine {
         didSet { if !dragging { present() } }
     }
 
+    /// The hotkey tip needs a registered shortcut (on, and not refused by Carbon). Injectable for tests.
+    @ObservationIgnored var shortcutRegistered: () -> Bool = { HotKey.shared.current != nil }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
@@ -57,10 +60,10 @@ final class HintEngine {
     var dismissed: Set<String> { Set(defaults.stringArray(forKey: Self.dismissedKey) ?? []) }
     private var counts: [String: Int] { defaults.dictionary(forKey: Self.countsKey) as? [String: Int] ?? [:] }
 
-    /// Tips on, not dismissed, shown fewer than `maxShows` times; the hotkey tip only while the shortcut is on.
+    /// Tips on, not dismissed, shown fewer than `maxShows` times; the hotkey tip only while the shortcut is on and registered.
     func eligible(_ hint: Hint) -> Bool {
         Preferences.tipsOn(defaults) && !dismissed.contains(hint.rawValue) && count(hint) < Self.maxShows
-            && (hint != .hotkey || Preferences.hotKeyOn(defaults))
+            && (hint != .hotkey || (Preferences.hotKeyOn(defaults) && shortcutRegistered()))
     }
 
     func record(_ event: Event) {

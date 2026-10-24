@@ -44,7 +44,7 @@ struct SettingsView: View {
                 }
                 // A failed attempt, or the saved shortcut refused at launch.
                 if let message = shortcutError
-                    ?? (hotKeyEnabled && HotKey.shared.current == nil ? Self.takenMessage : nil) {
+                    ?? (hotKeyEnabled && !recording && HotKey.shared.current == nil ? Self.takenMessage : nil) {
                     Text(message).font(.callout).foregroundStyle(.red)
                 }
             } header: {
@@ -166,7 +166,7 @@ private struct ShortcutField: View {
             .strokeBorder(recording ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: recording ? 2 : 1))
         .contentShape(Rectangle())
         .onTapGesture { recording.toggle() }
-        .background(KeyRecorder(active: recording, onKeyDown: onKeyDown, onClickOutside: { recording = false }))
+        .background(KeyRecorder(active: recording, onKeyDown: onKeyDown, onCancel: { recording = false }))
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel("Global shortcut")
@@ -179,28 +179,34 @@ private struct ShortcutField: View {
 private struct KeyRecorder: NSViewRepresentable {
     var active: Bool
     var onKeyDown: (NSEvent) -> Void
-    var onClickOutside: () -> Void
+    var onCancel: () -> Void
 
     func makeNSView(context: Context) -> RecorderView { RecorderView() }
 
     func updateNSView(_ view: RecorderView, context: Context) {
         view.onKeyDown = onKeyDown
-        view.onClickOutside = onClickOutside
+        view.onCancel = onCancel
         view.active = active
     }
 
     static func dismantleNSView(_ view: RecorderView, coordinator: ()) { view.active = false }
 
+    /// While active the global hotkey is paused (Carbon would see the keys before the monitor); it comes back on
+    /// every way out: a recorded key, Esc, Delete, click elsewhere, window close, teardown.
     final class RecorderView: NSView {
         var onKeyDown: ((NSEvent) -> Void)?
-        var onClickOutside: (() -> Void)?
+        /// Click elsewhere in the window, or the window closes.
+        var onCancel: (() -> Void)?
         private var monitor: Any?
         var active = false {
             didSet {
                 guard active != oldValue else { return }
-                if let monitor { NSEvent.removeMonitor(monitor) }
-                monitor = nil
-                guard active else { return }
+                stopMonitoring()
+                guard active else {
+                    if Preferences.hotKeyOn() { HotKey.shared.register(Preferences.shortcut()) }
+                    return
+                }
+                HotKey.shared.unregister()
                 // Local monitors run on the main thread; they see this app's events only.
                 monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
                     guard let self, let window = self.window, event.window === window else { return event }
@@ -208,16 +214,33 @@ private struct KeyRecorder: NSViewRepresentable {
                         self.onKeyDown?(event)
                         return nil
                     }
-                    if !self.bounds.contains(self.convert(event.locationInWindow, from: nil)) { self.onClickOutside?() }
+                    if !self.bounds.contains(self.convert(event.locationInWindow, from: nil)) { self.onCancel?() }
                     return event
                 }
+                if let window {
+                    NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose),
+                                                           name: NSWindow.willCloseNotification, object: window)
+                }
             }
+        }
+
+        @objc private func windowWillClose() {
+            active = false
+            onCancel?()
+        }
+
+        private func stopMonitoring() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: nil)
         }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if window == nil { active = false }
         }
+
+        isolated deinit { stopMonitoring() }
     }
 }
 

@@ -22,21 +22,48 @@ private func code(_ k: Int) -> UInt32 { UInt32(k) }
     #expect(Shortcut(keyCode: UInt16(kVK_ANSI_K), flags: [.capsLock]).modifiers == 0)
 }
 
+/// Layout data of an installed keyboard layout, e.g. "com.apple.keylayout.French"; nil if not installed.
+private func layout(_ id: String) -> Data? {
+    let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
+    guard let list = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource],
+          let source = list.first, let data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
+    return Unmanaged<CFData>.fromOpaque(data).takeUnretainedValue() as Data
+}
+
+@Test func keyNamesFollowTheLayout() throws {
+    let us = try #require(layout("com.apple.keylayout.US"))
+    #expect(Shortcut.keyName(code(kVK_ANSI_D), layout: us) == "D")
+    #expect(Shortcut.keyName(code(kVK_ANSI_Slash), layout: us) == "/")
+    if let french = layout("com.apple.keylayout.French") {
+        #expect(Shortcut.keyName(code(kVK_ANSI_Q), layout: french) == "A")
+    }
+    if let dvorak = layout("com.apple.keylayout.Dvorak") {
+        #expect(Shortcut.keyName(code(kVK_ANSI_D), layout: dvorak) == "E")
+    }
+    // Layout-independent keys, and no layout at all.
+    #expect(Shortcut.keyName(code(kVK_ANSI_Keypad1), layout: us) == "Keypad 1")
+    #expect(Shortcut.keyName(code(kVK_ANSI_KeypadEnter), layout: nil) == "Keypad Enter")
+    #expect(Shortcut.keyName(code(kVK_ANSI_D), layout: nil) == "Key 2")
+}
+
 @Test func displayStrings() {
-    #expect(Shortcut.standard.display == "⌃⌥⌘D")
-    #expect(Shortcut.standard.spoken == "Control-Option-Command-D")
+    // Character keys follow the host layout; only the modifier part is fixed.
+    #expect(Shortcut.standard.display == "⌃⌥⌘" + Shortcut.standard.keyName)
+    #expect(Shortcut.standard.spoken == "Control-Option-Command-" + Shortcut.standard.keyName)
     let all = UInt32(controlKey | optionKey | shiftKey | cmdKey)
     #expect(Shortcut(keyCode: code(kVK_F12), modifiers: all).display == "⌃⌥⇧⌘F12")
     #expect(Shortcut(keyCode: code(kVK_Space), modifiers: UInt32(optionKey)).display == "⌥Space")
     #expect(Shortcut(keyCode: code(kVK_LeftArrow), modifiers: UInt32(cmdKey)).display == "⌘←")
-    #expect(Shortcut(keyCode: code(kVK_ANSI_Slash), modifiers: UInt32(shiftKey | cmdKey)).spoken == "Shift-Command-/")
+    #expect(Shortcut(keyCode: code(kVK_ANSI_Keypad5), modifiers: UInt32(shiftKey | cmdKey)).spoken == "Shift-Command-Keypad 5")
 }
 
-@Test func menuKeyEquivalent() {
-    #expect(Shortcut.standard.keyboardShortcut == KeyboardShortcut("d", modifiers: [.control, .option, .command]))
+@Test func menuKeyEquivalent() throws {
+    let d = try #require(Shortcut.standard.keyName.lowercased().first)
+    #expect(Shortcut.standard.keyboardShortcut == KeyboardShortcut(KeyEquivalent(d), modifiers: [.control, .option, .command]))
     #expect(Shortcut(keyCode: code(kVK_UpArrow), modifiers: UInt32(shiftKey | cmdKey)).keyboardShortcut
         == KeyboardShortcut(.upArrow, modifiers: [.shift, .command]))
     #expect(Shortcut(keyCode: code(kVK_F5), modifiers: UInt32(cmdKey)).keyboardShortcut == nil)
+    #expect(Shortcut(keyCode: code(kVK_ANSI_Keypad1), modifiers: UInt32(cmdKey)).keyboardShortcut == nil)
 }
 
 @Test func shortcutPersistence() {

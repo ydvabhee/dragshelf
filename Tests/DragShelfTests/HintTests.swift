@@ -5,6 +5,7 @@ import Testing
 private func engine() -> (HintEngine, UserDefaults) {
     let d = UserDefaults(suiteName: "HintTests-\(UUID().uuidString)")!
     let e = HintEngine(defaults: d)
+    e.shortcutRegistered = { true }
     e.visible = true
     return (e, d)
 }
@@ -42,6 +43,14 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
 @Test func hotkeyTipNeedsShortcutOn() {
     let (e, d) = engine()
     d.set(false, forKey: Preferences.hotKeyEnabled)
+    e.record(.shown(.manual, hasFile: false, hasRecent: false))
+    e.record(.shown(.manual, hasFile: false, hasRecent: false))
+    #expect(e.current == nil)
+}
+
+@Test func hotkeyTipNeedsRegisteredShortcut() {
+    let (e, _) = engine()
+    e.shortcutRegistered = { false } // On, but Carbon refused it at launch.
     e.record(.shown(.manual, hasFile: false, hasRecent: false))
     e.record(.shown(.manual, hasFile: false, hasRecent: false))
     #expect(e.current == nil)
