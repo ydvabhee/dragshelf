@@ -249,6 +249,7 @@ Milestone M7. Source: user 2026-10-24. Supersedes OQ-03 for pinned items only (u
 - AC-3: Persistence in Application Support (`~/Library/Application Support/com.abhishekyadav.DragShelf/Pinned/`): original files stored as bookmark data (resolve on launch; stale → refresh; unresolvable → Missing style); cached items (images, promises, text, zips, converted) copied into the Pinned folder (not the cache, so launch wipe and T-21 sweep never touch it); text stored as UTF-8. Manifest JSON (versioned, strict decode). Unpin of a stored copy deletes it.
 - AC-4: Cache sweep (T-21) and launch/quit wipe ignore the Pinned folder; dedupe keys include pinned items.
 - AC-5: Tests: pin/unpin, survives clear, survives simulated relaunch (new store from manifest), bookmark of moved file resolves, unpin frees stored copy, manifest corruption handled.
+- AC-6 (carried from V2-09 QA): `SettingsView` shortcut recorder re-registers the hotkey from `updateNSView` (mutates @Observable during a view update) — defer it (`Task { @MainActor }` / `DispatchQueue.main.async`) so SwiftUI never warns "Modifying state during view update".
 
 ## V2-09 Custom global shortcut (Settings recorder)
 Milestone M7. Source: user 2026-10-24. Supersedes OQ-04.
@@ -326,7 +327,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-06 | Paste clipboard into DragShelf | M7 | V2-05 | US-2 | DONE (2026-10-24) |
 | V2-07 | Text ↔ .txt (dual drag-out, Use as Text, Save as .txt) | M7 | V2-06 | US-4 | DONE (2026-10-24) |
 | V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | TODO |
-| V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | QA |
+| V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | DONE (2026-10-24) |
 | V2-10 | Search and filter | M7 | V2-08 | US-6 | TODO |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
