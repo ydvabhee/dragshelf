@@ -1,9 +1,13 @@
 # DragShelf — Status & Handoff (paused 2026-10-20)
 
-## ▶ Resume here
-1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude` (or `claude --agent manager`), then say **"continue DragShelf from docs/STATUS.md"**.
-2. All v1 feature tasks are DONE (T-01..T-11, T-13..T-21). v2 Shelf Actions DONE: V2-01 Zip (+ Actions menu), V2-02 Share/AirDrop, V2-03 Convert/Resize, V2-04 Rename, V2-05 Custom resize. Next: ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is full; release steps in CLAUDE.md).
-3. Walk the user through the open questions below; T-12 (signing/notarization) once they have a Developer ID.
+## ▶ Resume here (paused 2026-10-24)
+1. `cd ~/Documents/Abhishek/MacApps/DragShelf && claude`, then say **"continue DragShelf from docs/STATUS.md"**.
+2. Done: all v1 tasks except T-12 (signing, blocked on Developer ID); v2 Shelf Actions V2-01..V2-05 (zip, share/AirDrop, convert/resize, rename, custom resize).
+3. Next batch (user-approved 2026-10-24, specs in TASKS.md), in this order:
+   - **V2-06 Paste** — partly written on branch `wip/V2-06` (commit 64190ca: DragShelfApp, DropReceiver, ShelfPanelController; no tests/CHANGELOG yet). Resume: `git merge --squash wip/V2-06` onto main (or cherry-pick), finish ACs + tests, then QA; delete the wip branch after.
+   - **V2-09 Custom shortcut** — not started; can run in parallel in a worktree (HotKey/Settings files only).
+   - **V2-07 Text ↔ .txt**, then **V2-08 Pin**, then **V2-10 Search/filter** — sequential (shared core files).
+4. Then ask the user about cutting **v0.2.0** (CHANGELOG `[Unreleased]` is large).
 
 ## Build / run
 - SwiftPM only (ADR-013; `xcodebuild` broken on this Mac until `sudo xcodebuild -runFirstLaunch`).
