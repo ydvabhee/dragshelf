@@ -493,3 +493,21 @@ Build, 125 tests (3 full runs), release build green.
 - Merge (641882d): header `ActionsMenu` and tile `menu(for:)` both list Compress, Rename…, Share…, AirDrop, Convert To ▸, Resize ▸ (… Custom… after a separator); no duplicates or missing entries.
 - b882b15: `cancelStopsAfterCurrentImageAndKeepsFinished` is deterministic (cancels from progress at image 2, asserts exactly p0-p2 and no extra files), so cancel-early is covered at the converter level. Runner test loosened to 1...20 is fine.
 Manual: repeat V2-05 steps 9 and 10 (Custom… reopen shows new size; 400 % on a large photo shows "Too large", form stays open).
+
+## V2-06 Paste clipboard (e1f5a94) - PASS
+Build, 130 tests, release build green.
+- Cmd-V: `DropReceiver.performKeyEquivalent`, only plain Cmd, not while `resizing`, not when firstResponder is `NSText` (rename field gets the paste). `ShelfPanel.handleKey` only takes Cmd-Z, so no double handling; menu bar has no Cmd-V item.
+- `validateMenuItem` uses `canAccept` (same reader as paste), so Paste is disabled on empty or unusable pasteboard.
+- Right-click: tiles supply `DragOutHandleView.menu(for:)`; empty area falls to `DropReceiver.menu(for:)` through the responder chain. Not unit-testable; manual step 4.
+- Menu bar paste: `show()` with `.manual` uses `orderFrontRegardless`, never key, no activation.
+- Large images: same `ingest` path, hashing in `Task.detached`. Reading the data from the pasteboard is on main (same as a drop).
+- File promises on the general pasteboard: `PasteboardReader.read` handles them via `NSFilePromiseReceiver`.
+- Low `DropReceiver.swift` `pasteItems`: "Nothing to paste" timer is not cancelled. Two pastes 2 s apart: the first timer clears the second message after 1 s. Fix: keep the Task, cancel it before starting a new one.
+Manual:
+1. Copy 2 files and a folder in Finder, focus DragShelf (hotkey), Cmd-V: all added; Cmd-V again: no duplicates.
+2. Copy a link, text, and an image (Safari "Copy Image", a screenshot to clipboard): each lands as a link, text, image item. Paste a large screenshot (> 20 MB): UI stays responsive.
+3. Rename a file (Return), Cmd-V in the field: pastes text into the field, shelf unchanged. Same in the Custom resize form.
+4. Right-click the empty grid area: "Paste" shown, enabled with a usable clipboard. Right-click a tile: tile menu (no Paste). Clipboard empty (copy nothing usable, e.g. a color): Paste is grayed.
+5. Clipboard empty, Cmd-V: "Nothing to paste" under the header, gone after about 3 s. Repeat twice quickly: message stays visible about 3 s after the last one (low finding: gone early).
+6. In Recent view, Cmd-V or Paste: returns to the grid.
+7. Hide the shelf, copy a file, menu bar "Paste to DragShelf": shelf appears, item added, front app keeps focus (no Dock activation, panel not key). Empty clipboard: shelf appears with "Nothing to paste".
