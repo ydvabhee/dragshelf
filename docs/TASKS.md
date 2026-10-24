@@ -280,7 +280,9 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - Accessibility: Reduce Motion → static/sleeping; VoiceOver: single "Pet" element (petting action), no noise.
 - Behaviors (cat): appear 2–5 s after items land (hop onto top edge or peek from behind), walk along the top edge, sit, groom, stretch, yawn, sleep (zzz), peek, bat a tile (tile wiggles), sit on a tile. Ball toy: `🧶` button adds a yarn ball; user drags it left/right; pet chases, pounces, rolls it back. Petting: click → purr + ♥; click while asleep → wakes and stretches. Right-click pet → "Send home" (turns pet off).
 - Personality system (data-driven, unit-testable): species = art + animation set; personality = weights (energy, curiosity, sleepiness, mischief, shyness). v0.3.0 personalities: Playful, Lazy, Curious, Shy, Mischievous. Mood modifiers: time of day, petting (happier → visits more), shelf activity.
-- Later (not v0.3.0): dog and other species (reuse personalities), more tricks, seasonal touches.
+- Art style (user 2026-10-24): soft clay 3D chibi — rounded chunky bodies, matte clay shading via gradients, blush cheeks, dot/closed-eye smiles, soft contact shadow; original designs drawn in code.
+- Species lineup (user picks 2026-10-24): **Cat** (v0.3.0), **Penguin** (v0.3.0 — waddle, belly-slide, flap), **Baby dino** (v0.3.x — stomp, "rawr!" bubble, tail wag, spikes peek from behind the shelf), **Bee** (v0.3.x — flies/hovers, visits tiles, naps on a tile; needs a flight movement system). Optional ideas: Hedgehog (curls into the ball), Octopus (holds several tiles). Settings: choose pet + "Surprise me" (rotates weekly).
+- Later: more tricks, seasonal touches.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
