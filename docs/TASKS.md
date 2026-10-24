@@ -289,7 +289,9 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - Show the cat rarely: mostly sleeping; current activity level otherwise fine (don't keep it on screen/active for long).
 - REMOVE the header ball button. Instead the cat occasionally (random) brings its own ball, plays briefly, and pushes it out of the shelf (off the edge).
 - Mouse follow: when the user moves the mouse over/near the shelf, the cat wakes, runs toward the cursor, and acts cute (sit, look up, head tilt, purr). Cheap: only while the shelf is visible; no global mouse monitoring when hidden.
-- Keep: soft clay cat, facing direction, hide on drag, routines, personalities, Send Home, Settings.
+- On drag: do NOT duck behind a floor/lip. The cat runs out of the shelf to the nearer side (left or right edge), out of view, and walks back in after the drag ends.
+- Default personality: **Curious** (user 2026-10-24) — plays with the items on the shelf: walks to tiles, sniffs, bats a tile (wiggle), sits beside or on one; purely visual, never changes items.
+- Keep: soft clay cat, facing direction, routines, personalities, Send Home, Settings.
 - Still deferred: cat teaches tips (speech bubbles).
 
 ## T-10 Settings window + launch at login
