@@ -287,7 +287,7 @@ struct ShelfView: View {
             Text("Drop here")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Files, links, and text")
+            Text("Files, folders, links, and text")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
