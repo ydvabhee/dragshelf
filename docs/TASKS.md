@@ -267,6 +267,17 @@ Milestone M7. Source: user 2026-10-24.
 - AC-4: Drops while filtered still add items; filter stays; new item visible only if it matches (header shows count change). Search state resets on hide.
 - AC-5: Performance: filtering 5000 items < 16 ms (precomputed lowercase/folded search key per item). Tests: matching rules, filter kinds, visible-only actions, perf.
 
+## V3-01 Shelf pet: cat with personalities, preview + opt-in
+Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 (validated). Original character only (never copy third-party art); drawn in code like the app icon.
+- Flag + default: `petEnabled` default **false**; internal compile/runtime feature flag to disable entirely.
+- Preview + opt-in: pet shows as a preview on the user's **2nd and 3rd** drag sessions (not the first — first teaches the core flow), footer line "Meet Mochi 🐱 — your shelf pet (preview)". After the preview, footer asks once: "Keep Mochi on DragShelf?  Keep · No thanks". Keep → on; No thanks / ignored → stays off, never asked again. Settings → Pet: on/off, species, personality (+ "Surprise me"), name, "Show preview".
+- Never in the way: hidden during any drag; clicks pass through except on the pet and its ball; never covers the drop target or scroll bar; purely visual — never moves, changes or removes items.
+- Cost: animates only while DragShelf is visible and idle; sleeps (near-static) after ~30 s; fully stopped when hidden. Idle CPU ≈ 0 when sleeping.
+- Accessibility: Reduce Motion → static/sleeping; VoiceOver: single "Pet" element (petting action), no noise.
+- Behaviors (cat): appear 2–5 s after items land (hop onto top edge or peek from behind), walk along the top edge, sit, groom, stretch, yawn, sleep (zzz), peek, bat a tile (tile wiggles), sit on a tile. Ball toy: `🧶` button adds a yarn ball; user drags it left/right; pet chases, pounces, rolls it back. Petting: click → purr + ♥; click while asleep → wakes and stretches. Right-click pet → "Send home" (turns pet off).
+- Personality system (data-driven, unit-testable): species = art + animation set; personality = weights (energy, curiosity, sleepiness, mischief, shyness). v0.3.0 personalities: Playful, Lazy, Curious, Shy, Mischievous. Mood modifiers: time of day, petting (happier → visits more), shelf activity.
+- Later (not v0.3.0): dog and other species (reuse personalities), more tricks, seasonal touches.
+
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
 - AC-1: Launch at login toggle calls `SMAppService.mainApp.register/unregister`; toggle reflects real status after relaunch.
@@ -329,6 +340,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | QA |
 | V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | DONE (2026-10-24) |
 | V2-10 | Search and filter | M7 | V2-08 | US-6 | TODO |
+| V3-01 | Shelf pet: cat with personalities, preview + opt-in | M8 (v0.3.0) | v0.2.0 release | US-18 | BACKLOG |
 
 Order reason: V2-01 builds the shared runner, progress/cancel UI, and menus with the simplest action.
 V2-02 is the riskiest UI (AirDrop from a non-activating panel), so it goes early. V2-04 last: text editing in the panel touches focus.

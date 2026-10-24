@@ -10,6 +10,7 @@
    4. **Release test checklist** (`docs/RELEASE-CHECKLIST.md`: manual-only checks from QA.md).
    5. **Cut v0.2.0**: CHANGELOG `[Unreleased]` → `[0.2.0]`, VERSION 0.2.0, `chore(release): v0.2.0`, tag, `scripts/make-dmg.sh`; user pushes + uploads DMG.
 4. Not now (user declined 2026-10-24): update check, Merge PDFs, OCR, auto-show options.
+5. **v0.3.0 headline: V3-01 Shelf pet** (spec in TASKS.md; default off, preview on 2nd/3rd session, ask once). Build after v0.2.0 ships.
 
 ## Build / run
 - SwiftPM only (ADR-013; `xcodebuild` broken on this Mac until `sudo xcodebuild -runFirstLaunch`).
