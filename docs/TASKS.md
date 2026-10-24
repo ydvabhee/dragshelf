@@ -240,6 +240,7 @@ Milestone M7. Source: user 2026-10-24 ("UI should be user friendly and not confu
 - AC-2: `.txt`/plain-text file item → context menu "Use as Text" adds a text item with its contents (UTF-8/UTF-16 detected; ≤ 1 MB, else disabled with tooltip "File is too large").
 - AC-3: Text item → context menu "Save as .txt" adds a cached `.txt` file item (name from first line, uniqueName). Original text item stays.
 - AC-4: ADR-016 for the file-promise provider delegate (writes off main). Tests: name sanitizing, encoding detection, size limit, promise writes exact bytes.
+- AC-5 (carried from V2-06 QA): `DropReceiver.pasteItems` keeps the "Nothing to paste" clear-timer Task and cancels it before starting a new one.
 
 ## V2-08 Pin items (persist across Clear, drag out, quit)
 Milestone M7. Source: user 2026-10-24. Supersedes OQ-03 for pinned items only (unpinned still cleared on quit).
@@ -322,7 +323,7 @@ Design: ARCHITECTURE §11 + ADR-014. Every v2 task also meets PRD common ACs AC-
 | V2-03 | Convert and resize images (ImageIO) | M6 | V2-01 | US-14 | DONE (2026-10-23) |
 | V2-04 | Rename shelf items | M6 | V2-01 | US-12 | DONE (2026-10-23) |
 | V2-05 | Custom image resize (Pixels/Percent, aspect lock) | M6 | V2-03 | US-14 | DONE (2026-10-23) |
-| V2-06 | Paste clipboard into DragShelf | M7 | V2-05 | US-2 | QA |
+| V2-06 | Paste clipboard into DragShelf | M7 | V2-05 | US-2 | DONE (2026-10-24) |
 | V2-07 | Text ↔ .txt (dual drag-out, Use as Text, Save as .txt) | M7 | V2-06 | US-4 | TODO |
 | V2-08 | Pin items (persist across Clear, drag out, quit) | M7 | V2-07 | US-6 | TODO |
 | V2-09 | Custom global shortcut (Settings recorder) | M7 | T-09 | US-8 | TODO |
