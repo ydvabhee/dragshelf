@@ -5,6 +5,7 @@
 2. `main`: all v1 (except T-12 signing) + v2 V2-01..V2-10 + Folders filter DONE, 166 tests, release-ready. Nothing pushed since the user's last push.
 3. **Pet trial (V3-01)** lives ONLY on branch `worktree-agent-a831b198b0f85dadb` (worktree `.claude/worktrees/agent-a831b198b0f85dadb`), main merged in at 44fa168. User feedback being applied in checkpoints:
    - **Checkpoints 1 + 2 DONE** in `616fbf6` on the branch (192 tests): play floor inside the shelf, facing/mirroring, hide behind the lip, warmer fur, ball physics (flick/bounce/roll off + fetch), needs-driven routines + reactions. Trial app built in the worktree and launched for the user. Next: user tries it; manual checks = clicks/ball drag/context menu inside the panel.
+   - **Next pet iteration (user feedback 2026-10-24, build tomorrow):** remove play floor → cat on bottom edge, mostly sleeping, no ball button (cat brings its own ball and pushes it off), cat follows the mouse and acts cute. Details: TASKS.md "V3-01 next iteration".
    - **Checkpoint 3 (deferred, not started; earlier WIP discarded):** cat teaches tips as speech bubbles with gestures (same HintEngine rules; footer fallback when pet off).
    - Cost note: user is near the weekly usage limit — use checkpoints, cheaper model for non-art work.
 4. After the pet decision: architect docs sync, release test checklist, cut v0.2.0 (on hold until then).

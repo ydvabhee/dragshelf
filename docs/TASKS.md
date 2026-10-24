@@ -284,6 +284,14 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - Species lineup (user picks 2026-10-24): **Cat** (v0.3.0), **Penguin** (v0.3.0 — waddle, belly-slide, flap), **Baby dino** (v0.3.x — stomp, "rawr!" bubble, tail wag, spikes peek from behind the shelf), **Bee** (v0.3.x — flies/hovers, visits tiles, naps on a tile; needs a flight movement system). Optional ideas: Hedgehog (curls into the ball), Octopus (holds several tiles). Settings: choose pet + "Surprise me" (rotates weekly).
 - Later: more tricks, seasonal touches.
 
+### V3-01 next iteration (user feedback 2026-10-24, build tomorrow; trial branch `worktree-agent-a831b198b0f85dadb` @ 616fbf6)
+- REMOVE the play floor band (no darker background / floor / lip). The cat sits on the BOTTOM edge of the shelf with no extra visual area (earlier it was on the top edge; now bottom). Confirm with user: on the bottom rim inside the shelf over transparent space, vs. standing just below the shelf's bottom edge.
+- Show the cat rarely: mostly sleeping; current activity level otherwise fine (don't keep it on screen/active for long).
+- REMOVE the header ball button. Instead the cat occasionally (random) brings its own ball, plays briefly, and pushes it out of the shelf (off the edge).
+- Mouse follow: when the user moves the mouse over/near the shelf, the cat wakes, runs toward the cursor, and acts cute (sit, look up, head tilt, purr). Cheap: only while the shelf is visible; no global mouse monitoring when hidden.
+- Keep: soft clay cat, facing direction, hide on drag, routines, personalities, Send Home, Settings.
+- Still deferred: cat teaches tips (speech bubbles).
+
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
 - AC-1: Launch at login toggle calls `SMAppService.mainApp.register/unregister`; toggle reflects real status after relaunch.
