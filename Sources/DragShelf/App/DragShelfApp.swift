@@ -12,6 +12,7 @@ struct DragShelfApp: App {
                 appDelegate.panelController.toggle()
             }
             .keyboardShortcut("d", modifiers: [.control, .option, .command])
+            Button("Paste to DragShelf") { appDelegate.panelController.paste() }
             Button("Undo Drag Out") { appDelegate.panelController.undoDragOut() }
                 .keyboardShortcut("z")
                 .disabled(appDelegate.store.recent.isEmpty)

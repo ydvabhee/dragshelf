@@ -13,12 +13,14 @@ private let promiseQueue = OperationQueue()
 @MainActor var pendingIngest: Task<Void, Never>?
 @MainActor private var pendingIngestCount = 0
 
-final class DropReceiver<Content: View>: NSHostingView<Content> {
+final class DropReceiver<Content: View>: NSHostingView<Content>, NSMenuItemValidation {
     var store: ShelfStore?
     /// A drop landed (keeps an auto-shown shelf open, T-08 AC-3).
     var onDrop: (() -> Void)?
     /// A file promise from that drop failed (e.g. offline Mail attachment).
     var onPromiseFailed: (@MainActor () -> Void)?
+    /// Source of Cmd-V and the Paste menu item; tests inject a private named pasteboard (V2-06).
+    var pasteboard: NSPasteboard = .general
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -52,6 +54,12 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
 
     /// Cmd-C copies the selection (panel is key after a tile click). `copy(_:)` covers a menu-routed Cmd-C.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Cmd-V pastes the clipboard like a drop; a focused text field (rename, resize, search) keeps its paste.
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           event.charactersIgnoringModifiers == "v", store?.resizing == nil, !(window?.firstResponder is NSText) {
+            paste(nil)
+            return true
+        }
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               event.charactersIgnoringModifiers == "c", store?.selection.isEmpty == false,
               !(window?.firstResponder is NSText) // typing in a field (rename, resize form) copies its text
@@ -63,6 +71,42 @@ final class DropReceiver<Content: View>: NSHostingView<Content> {
     @objc func copy(_ sender: Any?) {
         guard let store else { return }
         DragOutSource.copy(store.selectedItems.filter { !store.missing(id: $0.id) })
+    }
+
+    @objc func paste(_ sender: Any?) { pasteItems() }
+
+    /// Adds the pasteboard's items through the drop path (dedupe, image hashing, uniqueName) and returns to the grid.
+    /// Nothing usable: a one-line "Nothing to paste" under the header.
+    @discardableResult
+    func pasteItems() -> Bool {
+        guard let store else { return false }
+        let incoming = PasteboardReader.read(pasteboard)
+        guard !incoming.isEmpty else {
+            store.actions.message = "Nothing to paste"
+            Task { @MainActor in  // subtle: fades after a moment unless something else replaced it
+                try? await Task.sleep(for: .seconds(3))
+                if store.actions.message == "Nothing to paste" { store.actions.message = nil }
+            }
+            return false
+        }
+        store.actions.message = nil
+        store.showRecent = false
+        store.resizing = nil
+        let failed = onPromiseFailed
+        guard Self.ingest(incoming, into: store, onPromiseFailed: { failed?() }) else { return false }
+        onDrop?()
+        return true
+    }
+
+    /// Right-click on empty grid area (tiles supply their own menu).
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "").target = self
+        return menu
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action == #selector(paste(_:)) ? PasteboardReader.canAccept(pasteboard) : true
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {

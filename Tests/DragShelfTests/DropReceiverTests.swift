@@ -158,3 +158,74 @@ private final class FakeDraggingInfo: NSObject, NSDraggingInfo {
     #expect(store.items.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: dir.path))
 }
+
+// MARK: - Paste (V2-06)
+
+@MainActor
+private func pasteSetup(_ write: (NSPasteboard) -> Void) -> (DropReceiver<EmptyView>, ShelfStore, NSPasteboard) {
+    let pb = NSPasteboard(name: .init("test-paste-\(UUID())"))
+    pb.clearContents()
+    write(pb)
+    let store = ShelfStore(cache: ItemCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("paste-\(UUID())")))
+    let receiver = DropReceiver(rootView: EmptyView())
+    receiver.store = store
+    receiver.pasteboard = pb
+    return (receiver, store, pb)
+}
+
+@Test @MainActor func pasteAddsFilesURLAndText() async {
+    let a = URL(fileURLWithPath: "/tmp/pa.txt"), link = URL(string: "https://example.com/x")!
+    let (receiver, store, pb) = pasteSetup { $0.writeObjects([a as NSURL, link as NSURL, "hello" as NSString]) }
+    defer { pb.releaseGlobally() }
+    store.showRecent = true
+    #expect(receiver.pasteItems())
+    await pendingIngest?.value
+    #expect(store.items.map(\.kind).contains(.file(a)))
+    #expect(store.items.map(\.kind).contains(.text("hello")))
+    #expect(!store.showRecent)
+    #expect(store.actions.message == nil)
+}
+
+@Test @MainActor func pasteURLAndTextOnly() async {
+    let link = URL(string: "https://example.com/y")!
+    let (receiver, store, pb) = pasteSetup { _ in }
+    defer { pb.releaseGlobally() }
+    pb.setString(link.absoluteString, forType: .URL)
+    #expect(receiver.pasteItems())
+    await pendingIngest?.value
+    #expect(store.items.map(\.kind) == [.url(link)])
+}
+
+@Test @MainActor func pasteImageLandsAsCachedFileAndDedupes() async throws {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4, bitsPerSample: 8, samplesPerPixel: 4,
+                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let png = try #require(rep.representation(using: .png, properties: [:]))
+    let (receiver, store, pb) = pasteSetup { $0.setData(png, forType: .png) }
+    defer { pb.releaseGlobally(); store.cache.wipe() }
+    #expect(receiver.pasteItems())
+    await pendingIngest?.value
+    #expect(store.items.count == 1)
+    #expect(store.items.first?.isCached == true)
+    receiver.pasteItems()  // same bytes again: deduped
+    await pendingIngest?.value
+    #expect(store.items.count == 1)
+}
+
+@Test @MainActor func pasteDuplicateFileDeduped() async {
+    let a = URL(fileURLWithPath: "/tmp/pdup.txt")
+    let (receiver, store, pb) = pasteSetup { $0.writeObjects([a as NSURL]) }
+    defer { pb.releaseGlobally() }
+    receiver.pasteItems()
+    receiver.pasteItems()
+    await pendingIngest?.value
+    #expect(store.items.count == 1)
+}
+
+@Test @MainActor func pasteEmptyShowsMessageAndAddsNothing() {
+    let (receiver, store, pb) = pasteSetup { _ in }
+    defer { pb.releaseGlobally() }
+    #expect(!receiver.pasteItems())
+    #expect(store.items.isEmpty)
+    #expect(store.actions.message == "Nothing to paste")
+    #expect(!receiver.validateMenuItem(NSMenuItem(title: "Paste", action: #selector(DropReceiver<EmptyView>.paste(_:)), keyEquivalent: "")))
+}

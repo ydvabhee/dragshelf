@@ -16,6 +16,7 @@ final class ShelfPanelController {
     @ObservationIgnored let store: ShelfStore
     @ObservationIgnored let promos: PromoLoader
     @ObservationIgnored private let panel = ShelfPanel()
+    @ObservationIgnored private var receiver: DropReceiver<PanelRoot>!  // set in init, after self is usable
     @ObservationIgnored private(set) var reason: ShowReason?
     @ObservationIgnored private var droppedOnShelf = false
     @ObservationIgnored private var dragActive = false
@@ -32,7 +33,7 @@ final class ShelfPanelController {
     init(store: ShelfStore, promos: PromoLoader) {
         self.store = store
         self.promos = promos
-        let receiver = DropReceiver(rootView: PanelRoot(controller: self))
+        receiver = DropReceiver(rootView: PanelRoot(controller: self))
         receiver.store = store
         receiver.onDrop = { [weak self] in
             self?.droppedOnShelf = true
@@ -246,6 +247,12 @@ final class ShelfPanelController {
         }, completionHandler: { [weak self] in
             MainActor.assumeIsolated { self?.panel.invalidateShadow() }
         })
+    }
+
+    /// Menu "Paste to DragShelf": shows the panel (not key, app not activated) and adds the clipboard (V2-06 AC-2).
+    func paste() {
+        show()
+        receiver.pasteItems()
     }
 
     /// Menu "Undo Drag Out": restores the last drag out and shows the panel with it (T-17 AC-2).
