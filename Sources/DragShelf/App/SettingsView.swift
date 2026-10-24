@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ServiceManagement
 import SwiftUI
 
@@ -13,6 +14,9 @@ struct SettingsView: View {
     @AppStorage(Preferences.showTips) private var showTips = true
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
+    @State private var shortcut = Preferences.shortcut()
+    @State private var recording = false
+    @State private var shortcutError: String?
 
     var body: some View {
         Form {
@@ -30,8 +34,19 @@ struct SettingsView: View {
                     Text(loginError).font(.callout).foregroundStyle(.red)
                 }
                 Toggle("Show DragShelf when dragging", isOn: $autoShow)
-                Toggle("Global shortcut ⌃⌥⌘D", isOn: $hotKeyEnabled)
-                    .accessibilityLabel("Global shortcut Control-Option-Command-D")
+                LabeledContent("Global shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutField(shortcut: hotKeyEnabled ? shortcut : nil, recording: $recording,
+                                      onKeyDown: record, onClear: clearShortcut)
+                        Button("Reset to \(Shortcut.standard.display)") { apply(.standard) }
+                            .disabled(hotKeyEnabled && shortcut == .standard && HotKey.shared.current == .standard)
+                    }
+                }
+                // A failed attempt, or the saved shortcut refused at launch.
+                if let message = shortcutError
+                    ?? (hotKeyEnabled && HotKey.shared.current == nil ? Self.takenMessage : nil) {
+                    Text(message).font(.callout).foregroundStyle(.red)
+                }
             } header: {
                 Text("General")
             } footer: {
@@ -76,6 +91,42 @@ struct SettingsView: View {
         .onAppear { loginStatus = SMAppService.mainApp.status }
     }
 
+    private static let takenMessage = "This shortcut is used by another app."
+
+    /// Recorder keys: Esc cancels, Delete clears, anything else must carry ⌘, ⌃, or ⌥ (V2-09 AC-2).
+    private func record(_ event: NSEvent) {
+        let new = Shortcut(keyCode: event.keyCode, flags: event.modifierFlags)
+        if new.modifiers == 0 && Int(event.keyCode) == kVK_Escape {
+            recording = false
+        } else if new.modifiers == 0 && [kVK_Delete, kVK_ForwardDelete].contains(Int(event.keyCode)) {
+            clearShortcut()
+        } else if !new.isValid {
+            shortcutError = "Use at least one of ⌘, ⌃, or ⌥."
+        } else {
+            apply(new)
+        }
+    }
+
+    /// Registers first; only a shortcut Carbon accepted is saved, otherwise the previous one stays.
+    private func apply(_ new: Shortcut) {
+        recording = false
+        guard HotKey.shared.register(new) else {
+            shortcutError = Self.takenMessage
+            return
+        }
+        Preferences.setShortcut(new)
+        shortcut = new
+        hotKeyEnabled = true
+        shortcutError = nil
+    }
+
+    /// Clear = shortcut off (same switch the old toggle used); the saved key stays for Reset or a new recording.
+    private func clearShortcut() {
+        recording = false
+        shortcutError = nil
+        hotKeyEnabled = false
+    }
+
     private func setLaunchAtLogin(_ on: Bool) {
         loginError = nil
         do {
@@ -84,6 +135,89 @@ struct SettingsView: View {
             loginError = "Could not change launch at login: \(error.localizedDescription)"
         }
         loginStatus = SMAppService.mainApp.status
+    }
+}
+
+/// Apple-style shortcut field (V2-09): click, then type the shortcut. Keys are read only while recording, with a
+/// local monitor on this window: no global monitor, no Accessibility or Input Monitoring prompt (AC-4).
+private struct ShortcutField: View {
+    var shortcut: Shortcut?
+    @Binding var recording: Bool
+    var onKeyDown: (NSEvent) -> Void
+    var onClear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(recording ? "Type shortcut" : shortcut?.display ?? "Record Shortcut")
+                .foregroundStyle(recording || shortcut == nil ? .secondary : .primary)
+                .frame(minWidth: 96)
+            if shortcut != nil && !recording {
+                Button(action: onClear) { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Clear")
+                    .accessibilityLabel("Clear shortcut")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(recording ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: recording ? 2 : 1))
+        .contentShape(Rectangle())
+        .onTapGesture { recording.toggle() }
+        .background(KeyRecorder(active: recording, onKeyDown: onKeyDown, onClickOutside: { recording = false }))
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Global shortcut")
+        .accessibilityValue(recording ? "Type shortcut" : shortcut?.spoken ?? "None")
+        .accessibilityAction { recording.toggle() }
+    }
+}
+
+/// Swallows key downs for its own window while `active`; a click elsewhere in the window stops recording.
+private struct KeyRecorder: NSViewRepresentable {
+    var active: Bool
+    var onKeyDown: (NSEvent) -> Void
+    var onClickOutside: () -> Void
+
+    func makeNSView(context: Context) -> RecorderView { RecorderView() }
+
+    func updateNSView(_ view: RecorderView, context: Context) {
+        view.onKeyDown = onKeyDown
+        view.onClickOutside = onClickOutside
+        view.active = active
+    }
+
+    static func dismantleNSView(_ view: RecorderView, coordinator: ()) { view.active = false }
+
+    final class RecorderView: NSView {
+        var onKeyDown: ((NSEvent) -> Void)?
+        var onClickOutside: (() -> Void)?
+        private var monitor: Any?
+        var active = false {
+            didSet {
+                guard active != oldValue else { return }
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+                guard active else { return }
+                // Local monitors run on the main thread; they see this app's events only.
+                monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+                    guard let self, let window = self.window, event.window === window else { return event }
+                    if event.type == .keyDown {
+                        self.onKeyDown?(event)
+                        return nil
+                    }
+                    if !self.bounds.contains(self.convert(event.locationInWindow, from: nil)) { self.onClickOutside?() }
+                    return event
+                }
+            }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { active = false }
+        }
     }
 }
 

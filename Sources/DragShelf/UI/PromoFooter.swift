@@ -88,7 +88,8 @@ struct HintFooter: View {
 extension HintEngine.Hint {
     /// VoiceOver: "Tip: …" with key symbols spelled out.
     var spokenText: String {
-        let words = text.replacingOccurrences(of: "⌃⌥⌘D", with: "Control-Option-Command-D")
+        let shortcut = Preferences.shortcut()
+        let words = text.replacingOccurrences(of: shortcut.display, with: shortcut.spoken)
             .replacingOccurrences(of: "⌘Z", with: "Command-Z")
             .replacingOccurrences(of: "⌘", with: "Command")
             .replacingOccurrences(of: " · ", with: ", ")

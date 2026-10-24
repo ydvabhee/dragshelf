@@ -15,7 +15,7 @@ final class HintEngine {
             case .clear: "Clear only empties DragShelf; your files aren't touched."
             case .dragOut: "Removed from DragShelf · ⌘Z to bring it back"
             case .firstDrop: "Switch apps, then drag items out of DragShelf."
-            case .hotkey: "Tip: ⌃⌥⌘D shows DragShelf from anywhere."
+            case .hotkey: "Tip: \(Preferences.shortcut().display) shows DragShelf from anywhere."
             case .recent: "Recent drags are under the clock icon."
             case .holdCommand: "Hold ⌘ while dragging out to move instead of copy."
             case .moveResize: "Drag the top bar to move DragShelf · edges to resize."

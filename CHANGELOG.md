@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Custom shortcut: Settings → General has a shortcut field. Click it and type a new shortcut (it needs ⌘, ⌃, or ⌥); Esc cancels, Delete or ✕ turns the shortcut off, and "Reset to ⌃⌥⌘D" brings back the default. A shortcut another app already uses is refused and the old one keeps working. The menu bar menu and tips show the current shortcut.
 - Custom resize: Resize ▸ Custom… opens a size form right in DragShelf (Pixels or Percent, width and height, a link button to keep the aspect ratio). Several images each fit inside the size; custom sizes may enlarge, and DragShelf says so. Copies are named like "photo (800×600).jpg"; the originals stay.
 - Share and AirDrop: send DragShelf items with "Share…" (any macOS share service) or "AirDrop" from the Actions menu or a tile's context menu. Files, links, and text are shared; missing files are left out. Items stay on DragShelf afterwards.
 - Rename: press Return or choose "Rename…" on a file to edit its name right on the tile (Return or a click elsewhere saves, Esc cancels). DragShelf renames its own copy; your original file keeps its name. New items named like one already on DragShelf get a Finder-style number ("Archive 2.zip").
