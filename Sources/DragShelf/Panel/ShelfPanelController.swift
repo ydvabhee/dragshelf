@@ -21,10 +21,8 @@ final class ShelfPanelController {
     @ObservationIgnored private var droppedOnShelf = false
     @ObservationIgnored private var dragActive = false
     @ObservationIgnored private var hideTask: Task<Void, Never>?
-    /// Shelf pet and its play floor (V3-01); set in init.
+    /// Shelf pet (V3-01); set in init.
     @ObservationIgnored private(set) var pet: PetController!
-    /// The next fit animates (the pet floor appeared or went away).
-    @ObservationIgnored var animateNextFit = false
 
     /// Gap below the menu bar / notch, and the entry slide distance.
     static let topInset: CGFloat = 12
@@ -77,17 +75,13 @@ final class ShelfPanelController {
 
     /// Width and height cap on `visible`: the user's size there (its height is the max, content still fits below it,
     /// T-16 AC-6), else the default width and min(4.5 rows, 50% of the visible height) (T-13 AC-2).
-    /// Clamped to `ShelfView.minSize` … `visible` (T-16 AC-5). `floor` = the pet's play floor band (V3-01), added on
-    /// top: saved sizes never include it, so turning the pet on or off keeps the grid's room.
-    static func limits(saved: NSSize?, in visible: NSRect, floor: CGFloat = 0) -> (width: CGFloat, maxHeight: CGFloat) {
+    /// Clamped to `ShelfView.minSize` … `visible` (T-16 AC-5).
+    static func limits(saved: NSSize?, in visible: NSRect) -> (width: CGFloat, maxHeight: CGFloat) {
         let w = saved?.width ?? ShelfView.defaultWidth
-        let h = (saved?.height ?? min(ShelfView.maxContentHeight, (visible.height * 0.5).rounded())) + floor
+        let h = (saved?.height ?? min(ShelfView.maxContentHeight, (visible.height * 0.5).rounded()))
         return (max(ShelfView.minSize.width, min(w, visible.width)),
-                max(ShelfView.minSize.height + floor, min(h, visible.height)))
+                max(ShelfView.minSize.height, min(h, visible.height)))
     }
-
-    /// Height of the pet's play floor while it is on (V3-01).
-    private var floor: CGFloat { pet.floorOn ? PetController.floorHeight : 0 }
 
     /// Per-screen pair saved under `key` (offsets, sizes).
     static func saved(_ key: String, screen: String, in defaults: UserDefaults = .standard) -> [Double]? {
@@ -146,7 +140,7 @@ final class ShelfPanelController {
     /// Edge drag ended: the size becomes this screen's width and max height; content fits below it (T-16 AC-6/7).
     private func userResized() {
         guard let screen = panel.screen else { return }
-        Self.save([panel.frame.width, panel.frame.height - floor], as: Self.sizesKey, screen: Self.id(of: screen))
+        Self.save([panel.frame.width, panel.frame.height], as: Self.sizesKey, screen: Self.id(of: screen))
         userMoved() // A left-edge drag moved the top center too.
         Task { @MainActor in
             fitToContent()
@@ -158,11 +152,11 @@ final class ShelfPanelController {
     /// every set re-renders the view.
     private func updateLimits(for screen: NSScreen) {
         let saved = Self.saved(Self.sizesKey, screen: Self.id(of: screen)).map { NSSize(width: $0[0], height: $0[1]) }
-        let limits = Self.limits(saved: saved, in: screen.visibleFrame, floor: floor)
+        let limits = Self.limits(saved: saved, in: screen.visibleFrame)
         if limits.width != width { width = limits.width }
         if limits.maxHeight != maxHeight { maxHeight = limits.maxHeight }
         panel.maxSize = screen.visibleFrame.size
-        panel.minSize = NSSize(width: ShelfView.minSize.width, height: ShelfView.minSize.height + floor)
+        panel.minSize = NSSize(width: ShelfView.minSize.width, height: ShelfView.minSize.height)
     }
 
     /// Menu item / Settings / header double-click: forget all saved spots and sizes, back to top center.
@@ -181,9 +175,7 @@ final class ShelfPanelController {
         updateLimits(for: screen)
         guard let size = panel.contentView?.fittingSize, size.height > 0,
               abs(size.height - panel.frame.height) >= 0.5 || abs(size.width - panel.frame.width) >= 0.5 else { return }
-        let animate = animateNextFit && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        animateNextFit = false
-        panel.setFrame(Self.fit(panel.frame, size: size, in: screen.visibleFrame), display: true, animate: animate)
+        panel.setFrame(Self.fit(panel.frame, size: size, in: screen.visibleFrame), display: true)
     }
 
     /// Visibility rule 2 (ARCHITECTURE §5): only an auto-shown, still-empty shelf that got no drop hides.
@@ -337,7 +329,7 @@ private struct PanelRoot: View {
                   onDismissPromo: controller.promos.dismiss,
                   hint: showTips ? controller.store.hints.current : nil,
                   onDismissHint: controller.store.hints.dismiss,
-                  pet: controller.pet.floorOn ? controller.pet : nil)
+                  pet: controller.pet.petOn ? controller.pet : nil)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }
@@ -345,8 +337,6 @@ private struct PanelRoot: View {
             .onChange(of: controller.store.hints.current) { _, hint in if let hint { controller.announce(hint.spokenText) } }
             // Quick Look follows any selection/items change, not only keys.
             .onChange(of: controller.store.previewURLs) { controller.previewSourceChanged() }
-            // Pet floor on/off: the panel grows or shrinks smoothly, top edge fixed.
-            .onChange(of: controller.pet.floorOn) { controller.animateNextFit = true }
             // Async: `fittingSize` read synchronously here is 0 and would collapse the panel.
             .onGeometryChange(for: CGSize.self, of: \.size) { _ in
                 Task { @MainActor in controller.fitToContent() }

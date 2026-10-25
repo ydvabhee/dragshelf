@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// Shelf pet (V3-01): a transparent child window on the shelf's top edge, driven by `PetBrain`.
+// Shelf pet (V3-01): a cat on the shelf's bottom rim (an overlay on the panel content), driven by `PetBrain`.
 
 extension Preferences {
     static let petEnabled = "petEnabled"
@@ -23,7 +23,7 @@ extension Preferences {
     }
 
     static func petPersonalityChoice(_ d: UserDefaults = .standard) -> PetPersonality {
-        d.string(forKey: petPersonality).flatMap(PetPersonality.init(rawValue:)) ?? .playful
+        d.string(forKey: petPersonality).flatMap(PetPersonality.init(rawValue:)) ?? .curious
     }
 
     static func petDisplayName(_ d: UserDefaults = .standard) -> String {
@@ -54,42 +54,40 @@ extension Preferences {
 }
 
 
-/// What the play floor draws right now.
+/// What the cat overlay draws right now.
 struct PetSnapshot: Equatable {
     var frame: PetFrame
-    /// Cat centre on the floor track.
+    /// Cat centre on the rim track.
     var x: Double
     var facingRight: Bool
-    /// Ball centre on the floor track (nil = no ball shown).
+    /// Ball centre on the rim track (nil = no ball shown).
     var ball: Double?
     var ballSpin = 0.0
     var bubble: String?
 }
 
-/// Runs the shelf pet (V3-01): feeds `PetBrain` time and shelf events, publishes what the play floor draws.
-/// The floor is a band at the bottom of the shelf panel (`PetFloor`), present only while the pet is on.
+/// Runs the shelf pet (V3-01): feeds `PetBrain` time and shelf events, publishes what the cat overlay draws.
+/// The cat stands on the shelf's bottom rim over the panel's own background (`PetStage`): no band, no layout.
 @Observable
 final class PetController {
-    /// Floor band height, the floor surface (top of the front lip) from the band's top, the tray's side inset,
-    /// and where the cat's track starts (clear of the tray's rounded ends).
-    static let floorHeight: CGFloat = 60
-    static let groundY: CGFloat = 48
-    static let trayInset: CGFloat = 10
+    /// Overlay height (the sprite canvas), the cat's feet above the panel's bottom edge, and where the cat's
+    /// track starts (the sprite is centred on it, so a cat at -72 is fully out of view).
+    static let stageHeight: CGFloat = 64
+    static let rimInset: CGFloat = 4
     static let trackInset: CGFloat = 40
     static let favoriteKey = "petFavoriteSpot"
 
-    /// Pet on (or previewing / asking): the shelf shows the floor band.
-    private(set) var floorOn = false
+    /// Pet on (or previewing / asking): the shelf shows the cat.
+    private(set) var petOn = false
     /// Drawn state; set by the controller (and by snapshot tests).
     var snapshot: PetSnapshot?
     private(set) var asking = false
-    private(set) var ballOut = false
     /// Per-tile wiggle counters; a change wiggles that tile once.
     private(set) var wiggles: [UUID: Int] = [:]
     private(set) var name = Preferences.defaultPetName
 
-    /// Floor band frame in the panel's content coordinates (top-left origin), reported by `PetFloor`.
-    @ObservationIgnored var floorFrame: CGRect = .zero { didSet { if floorFrame.width != oldValue.width { layout() } } }
+    /// Overlay frame in the panel's content coordinates (top-left origin), reported by `PetStage`.
+    @ObservationIgnored var stageFrame: CGRect = .zero { didSet { if stageFrame.width != oldValue.width { layout() } } }
     @ObservationIgnored private var brain: PetBrain
     @ObservationIgnored private let shelf: NSWindow
     @ObservationIgnored private let store: ShelfStore
@@ -102,13 +100,13 @@ final class PetController {
     @ObservationIgnored private var askShown = false
     @ObservationIgnored private var previewUntil: TimeInterval = 0
     @ObservationIgnored private var itemIDs: [UUID] = []
-    @ObservationIgnored private var personality = PetPersonality.playful
+    @ObservationIgnored private var personality = PetPersonality.curious
 
     init(shelf: NSWindow, store: ShelfStore, defaults: UserDefaults = .standard) {
         self.shelf = shelf
         self.store = store
         self.defaults = defaults
-        brain = PetBrain(traits: PetPersonality.playful.traits, seed: UInt64.random(in: 0...UInt64.max))
+        brain = PetBrain(traits: PetPersonality.curious.traits, seed: UInt64.random(in: 0...UInt64.max))
         observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil,
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.prefsChanged() }
@@ -148,22 +146,11 @@ final class PetController {
         Preferences.answerPetQuestion(keep: keep, defaults)
     }
 
-    /// Ball drag on the floor (`floorX` from the band's leading edge).
-    func holdBall(at floorX: CGFloat) {
-        brain.holdBall(at: Double(floorX - Self.trackInset), now: Self.now())
-        reschedule()
-    }
-
-    /// Flick: the drag's release velocity (pt/s) keeps it rolling.
-    func releaseBall(at floorX: CGFloat, velocity: CGFloat) {
-        brain.releaseBall(at: Double(floorX - Self.trackInset), velocity: Double(velocity), now: Self.now())
-        reschedule()
-    }
-
-    /// Header yarn button.
-    func toggleBall() {
-        ballOut.toggle()
-        ballOut ? brain.placeBall(now: Self.now()) : brain.removeBall(now: Self.now())
+    /// Pointer over the shelf at `x` in the panel's content coordinates (nil = it left). Local tracking only: the
+    /// view reports it while the shelf is on screen; nothing watches the mouse while the shelf is hidden.
+    func pointer(x: CGFloat?) {
+        guard attached else { return }
+        brain.cursorMoved(x.map { Double($0 - Self.trackInset) }, now: Self.now())
         reschedule()
     }
 
@@ -185,7 +172,7 @@ final class PetController {
         }
         guard newMode != mode else { return }
         mode = newMode
-        if floorOn != (mode != .off) { floorOn = mode != .off }
+        if petOn != (mode != .off) { petOn = mode != .off }
         // Kept after the question: back to normal motion, same pet.
         if mode != .ask && asking {
             asking = false
@@ -216,25 +203,31 @@ final class PetController {
         loop?.cancel()
         loop = nil
         brain.shelfHidden(now: Self.now())
-        ballOut = false
         wiggles = [:]
         previewUntil = 0
         snapshot = nil
     }
 
-    /// Track length and tile positions follow the floor width.
+    /// Track length and tile positions follow the panel width.
     private func layout() {
-        let width = floorFrame.width > 0 ? floorFrame.width : shelf.frame.width
+        let width = stageFrame.width > 0 ? stageFrame.width : shelf.frame.width
         guard width > 0 else { return }
         brain.track = max(0, Double(width - 2 * Self.trackInset))
-        brain.tiles = (0..<min(columns, store.visibleItems.count)).map(tileX)
+        brain.tiles = (0..<bottomRowCount).map(tileX)
     }
 
-    private var columns: Int { ShelfView.columnCount(width: floorFrame.width > 0 ? floorFrame.width : shelf.frame.width) }
+    private var columns: Int { ShelfView.columnCount(width: stageFrame.width > 0 ? stageFrame.width : shelf.frame.width) }
 
-    /// First-row centre of grid column `col` on the floor track (grid padding 12, spacing 8).
+    /// Items in the grid's last row; the cat visits those tiles.
+    /// ponytail: the last row, not the last row on screen (the grid may be scrolled); visual only.
+    private var bottomRowCount: Int {
+        let n = store.visibleItems.count
+        return n == 0 ? 0 : n - (n - 1) / columns * columns
+    }
+
+    /// Centre of grid column `col` on the rim track (grid padding 12, spacing 8).
     private func tileX(_ col: Int) -> Double {
-        let width = floorFrame.width > 0 ? floorFrame.width : shelf.frame.width
+        let width = stageFrame.width > 0 ? stageFrame.width : shelf.frame.width
         let cols = CGFloat(columns), cell = (width - 24 - 8 * (cols - 1)) / cols
         return Double(12 + cell / 2 + CGFloat(col) * (cell + 8) - Self.trackInset)
     }
@@ -292,17 +285,10 @@ final class PetController {
         guard attached else { return }
         let now = Self.now()
         let wasVisible = brain.isVisible, bats = brain.tileBats
-        brain.cursorX = cursorX()
         brain.tick(now: now)
         if brain.tileBats != bats { wiggleTile() }
         if brain.isVisible && !wasVisible { appeared(now) }
         publish(now)
-    }
-
-    /// Pointer x on the floor track, so a batted ball comes back toward it.
-    private func cursorX() -> Double? {
-        guard floorFrame.width > 0 else { return nil }
-        return Double(NSEvent.mouseLocation.x - shelf.frame.minX - floorFrame.minX - Self.trackInset)
     }
 
     /// First appearance this show: the preview note or the question.
@@ -328,11 +314,11 @@ final class PetController {
         if frame.pose == .purr { bubble = "purrr…" }
         if now < previewUntil { bubble = "Meet \(name) 🐱 — your shelf pet (preview)" }
         var ball: Double?
-        if ballOut, let b = brain.ball {
+        if let b = brain.ball {
             if brain.ballGone {
-                // Rolling off the end, out of sight behind the tray's side.
+                // Rolling off the end, out of view.
                 let t = min(1, (now - brain.ballGoneAt) / 0.35)
-                if t < 1 { ball = b + (b > 0 ? 1 : -1) * 30 * t }
+                if t < 1 { ball = b + (b > 0 ? 1 : -1) * 40 * t }
             } else if brain.ballVisible {
                 ball = b
             }
@@ -345,14 +331,16 @@ final class PetController {
         if abs(fav - defaults.double(forKey: Self.favoriteKey)) > 0.01 { defaults.set(fav, forKey: Self.favoriteKey) }
     }
 
-    /// Bat a tile: the tile under the cat (first row) wiggles. Purely visual; items never change.
+    /// Bat a tile: the bottom-row tile nearest the cat wiggles. Purely visual; items never change.
     private func wiggleTile() {
         let items = store.visibleItems
-        guard !items.isEmpty else { return }
-        let col = (0..<min(columns, items.count)).min { abs(tileX($0) - brain.x) < abs(tileX($1) - brain.x) } ?? 0
-        wiggles[items[col].id, default: 0] += 1
+        let count = bottomRowCount
+        guard count > 0 else { return }
+        let start = items.count - count
+        let col = (0..<count).min { abs(tileX($0) - brain.x) < abs(tileX($1) - brain.x) } ?? 0
+        wiggles[items[start + col].id, default: 0] += 1
     }
 
-    /// The cat takes clicks only while it is up on the floor (not ducked behind the lip).
+    /// The cat takes clicks only while it is in view.
     var interactive: Bool { brain.isInteractive }
 }

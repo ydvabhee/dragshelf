@@ -54,13 +54,43 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 
 @Test func personalitiesShapeRoutines() {
     let playful = shares(.playful), lazy = shares(.lazy), curious = shares(.curious)
-    let shy = shares(.shy), mischievous = shares(.mischievous)
+    let mischievous = shares(.mischievous)
     func s(_ d: [PetBrain.Routine: Double], _ r: PetBrain.Routine) -> Double { d[r] ?? 0 }
     #expect(s(playful, .wander) > 2 * s(lazy, .wander))
-    #expect(s(lazy, .idle) > s(playful, .idle) + 0.1)
-    #expect(s(shy, .shyPeek) > 3 * s(playful, .shyPeek))
-    #expect(s(mischievous, .inspect) > s(shy, .inspect))
+    #expect(s(lazy, .idle) > s(playful, .idle))
+    #expect(s(curious, .inspect) > 1.2 * s(playful, .inspect)) // Curious plays with the tiles.
     #expect(s(curious, .explore) > s(lazy, .explore))
+    #expect(s(mischievous, .inspect) > s(lazy, .inspect))
+}
+
+/// The cat is mostly asleep: napping is the likeliest routine for every personality, and over half for most.
+@Test func sleepIsTheDefault() {
+    for p in PetPersonality.concrete {
+        let d = shares(p)
+        let nap = d[.nap] ?? 0
+        #expect(nap > 0.45, "\(p) \(nap)")
+        #expect(d.allSatisfy { $0.key == .nap || $0.value < nap }, "\(p)")
+    }
+    // Over a long session it spends most visible time asleep.
+    var b = brain(.curious, seed: 5)
+    var asleep = 0.0, total = 0.0
+    run(&b, from: 0, to: 600, dt: 0.25) { b, t in
+        if t > 10 && b.isVisible { total += 1; if b.isAsleep { asleep += 1 } }
+    }
+    #expect(asleep / max(total, 1) > 0.6, "\(asleep / max(total, 1))")
+}
+
+@Test func routineNapsAreLong() {
+    var b = awake(.lazy)
+    b.setNeeds(PetBrain.Needs(energy: 0.9, curiosity: 0.2, play: 0.2))
+    b.start(.nap, now: 6)
+    var sleepStart: Double?, wokeAt: Double?
+    run(&b, from: 6, to: 300) { b, t in
+        if sleepStart == nil && b.activity == .sleep { sleepStart = t }
+        if sleepStart != nil && wokeAt == nil && !b.isAsleep { wokeAt = t }
+    }
+    let start = try! #require(sleepStart), woke = try! #require(wokeAt)
+    #expect(woke - start >= 59 && woke - start <= 181, "\(woke - start)")
 }
 
 @Test func needsDriftByPersonality() {
@@ -116,15 +146,15 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
         run(&b, from: 0, to: 150) { b, t in
             switch Int(t * 20) {
             case 400: b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: t)
-            case 800: b.releaseBall(at: 100, velocity: 400, now: t)
             case 1200: b.setDragging(true, now: t)
             case 1300: b.setDragging(false, now: t)
-            case 1600: b.releaseBall(at: 250, velocity: 800, now: t) // Rolls off: fetch.
+            case 1500: b.cursorMoved(200, now: t)
             case 2200: b.pet(now: t)
             default: break
             }
-            if let l = last { maxStep = max(maxStep, abs(b.x - l)) }
-            last = b.x
+            // Walking in from out of view (invisible) is not a jump.
+            if let l = last, b.isVisible { maxStep = max(maxStep, abs(b.x - l)) }
+            last = b.isVisible ? b.x : nil
         }
         #expect(maxStep <= PetBrain.runSpeed * 0.05 + 1, "seed \(seed): \(maxStep)")
     }
@@ -173,26 +203,35 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 
 // MARK: Drag
 
-@Test func ducksBehindTheLipDuringDragAndPopsUp() {
-    var b = awake()
-    b.setDragging(true, now: 6)
-    #expect(b.activity == .hide)
-    #expect(!b.isInteractive)
-    b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: 7) // The drop that ends the drag.
-    run(&b, from: 6, to: 30) { b, _ in #expect(b.activity == .hide && b.frame(at: 30)?.pose == .hide) }
-    #expect(b.nextWake(now: 30) == nil) // Ducked and still: no ticks.
-    b.setDragging(false, now: 30)
-    var up: Double?
-    var probe = b
-    run(&probe, from: 30, to: 33) { b, t in if up == nil && b.activity == .popUp { up = t } }
-    #expect(up.map { $0 >= 30.5 && $0 <= 31.05 } == true)
-    // The drop's reaction plays after popping up.
-    #expect(isSubsequence([.popUp, .perk, .walk, .sniff], of: trace(&b, from: 30, to: 40)))
+@Test func runsOutToNearerSideDuringDragAndWalksBack() {
+    for (start, right) in [(40.0, false), (240.0, true)] {
+        var b = awake()
+        b.place(at: start)
+        b.start(.idle, now: 6)
+        b.setDragging(true, now: 6)
+        #expect(b.routine == .exit && b.activity == .run)
+        b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: 7) // The drop that ends the drag: no interruption.
+        var xs: [Double] = []
+        run(&b, from: 6, to: 30) { b, _ in if b.isVisible { xs.append(b.x) } }
+        #expect(!b.isVisible && b.isOffstage && (b.x > 0) == right, "x \(b.x)")
+        #expect(b.entryRight == right)
+        #expect(b.nextWake(now: 30) == nil) // Out of view and still: no ticks.
+        // Never ducks: it only ever runs outward.
+        #expect(zip(xs, xs.dropFirst()).allSatisfy { right ? $1 >= $0 : $1 <= $0 })
+        b.setDragging(false, now: 30)
+        var back: Double?
+        var probe = b
+        run(&probe, from: 30, to: 33) { b, t in if back == nil && b.isVisible { back = t } }
+        // Walks back in about a second after the drag ends (the walk from out of view takes a moment to show).
+        #expect(back.map { $0 >= 30.9 && $0 <= 32.5 } == true, "\(String(describing: back))")
+        // The drop's reaction plays once it is back.
+        #expect(isSubsequence([.walk, .perk, .walk, .sniff], of: trace(&b, from: 30, to: 45)))
+    }
 }
 
 @Test func hiddenShelfStopsEverything() {
     var b = awake()
-    b.placeBall(now: 6)
+    b.start(.bringBall, now: 6)
     b.shelfHidden(now: 7)
     #expect(!b.isVisible && b.ball == nil)
     #expect(b.nextWake(now: 7) == nil)
@@ -207,78 +246,35 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     }
 }
 
-// MARK: Ball
+// MARK: Own ball
 
-@Test func flickedBallRollsWithFrictionAndSpins() {
-    var b = awake(.lazy)
-    b.releaseBall(at: 100, velocity: 200, now: 6)
-    run(&b, from: 6, to: 9)
-    // v²/2f = 133 pt of travel, then it stops.
-    #expect(abs((b.ball ?? 0) - 233.3) < 4)
-    #expect(b.ballSpeed == 0)
-    #expect(b.ballSpin > 133 / PetBrain.ballRadius - 1)
-}
-
-@Test func ballBouncesOffFloorEndsAndRollsOffOnHardFlick() {
-    var b = awake(.lazy)
-    var bounced = false
-    b.releaseBall(at: 250, velocity: 230, now: 6)
-    run(&b, from: 6, to: 9) { b, _ in if b.ballSpeed < 0 { bounced = true } }
-    #expect(bounced && !b.ballGone)
-    #expect(b.ballRange.contains(b.ball ?? -999))
-    var hard = awake(.lazy)
-    hard.releaseBall(at: 250, velocity: 700, now: 6)
-    run(&hard, from: 6, to: 6.5)
-    #expect(hard.ballGone)
-}
-
-@Test func catFetchesTheBallBack() {
+@Test func catBringsItsOwnBallPlaysAndPushesItOut() {
     var b = awake(.playful)
     b.setNeeds(PetBrain.Needs(energy: 0.9, curiosity: 0.2, play: 0.9))
-    b.releaseBall(at: 250, velocity: 700, now: 6)
+    #expect(b.ball == nil)
+    b.start(.bringBall, now: 6)
     var seen: [PetBrain.Activity] = []
-    var wentOffstage = false
-    run(&b, from: 6, to: 30) { b, _ in
+    var wentOffstage = false, ballShown = false, ballGoneSeen = false
+    var ballAtPush: Double?
+    run(&b, from: 6, to: 80) { b, _ in
         if seen.last != b.activity { seen.append(b.activity) }
         if b.isOffstage { wentOffstage = true }
+        if b.ballVisible { ballShown = true }
+        if b.ballGone { ballGoneSeen = true }
+        if b.activity == .pushOut && ballAtPush == nil { ballAtPush = b.ball }
     }
-    #expect(wentOffstage)
-    #expect(isSubsequence([.run, .carry, .dropBall], of: seen), "\(seen)")
-    #expect(b.ballVisible && !b.ballGone)
+    #expect(wentOffstage && ballShown && ballGoneSeen)
+    #expect(isSubsequence([.run, .carry, .dropBall, .perk, .run, .crouch, .pounce, .bat, .run, .pushOut], of: seen), "\(seen)")
+    #expect(b.ball == nil && !b.ballGone && !b.catHasBall) // Pushed off the edge: gone.
 }
 
-@Test func playLoopBatsBackTowardPointer() {
-    var b = awake(.mischievous)
-    b.setNeeds(PetBrain.Needs(energy: 0.9, curiosity: 0.2, play: 0.95))
-    b.place(at: 40)
-    b.cursorX = 100
-    b.releaseBall(at: 200, velocity: 0, now: 6)
-    var seen: [PetBrain.Activity] = []
-    var stopsAt: Double?
-    run(&b, from: 6, to: 12) { b, _ in
-        if seen.last != b.activity { seen.append(b.activity) }
-        if b.activity == .bat && stopsAt == nil, let ball = b.ball {
-            stopsAt = ball + b.ballSpeed * abs(b.ballSpeed) / (2 * PetBrain.friction)
-        }
-    }
-    #expect(isSubsequence([.perk, .run, .crouch, .pounce, .bat], of: seen), "\(seen)")
-    #expect(b.rounds >= 1)
-    // Batted back so it rolls to a stop near the pointer.
-    #expect(stopsAt.map { abs($0 - 100) < 3 } == true, "\(String(describing: stopsAt))")
-}
-
-@Test func interestFadesAfterRounds() {
-    var b = awake(.lazy)
-    b.setNeeds(PetBrain.Needs(energy: 0.9, curiosity: 0.2, play: 0.5))
-    b.cursorX = 140
-    b.releaseBall(at: 200, velocity: 0, now: 6)
-    var lastPlay: Double = 0
-    var other: PetBrain.Routine?
-    run(&b, from: 6, to: 60) { b, t in
-        if b.routine == .play { lastPlay = t } else if lastPlay > 0, other == nil, b.routine != nil { other = b.routine }
-    }
-    #expect(other == .explore || other == .nap)
-    #expect(b.ball != nil) // The ball idles where it stopped.
+@Test func ownBallIsOccasionalAndNeverWhileStatic() {
+    var b = brain(.playful, seed: 42)
+    var n = 0
+    for _ in 0..<2000 where b.chooseRoutine() == .bringBall { n += 1 }
+    #expect(n > 20 && n < 400, "\(n)") // Occasional, not constant.
+    var s = brain(.playful, reduceMotion: true)
+    run(&s, from: 0, to: 200) { s, _ in #expect(s.ball == nil) }
 }
 
 // MARK: Sleep, Reduce Motion
@@ -304,7 +300,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
             #expect(f.step == 0)
         }
         xs.insert(b.x)
-        if Int(t * 20) == 200 { b.releaseBall(at: 10, velocity: 300, now: t) }
+        if Int(t * 20) == 200 { b.cursorMoved(200, now: t) } // Static: no follow.
         if Int(t * 20) == 240 { b.pet(now: t) }
         if Int(t * 20) == 300 { b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: t) }
     }
@@ -320,6 +316,96 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     }
     #expect(once() == once())
     #expect(once().count > 5)
+}
+
+// MARK: Mouse follow
+
+@Test func catWakesRunsToCursorAndActsCute() {
+    var b = awake(.playful)
+    b.place(at: 30)
+    b.start(.nap, now: 6)
+    run(&b, from: 6, to: 20)
+    #expect(b.isAsleep)
+    let at = b.x
+    b.cursorMoved(220, now: 20)
+    #expect(b.routine == .follow && b.followX == 220)
+    #expect(b.frame(at: 20)?.pose == .stretch) // Wakes first.
+    var seen: [PetBrain.Activity] = []
+    var faced: Bool?, arrived: Double?
+    run(&b, from: 20, to: 40) { b, _ in
+        if seen.last != b.activity { seen.append(b.activity) }
+        if b.activity == .run && faced == nil { faced = b.facingRight }
+        if b.activity == .sit && arrived == nil { arrived = b.x }
+    }
+    #expect(isSubsequence([.stretch, .run, .sit, .look, .perk, .leanIn], of: seen), "\(seen)")
+    #expect(faced == (220 > at)) // Faces where it runs.
+    #expect(arrived.map { abs($0 - 220) < 1 } == true, "\(String(describing: arrived))")
+}
+
+@Test func followIsThrottledAndStopsWhenCursorLeaves() {
+    var b = awake(.playful)
+    b.place(at: 30)
+    b.start(.idle, now: 6)
+    b.cursorMoved(250, now: 6)
+    #expect(b.followX == 250)
+    // Inside the throttle window: ignored (no re-aim, no RNG use).
+    b.cursorMoved(100, now: 6.05)
+    #expect(b.followX == 250)
+    run(&b, from: 6, to: 6.4)
+    #expect(b.activity == .run && b.x > 30)
+    // A small move is ignored; a big move re-aims the run.
+    b.cursorMoved(255, now: 6.5)
+    #expect(b.followX == 250)
+    b.cursorMoved(40, now: 6.7)
+    #expect(b.followX == 40 && b.activity == .run)
+    run(&b, from: 6.7, to: 7.5)
+    // Cursor leaves: back to routines (sits a moment, then picks its own).
+    b.cursorMoved(nil, now: 7.5)
+    #expect(b.followX == nil && b.routine == nil && b.activity == .sit)
+    run(&b, from: 7.5, to: 20)
+    #expect(b.routine != .follow)
+}
+
+@Test func followIgnoredWhenStaticOrDraggingOrAway() {
+    var s = brain(.playful, reduceMotion: true)
+    run(&s, from: 0, to: 8)
+    s.cursorMoved(200, now: 8)
+    #expect(s.followX == nil && s.routine != .follow)
+    var d = awake()
+    d.setDragging(true, now: 6)
+    d.cursorMoved(200, now: 7)
+    #expect(d.followX == nil)
+    var away = brain()
+    away.cursorMoved(200, now: 0.5)
+    #expect(away.activity == .away && away.followX == nil) // Not summoned before it appears.
+}
+
+@Test func shyCatFollowsLessOften() {
+    func follows(_ p: PetPersonality) -> Int {
+        var n = 0
+        for seed: UInt64 in 1...200 {
+            var b = awake(p, seed: seed)
+            b.place(at: 30)
+            b.start(.idle, now: 6)
+            b.cursorMoved(250, now: 6)
+            if b.routine == .follow { n += 1 }
+        }
+        return n
+    }
+    #expect(follows(.playful) > follows(.shy) + 30)
+}
+
+@Test func curiousCatBatsATile() {
+    var b = awake(.curious, seed: 3)
+    var bats = 0
+    for seed: UInt64 in 1...40 {
+        var c = awake(.curious, seed: seed)
+        c.start(.inspect, now: 6)
+        if trace(&c, from: 6, to: 30).contains(.batTile) { bats += 1 }
+    }
+    #expect(bats > 15, "\(bats)")
+    b.start(.inspect, now: 6)
+    #expect(isSubsequence([.walk, .sniff], of: trace(&b, from: 6, to: 20)))
 }
 
 // MARK: Opt-in, preferences
@@ -376,7 +462,9 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(Preferences.petDisplayName(d) == "Mochi")
     d.set("Biscuit", forKey: Preferences.petName)
     #expect(Preferences.petDisplayName(d) == "Biscuit")
-    #expect(Preferences.petPersonalityChoice(d) == .playful)
+    #expect(Preferences.petPersonalityChoice(d) == .curious) // New users get Curious…
+    d.set(PetPersonality.lazy.rawValue, forKey: Preferences.petPersonality)
+    #expect(Preferences.petPersonalityChoice(d) == .lazy) // …a saved choice is kept.
     var rng = SplitMix64(seed: 1)
     #expect(PetPersonality.concrete.contains(PetPersonality.surprise.resolved(using: &rng)))
 }

@@ -1,90 +1,34 @@
 import SwiftUI
 
-/// The pet's play floor (V3-01): a recessed clay tray at the bottom of the shelf, with a soft front lip the cat
-/// ducks behind. Present only while the pet is on. The whole panel stays the drop target.
-struct PetFloor: View {
+/// The cat on the shelf's bottom rim (V3-01): an overlay over the panel's own background, no band, no extra
+/// height. Only the cat takes clicks; everything else falls through to the tiles. Clipped at the panel's sides, so
+/// the cat leaves the shelf past an edge.
+struct PetStage: View {
     let pet: PetController
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
 
     private typealias C = PetController
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            tray
-            stage
-                .clipShape(SideClip(inset: C.trayInset))
-        }
-        .frame(maxWidth: .infinity, minHeight: C.floorHeight, maxHeight: C.floorHeight, alignment: .topLeading)
-        .coordinateSpace(.named("petFloor"))
-        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { pet.floorFrame = $0 }
+        stage
+            .frame(maxWidth: .infinity, minHeight: C.stageHeight, maxHeight: C.stageHeight, alignment: .topLeading)
+            .clipShape(SideClip())
+            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { pet.stageFrame = $0 }
     }
-
-    // MARK: Tray
-
-    private var dark: Bool { scheme == .dark }
-    private var opacity: Double { reduceTransparency ? 1 : 0.7 }
-    private var wall: [Color] {
-        dark ? [Color(red: 0.10, green: 0.08, blue: 0.07), Color(red: 0.17, green: 0.14, blue: 0.12)]
-            : [Color(red: 0.88, green: 0.82, blue: 0.75), Color(red: 0.95, green: 0.91, blue: 0.86)]
-    }
-    private var lip: [Color] {
-        dark ? [Color(red: 0.36, green: 0.31, blue: 0.27), Color(red: 0.25, green: 0.21, blue: 0.18)]
-            : [Color(red: 0.99, green: 0.96, blue: 0.92), Color(red: 0.90, green: 0.84, blue: 0.77)]
-    }
-
-    private var tray: some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        return ZStack(alignment: .top) {
-            // Recessed back: darker at the top, as if lit from the front.
-            shape.fill(LinearGradient(colors: wall, startPoint: .top, endPoint: .bottom)).opacity(opacity)
-                .overlay(shape.strokeBorder(.black.opacity(dark ? 0.35 : 0.07), lineWidth: 1).blur(radius: 0.6))
-            // Front lip: a soft rounded clay ledge with a top highlight.
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(LinearGradient(colors: lip, startPoint: .top, endPoint: .bottom))
-                .overlay(alignment: .top) {
-                    Capsule().fill(.white.opacity(dark ? 0.12 : 0.7)).frame(height: 1).padding(.horizontal, 8).padding(.top, 0.5)
-                }
-                .shadow(color: .black.opacity(dark ? 0.35 : 0.10), radius: 1.5, y: -0.5)
-                .frame(height: C.floorHeight - 4 - C.groundY + 1)
-                .offset(y: C.groundY - 2 - 1)
-                .overlay {
-                    if contrast == .increased {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
-                            .frame(height: C.floorHeight - 4 - C.groundY + 1).offset(y: C.groundY - 2 - 1)
-                    }
-                }
-        }
-        .overlay { if contrast == .increased { shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1) } }
-        .frame(height: C.floorHeight - 4)
-        .padding(.horizontal, C.trayInset)
-        .padding(.top, 2)
-        .accessibilityHidden(true)
-    }
-
-    // MARK: Cat, ball, bubble
 
     @ViewBuilder private var stage: some View {
         if let s = pet.snapshot {
             let cx = C.trackInset + s.x
             ZStack(alignment: .topLeading) {
-                Color.clear
+                Color.clear.allowsHitTesting(false)
                 if let b = s.ball {
                     YarnView(spin: s.ballSpin)
-                        .offset(x: C.trackInset + b - 11, y: C.groundY - 17)
-                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("petFloor"))
-                            .onChanged { pet.holdBall(at: $0.location.x) }
-                            .onEnded { pet.releaseBall(at: $0.location.x, velocity: $0.velocity.width) })
-                        .help("Flick the yarn ball")
+                        .offset(x: C.trackInset + b - 11, y: C.stageHeight - C.rimInset - 17)
+                        .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
-                let ducked = s.frame.pose == .hide || s.frame.pose == .peek
                 PetSprite(frame: s.frame, facingRight: s.facingRight)
                     .contentShape(Rectangle().path(in: CGRect(x: 10, y: 10, width: 44, height: 48)))
-                    .offset(x: cx - PetArt.size.width / 2, y: C.groundY - PetArt.ground)
-                    .allowsHitTesting(!ducked)
+                    .offset(x: cx - PetArt.size.width / 2, y: C.stageHeight - C.rimInset - PetArt.ground)
                     .onTapGesture { pet.petTapped() }
                     .contextMenu {
                         Button("Pet \(pet.name)") { pet.petTapped() }
@@ -96,7 +40,6 @@ struct PetFloor: View {
                     .accessibilityAction { pet.petTapped() }
                     .accessibilityAction(named: "Pet") { pet.petTapped() }
                     .accessibilityAction(named: "Send Home") { pet.sendHome() }
-                    .accessibilityHidden(ducked)
                 if pet.asking {
                     beside(cx) { question }
                 } else if let text = s.bubble {
@@ -109,16 +52,18 @@ struct PetFloor: View {
                     .accessibilityHidden(true)
                 }
             }
+        } else {
+            Color.clear.allowsHitTesting(false)
         }
     }
 
     /// Bubble on whichever side of the cat has more room, at head height.
     private func beside(_ cx: CGFloat, @ViewBuilder _ content: () -> some View) -> some View {
-        let right = cx < pet.floorFrame.width / 2
+        let right = cx < pet.stageFrame.width / 2
         return content()
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: right ? .leading : .trailing)
-            .padding(right ? .leading : .trailing, right ? cx + 24 : max(0, pet.floorFrame.width - cx + 24))
+            .padding(right ? .leading : .trailing, right ? cx + 24 : max(0, pet.stageFrame.width - cx + 24))
             .padding(.top, 8)
     }
 
@@ -135,12 +80,10 @@ struct PetFloor: View {
     }
 }
 
-/// Clips the stage at the tray's sides only: the cat and ball leave the floor past an end, while ears, hearts and
-/// bubbles may rise above the band.
+/// Clips at the panel's sides only: ears, hearts and bubbles may rise above the overlay.
 private struct SideClip: Shape {
-    let inset: CGFloat
     func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: rect.minX + inset, y: rect.minY - 200, width: max(0, rect.width - 2 * inset), height: rect.height + 220))
+        Path(CGRect(x: rect.minX, y: rect.minY - 200, width: rect.width, height: rect.height + 220))
     }
 }
 
@@ -151,24 +94,6 @@ private extension View {
             .padding(.vertical, 3)
             .background(Capsule().fill(PetArt.paper).shadow(color: .black.opacity(0.18), radius: 2, y: 1))
             .overlay(Capsule().strokeBorder(PetArt.ink.opacity(0.2), lineWidth: 0.5))
-    }
-}
-
-/// Header button that puts the yarn ball out or away.
-struct PetBallButton: View {
-    let pet: PetController
-
-    var body: some View {
-        Button { pet.toggleBall() } label: {
-            Label {
-                Text(pet.ballOut ? "Put the yarn ball away" : "Yarn ball")
-            } icon: {
-                Canvas { ctx, _ in drawYarn(ctx, center: CGPoint(x: 9.5, y: 8), radius: 5.5, shadow: false) }
-                    .frame(width: 16, height: 16)
-            }
-        }
-        .help(pet.ballOut ? "Put the yarn ball away" : "Give \(pet.name) a yarn ball")
-        .accessibilityAddTraits(pet.ballOut ? .isSelected : [])
     }
 }
 
@@ -198,7 +123,7 @@ private struct PetWiggle: ViewModifier {
 /// Settings → Pet.
 struct PetSettingsSection: View {
     @AppStorage(Preferences.petEnabled) private var enabled = false
-    @AppStorage(Preferences.petPersonality) private var personality = PetPersonality.playful.rawValue
+    @AppStorage(Preferences.petPersonality) private var personality = PetPersonality.curious.rawValue
     @AppStorage(Preferences.petName) private var name = Preferences.defaultPetName
     @AppStorage(Preferences.petPreview) private var preview = false
 
@@ -214,7 +139,7 @@ struct PetSettingsSection: View {
             } header: {
                 Text("Pet")
             } footer: {
-                Text("A little cat gets its own play floor at the bottom of DragShelf. It ducks while you drag and never touches your items. Click it to pet it; right-click to send it home.")
+                Text("A little cat sleeps on the bottom edge of DragShelf, follows your mouse when you hover, and plays with its own ball now and then. It runs off while you drag and never touches your items. Click it to pet it; right-click to send it home.")
                     .foregroundStyle(.secondary)
             }
         }

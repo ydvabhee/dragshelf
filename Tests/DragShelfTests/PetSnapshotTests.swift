@@ -7,7 +7,7 @@ nonisolated private let snapshotDir = ProcessInfo.processInfo.environment["DRAGS
 
 /// Review aid for the shelf pet (V3-01): `DRAGSHELF_SNAPSHOT_DIR=/path swift test --filter petSnapshots` writes
 /// `<dir>/pet/`: each pose on a strip of floor (light and dark, 2x), a contact sheet and a 4x close-up, and the
-/// shelf with its play floor (light and dark) with the cat in several poses and the ball rolling.
+/// shelf with the cat on its bottom rim (light and dark) in several poses, with its ball, and leaving.
 @Test(.enabled(if: snapshotDir != nil))
 func petSnapshots() throws {
     let out = URL(fileURLWithPath: try #require(snapshotDir), isDirectory: true).appendingPathComponent("pet")
@@ -74,7 +74,7 @@ func petSnapshots() throws {
         }
     }.background(.white), "pet-zoom.png", scale: 4)
 
-    // The shelf with its play floor: cat poses on the floor, the ball rolling.
+    // The shelf with the cat on its bottom rim.
     let cacheRoot = FileManager.default.temporaryDirectory.appendingPathComponent("PetSnap-\(UUID())")
     defer { try? FileManager.default.removeItem(at: cacheRoot) }
     let store = ShelfStore(cache: ItemCache(root: cacheRoot))
@@ -84,11 +84,13 @@ func petSnapshots() throws {
     defer { defaults.removePersistentDomain(forName: suite) }
     let pet = PetController(shelf: NSPanel(), store: store, defaults: defaults)
     let scenes: [(String, PetSnapshot)] = [
-        ("walk", PetSnapshot(frame: PetFrame(pose: .walk, step: 1, turn: 1), x: 90, facingRight: true, ball: 220, ballSpin: 2)),
-        ("crouch", PetSnapshot(frame: PetFrame(pose: .crouch, step: 0, turn: 1), x: 160, facingRight: true, ball: 195)),
-        ("sleep", PetSnapshot(frame: PetFrame(pose: .sleep), x: 0, facingRight: true, ball: 150)),
-        ("hide", PetSnapshot(frame: PetFrame(pose: .hide, progress: 1), x: 120, facingRight: true)),
+        ("sleep", PetSnapshot(frame: PetFrame(pose: .sleep), x: 20, facingRight: true)),
+        ("walk", PetSnapshot(frame: PetFrame(pose: .walk, step: 1, turn: 1), x: 120, facingRight: true)),
+        ("walk-left", PetSnapshot(frame: PetFrame(pose: .walk, step: 2, turn: 1), x: 200, facingRight: false)),
+        ("lookup", PetSnapshot(frame: PetFrame(pose: .perk, turn: 0.7), x: 150, facingRight: true)),
         ("purr", PetSnapshot(frame: PetFrame(pose: .purr, progress: 0.4), x: 60, facingRight: true, bubble: "purrr…")),
+        ("ball", PetSnapshot(frame: PetFrame(pose: .crouch, step: 0, turn: 1), x: 160, facingRight: true, ball: 195)),
+        ("exit", PetSnapshot(frame: PetFrame(pose: .run, step: 1, turn: 1), x: 262, facingRight: true)),
     ]
     for (scene, snap) in scenes {
         pet.snapshot = snap
@@ -107,7 +109,7 @@ func petSnapshots() throws {
             let rep = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
             view.cacheDisplay(in: view.bounds, to: rep)
             try #require(rep.representation(using: .png, properties: [:]))
-                .write(to: out.appendingPathComponent("floor-\(scene)-\(scheme).png"))
+                .write(to: out.appendingPathComponent("rim-\(scene)-\(scheme).png"))
         }
     }
 }

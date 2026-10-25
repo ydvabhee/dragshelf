@@ -18,7 +18,7 @@ struct ShelfView: View {
     /// Contextual tip (T-18); takes the footer slot over the promo. Nil when tips are off or none is due.
     var hint: HintEngine.Hint?
     var onDismissHint: () -> Void = {}
-    /// Shelf pet (V3-01): when set, a play floor band sits under the grid and the header gets the yarn button.
+    /// Shelf pet (V3-01): when set, a cat sits on the bottom rim (an overlay; no layout change).
     var pet: PetController?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,11 +32,8 @@ struct ShelfView: View {
     /// Grid / Recent height cap: what `maxHeight` leaves after header, search row, caption, and the footer row.
     private var contentCap: CGFloat {
         max(0, maxHeight - Self.headerHeight - (showsSearch ? searchHeight : 0)
-            - (store.actions.message == nil ? 0 : captionHeight) - Self.footerRowHeight - floorHeight)
+            - (store.actions.message == nil ? 0 : captionHeight) - Self.footerRowHeight)
     }
-
-    /// The pet's play floor band, when on.
-    private var floorHeight: CGFloat { pet == nil ? 0 : PetController.floorHeight }
 
     /// Recent replaces the grid.
     private var showsRecent: Bool { store.showRecent && !store.recent.isEmpty }
@@ -100,7 +97,6 @@ struct ShelfView: View {
             } else {
                 grid(visible)
             }
-            if let pet { PetFloor(pet: pet) }
             // Own row under the grid: never over tiles. Hidden during any drag; the row keeps its height so the
             // panel does not resize under the pointer (a hover at the bottom edge would otherwise flicker).
             // ZStack: an outgoing and incoming line overlap instead of stacking (no height jump on swap).
@@ -128,7 +124,16 @@ struct ShelfView: View {
             }
         }
         .frame(width: width)
-        .frame(minHeight: Self.minHeight + floorHeight, alignment: .top)
+        .frame(minHeight: Self.minHeight, alignment: .top)
+        .overlay(alignment: .bottom) { if let pet { PetStage(pet: pet) } }
+        // Local pointer tracking for the pet (only while the shelf is on screen; no global monitor).
+        .onContinuousHover { phase in
+            guard let pet else { return }
+            switch phase {
+            case .active(let p): pet.pointer(x: p.x)
+            case .ended: pet.pointer(x: nil)
+            }
+        }
         .shelfBackground(isTargeted: store.isDropTargeted)
         // Clicks make the panel key; never draw the system focus ring (T-16 AC-1). Selection is the tile's own style.
         .focusEffectDisabled()
@@ -192,7 +197,6 @@ struct ShelfView: View {
                     .accessibilityHint(store.isSearching ? "Clears the search and shows all items" : "Shows a search field to filter items")
                 }
 
-                if let pet { PetBallButton(pet: pet) }
                 ActionsMenu(store: store)
 
                 if !store.recent.isEmpty {

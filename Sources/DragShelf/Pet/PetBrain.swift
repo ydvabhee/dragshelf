@@ -6,14 +6,15 @@ import Foundation
 // Continuity: needs (energy, curiosity, play) drift over time and with events; when the current routine ends the
 // cat picks the next one from its needs, scaled by personality. Routines are short step lists (walk to a spot,
 // sit, look around…); the cat always walks between spots, never jumps.
-// Coordinates: `x` is the cat's centre along the play floor, 0…`track`; the ball may roll a little further.
+// Coordinates: `x` is the cat's centre along the shelf's bottom rim, 0…`track`; the ball may roll a little further.
+// Past either end (beyond ±72) the cat is out of view: it enters and leaves that way (appear, drag, own ball).
 
 nonisolated enum PetPose: String, CaseIterable, Sendable {
     // Front-facing.
     case sit, look, perk, sad, sniff, purr, yawn, bat, sleep
     // Side view, drawn facing right (mirrored for left).
     case walk, run, carry, crouch, pounce, stretch, backRoll
-    // Behind the floor's front lip.
+    // Unused since the floor band went away (kept so the art and its review sheets stay complete).
     case peek, hide
 }
 
@@ -68,8 +69,8 @@ nonisolated struct SplitMix64: RandomNumberGenerator, Sendable {
 
 nonisolated struct PetBrain: Sendable {
     enum Activity: Equatable, Sendable {
-        case away, hide, popUp, sit, look, perk, sad, sniff, leanIn, yawn, stretch, circle, curl, sleep,
-             walk, run, carry, crouch, pounce, bat, backRoll, batTile, dropBall
+        case away, sit, look, perk, sad, sniff, leanIn, yawn, stretch, circle, curl, sleep,
+             walk, run, carry, crouch, pounce, bat, backRoll, batTile, dropBall, pushOut, pushPrep
     }
 
     enum Target: Equatable, Sendable {
@@ -77,7 +78,7 @@ nonisolated struct PetBrain: Sendable {
         case x(Double)
         /// Next to the ball (follows it while it rolls).
         case ball
-        /// Past a floor end, out of sight (`right` side or left).
+        /// Past an end of the rim, out of sight (`right` side or left).
         case offstage(right: Bool)
     }
 
@@ -97,7 +98,7 @@ nonisolated struct PetBrain: Sendable {
         }
     }
 
-    enum Routine: Equatable, Sendable { case nap, wake, explore, inspect, idle, stretch, shyPeek, wander, play, fetch, react }
+    enum Routine: Equatable, Sendable { case nap, wake, explore, inspect, idle, stretch, wander, bringBall, follow, exit, react }
 
     /// 0…1 each.
     struct Needs: Equatable, Sendable {
@@ -106,9 +107,16 @@ nonisolated struct PetBrain: Sendable {
 
     static let sleepAfter: TimeInterval = 30
     static let appearDelay: ClosedRange<TimeInterval> = 2...5
-    static let popDelay: ClosedRange<TimeInterval> = 0.5...1.0
+    /// Back in this long after a drag ends.
+    static let returnDelay: ClosedRange<TimeInterval> = 0.9...1.1
+    /// Routine naps last this long (idle dozing lasts until something happens).
+    static let napLength: ClosedRange<TimeInterval> = 60...180
+    /// Mouse follow: at most one cursor update per `followThrottle`; re-aim only past `followSlack`.
+    static let followThrottle: TimeInterval = 0.1, followSlack = 20.0
+    /// Where the cat is out of view (the sprite is 64 wide).
+    static let offstageX = 72.0
     static let walkSpeed = 38.0, runSpeed = 120.0, carrySpeed = 45.0
-    /// Rolling friction (pt/s²), bounce damping at the floor ends, and the speed that rolls the ball off an end.
+    /// Rolling friction (pt/s²), bounce damping at the ends, and the speed that rolls the ball off an end.
     static let friction = 150.0, bounce = 0.5, rollOffSpeed = 240.0, maxFlick = 900.0, ballRadius = 7.0
     /// How far the ball may roll past the cat's track at each end; past that it hits the end.
     static let ballOverhang = 22.0
@@ -122,11 +130,11 @@ nonisolated struct PetBrain: Sendable {
     /// Local hour, for the time-of-day mood.
     var hour = 12
     var track = 280.0 { didSet { x = min(max(x, -80), track + 80); favorite = min(max(favorite, 0), track) } }
-    /// Favorite nap nook (a floor corner), remembered by the controller.
+    /// Favorite nap nook (a rim corner), remembered by the controller.
     var favorite = 0.0
-    /// Pointer x on the floor, if known: a batted ball goes back toward it.
+    /// Pointer x on the rim, if known: a batted ball goes back toward it.
     var cursorX: Double?
-    /// First-row tile centres on the floor's axis (for inspecting).
+    /// Bottom-row tile centres on the rim's axis (for inspecting).
     var tiles: [Double] = []
     var rng: SplitMix64
 
@@ -141,18 +149,19 @@ nonisolated struct PetBrain: Sendable {
     private(set) var lastFlip: TimeInterval = -1
     private(set) var started: TimeInterval = 0
     private(set) var appearAt: TimeInterval?
+    /// Side the cat enters from (and left by, during a drag).
+    private(set) var entryRight = false
+    private(set) var followX: Double?
     private(set) var lastActive: TimeInterval = 0
     private(set) var happiness = 0.0
     private(set) var ball: Double?
     private(set) var ballSpeed = 0.0
     private(set) var ballSpin = 0.0
-    private(set) var ballHeld = false
-    /// Rolled off an end (`ballGoneAt`), hidden until the cat brings it back.
+    /// Rolled off an end (`ballGoneAt`); the ball is gone for good a moment later.
     private(set) var ballGone = false
     private(set) var ballGoneAt: TimeInterval = 0
     /// The cat holds the ball (carry, back roll).
     private(set) var catHasBall = false
-    private(set) var rounds = 0
     private(set) var tileBats = 0
     private(set) var shelfVisible = false
     private(set) var hasItems = false
@@ -160,6 +169,9 @@ nonisolated struct PetBrain: Sendable {
     private var from = 0.0, pounceTo = 0.0
     private var circled = false
     private var lastTick: TimeInterval?
+    private var lastCursor: TimeInterval = -1
+    private var napEnd: TimeInterval = .infinity
+    private var lazyNap = false
 
     init(traits: PetTraits, seed: UInt64) {
         self.traits = traits
@@ -169,10 +181,9 @@ nonisolated struct PetBrain: Sendable {
     var activity: Activity { current.activity }
     var isVisible: Bool { activity != .away && !isOffstage }
     var isAsleep: Bool { activity == .sleep || activity == .curl }
-    /// Out past a floor end (fetching the ball).
-    var isOffstage: Bool { x < -40 || x > track + 40 }
-    /// Takes clicks (not hidden behind the lip or offstage).
-    var isInteractive: Bool { isVisible && activity != .hide && activity != .popUp }
+    /// Out past an end of the rim, out of view.
+    var isOffstage: Bool { x < -Self.offstageX || x > track + Self.offstageX }
+    var isInteractive: Bool { isVisible }
     var ballVisible: Bool { ball != nil && !catHasBall && !ballGone }
     var ballRange: ClosedRange<Double> { -Self.ballOverhang...(track + Self.ballOverhang) }
 
@@ -199,17 +210,13 @@ nonisolated struct PetBrain: Sendable {
 
     func frame(at now: TimeInterval) -> PetFrame? {
         guard activity != .away else { return nil }
-        var p = progress(at: now)
+        let p = progress(at: now)
         let side = now - lastFlip < Self.turnTime && !reduceMotion ? 0.0 : 1.0
         let pose: PetPose
         var turn = 0.0
         switch activity {
         case .away: return nil
-        case .hide:
-            pose = .hide
-            p = reduceMotion ? 1 : min(1, (now - started) / 0.3)
-        case .popUp: pose = .peek
-        case .sit, .dropBall: pose = .sit
+        case .sit, .dropBall, .pushPrep: pose = .sit
         case .look:
             pose = .look
             turn = reduceMotion ? 0 : sin(p * 2 * .pi) * 0.8
@@ -224,7 +231,7 @@ nonisolated struct PetBrain: Sendable {
         case .yawn: pose = .yawn
         case .stretch: pose = .stretch
         case .curl, .sleep: pose = .sleep
-        case .bat, .batTile: pose = .bat
+        case .bat, .batTile, .pushOut: pose = .bat
         case .walk, .circle:
             pose = .walk
             turn = side
@@ -254,8 +261,10 @@ nonisolated struct PetBrain: Sendable {
         lastTick = now
         set(Step(.away), now)
         x = min(max(favorite, 0), track)
+        entryRight = favorite > track / 2
         plan = []
         pending = []
+        followX = nil
         appearAt = hasItems && !dragging ? now + Double.random(in: Self.appearDelay, using: &rng) : nil
     }
 
@@ -269,12 +278,11 @@ nonisolated struct PetBrain: Sendable {
         ball = nil
         ballSpeed = 0
         ballGone = false
-        ballHeld = false
         catHasBall = false
-        rounds = 0
+        followX = nil
     }
 
-    /// Items changed. `addedAt` / `removedAt`: floor x of a tile that arrived or left (ears perk, look, inspect;
+    /// Items changed. `addedAt` / `removedAt`: rim x of a tile that arrived or left (ears perk, look, inspect;
     /// or head follows with a small sad beat).
     mutating func itemsChanged(count: Int, addedAt: Double?, removedAt: Double?, now: TimeInterval) {
         hasItems = count > 0
@@ -292,7 +300,8 @@ nonisolated struct PetBrain: Sendable {
             reaction = [Step(.perk, 0.8, look: r), Step(.sad, 1.2, look: r)]
         }
         guard !reaction.isEmpty else { return }
-        if !isVisible || activity == .hide || activity == .popUp {
+        if !isVisible || dragging {
+            // Plays once the cat is back in view.
             pending = reaction
             if activity == .away && appearAt == nil && shelfVisible && !dragging {
                 appearAt = now + Double.random(in: Self.appearDelay, using: &rng)
@@ -304,72 +313,66 @@ nonisolated struct PetBrain: Sendable {
         }
     }
 
-    /// Any drag (in, out, over the shelf): the cat ducks behind the floor's lip, ear tips showing, and pops up
-    /// 0.5–1 s after the drag ends.
+    /// Any drag (in, out, over the shelf): the cat runs out of the shelf to the nearer side (out of view) and walks
+    /// back in about a second after the drag ends.
     mutating func setDragging(_ on: Bool, now: TimeInterval) {
         guard on != dragging else { return }
         dragging = on
+        followX = nil
         if on {
-            if activity != .away {
-                if routine != .react { pending = [] }
-                if catHasBall && !ballGone { dropBallHere() }
-                set(Step(.hide), now)
-            }
+            if routine != .react { pending = [] }
             appearAt = nil
+            guard activity != .away else { return }
+            if catHasBall || ball != nil { ball = nil; catHasBall = false; ballSpeed = 0; ballGone = false }
+            let right = x >= track / 2
+            if isOffstage { return set(Step(.away), now) }
+            entryRight = right
+            run(.exit, (isAsleep ? [Step(.stretch, 0.6)] : []) + exitPlan(right: right), now)
         } else if shelfVisible && hasItems {
             lastActive = now
-            appearAt = now + Double.random(in: Self.popDelay, using: &rng)
+            appearAt = now + Double.random(in: Self.returnDelay, using: &rng)
         }
+    }
+
+    private func exitPlan(right: Bool) -> [Step] {
+        [Step(.run, to: .x(right ? track : 0)), Step(.run, to: .offstage(right: right))]
     }
 
     /// Click (or VoiceOver "Pet"): leans in and purrs; asleep → wakes with a stretch first.
     mutating func pet(now: TimeInterval) {
-        guard isInteractive else { return }
+        guard isInteractive, !dragging else { return }
         happiness = min(1, happiness + 0.25)
         lastActive = now
         run(.react, (isAsleep ? [Step(.stretch, 1.8)] : []) + [Step(.leanIn, 2.4)], now)
     }
 
-    /// Header button: the ball appears on the far side of the floor, still.
-    mutating func placeBall(now: TimeInterval) {
-        ball = x < track / 2 ? track * 0.85 : track * 0.15
-        ballSpeed = 0
-        ballGone = false
-        catHasBall = false
-        needs.play = min(1, needs.play + 0.25)
-        noticeBall(now)
-    }
-
-    mutating func removeBall(now: TimeInterval) {
-        ball = nil
-        ballSpeed = 0
-        ballGone = false
-        ballHeld = false
-        catHasBall = false
-        if routine == .play || routine == .fetch { run(nil, [Step(.sit, 1.5)], now) }
-    }
-
-    /// The user grabbed the ball and is moving it.
-    mutating func holdBall(at bx: Double, now: TimeInterval) {
-        let b = min(max(bx, ballRange.lowerBound), ballRange.upperBound)
-        if let old = ball { ballSpin += (b - old) / Self.ballRadius }
-        ball = b
-        ballHeld = true
-        ballSpeed = 0
-        ballGone = false
-        lastActive = now
-        if isInteractive && !isAsleep && !reduceMotion && routine != .play && activity != .perk {
-            run(.react, [Step(.perk, 0.8, look: b)], now)
+    /// The pointer moved over the shelf at rim x `cx` (nil = it left). The cat wakes, runs toward it, then acts
+    /// cute (sit, look up, head tilt, purr). Throttled; ignored while Reduce Motion is on, during a drag, or when
+    /// the cat is out of view (it is not summoned). A shy cat follows less often.
+    mutating func cursorMoved(_ cx: Double?, now: TimeInterval) {
+        cursorX = cx
+        guard let cx else {
+            if routine == .follow {
+                followX = nil
+                run(nil, [Step(.sit, 1.5)], now)
+            }
+            return
         }
-    }
-
-    /// Let go with the drag's release velocity (pt/s): the ball rolls with friction and the cat plays.
-    mutating func releaseBall(at bx: Double, velocity: Double, now: TimeInterval) {
-        holdBall(at: bx, now: now)
-        ballHeld = false
-        ballSpeed = min(max(velocity, -Self.maxFlick), Self.maxFlick)
-        needs.play = min(1, needs.play + 0.35)
-        noticeBall(now)
+        guard !reduceMotion, !dragging, isVisible, now - lastCursor >= Self.followThrottle else { return }
+        lastCursor = now
+        lastActive = now
+        let goal = min(max(cx, 0), track)
+        if routine == .follow {
+            // Re-aim only while still on the way; once sitting by the pointer, stay cute.
+            guard let f = followX, abs(goal - f) > Self.followSlack, activity == .run else { return }
+            followX = goal
+            return begin(Step(.run, to: .x(goal)), now)
+        }
+        guard abs(goal - x) > Self.followSlack, routine != .react,
+              Double.random(in: 0..<1, using: &rng) < 1 - 0.7 * mood().shyness else { return }
+        followX = goal
+        run(.follow, (isAsleep ? [Step(.stretch, 0.9)] : []) + [Step(.run, to: .x(goal)), Step(.sit, 0.5),
+                                                                  Step(.look, 2.0), Step(.perk, 1.0), Step(.leanIn, 3.0)], now)
     }
 
     // MARK: Time
@@ -380,26 +383,25 @@ nonisolated struct PetBrain: Sendable {
         let dt = min(0.25, raw)
         updateNeeds(raw)
         rollBall(dt, now)
+        if ballGone && now - ballGoneAt >= 0.4 { // Pushed off the edge: gone for good.
+            ball = nil
+            ballGone = false
+        }
         guard shelfVisible, hasItems else {
             if activity != .away { set(Step(.away), now) }
             return
         }
-        if dragging {
-            if activity != .away && activity != .hide { set(Step(.hide), now) }
-            return
-        }
-        // Waiting to appear or to pop up after a drag.
-        if activity == .away || (activity == .hide && current.duration == 0) {
-            guard let t = appearAt, now >= t else { return }
+        // Waiting to appear (first time, or back after a drag): walks in from a side.
+        if activity == .away {
+            guard !dragging, let t = appearAt, now >= t else { return }
             appearAt = nil
             lastActive = now
             let reaction = pending
             pending = []
-            run(reaction.isEmpty ? nil : .react, [Step(.popUp, 0.7)] + reaction, now)
+            let spot = entryRight ? track - 30 : 30
+            if !reduceMotion { x = entryRight ? track + Self.offstageX + 8 : -Self.offstageX - 8 }
+            run(reaction.isEmpty ? nil : .react, [Step(.walk, to: .x(reduceMotion ? x : spot))] + reaction, now)
             return
-        }
-        if ballGone && routine != .fetch && !isAsleep && !reduceMotion && needs.play > 0.15 && current.target == .none {
-            return run(.fetch, fetchPlan(), now)
         }
         switch activity {
         case .walk, .run, .carry:
@@ -412,14 +414,14 @@ nonisolated struct PetBrain: Sendable {
         case .pounce:
             x = from + (pounceTo - from) * progress(at: now)
         case .sleep:
-            // A nap ends when rested, but only if someone is around; idle dozing waits for an event.
-            if needs.energy >= 0.98 && now - lastActive < Self.sleepAfter { return run(.wake, wakePlan(), now) }
+            if now >= napEnd { return run(.wake, wakePlan(), now) }
         default:
             break
         }
         if current.duration > 0 && now >= started + current.duration { return advance(now) }
-        if !isAsleep && routine != .nap && now - lastActive >= Self.sleepAfter {
+        if !dragging && !isAsleep && routine != .nap && now - lastActive >= Self.sleepAfter {
             run(.nap, napPlan(at: favorite), now)
+            lazyNap = true
         }
     }
 
@@ -427,19 +429,16 @@ nonisolated struct PetBrain: Sendable {
     func nextWake(now: TimeInterval) -> TimeInterval? {
         guard shelfVisible else { return nil }
         let frameRate = 1.0 / 30
-        if ball != nil && ballSpeed != 0 && !ballHeld { return frameRate }
-        if ballGone && now - ballGoneAt < 0.4 { return frameRate }
+        if ball != nil && ballSpeed != 0 { return frameRate }
+        if ballGone && now - ballGoneAt < 0.45 { return frameRate }
         let end = current.duration > 0 ? started + current.duration - now : .infinity
-        let doze = isAsleep || routine == .nap ? .infinity : lastActive + Self.sleepAfter - now
+        let doze = isAsleep || routine == .nap || dragging ? .infinity : lastActive + Self.sleepAfter - now
         let wait: TimeInterval?
         switch activity {
-        case .away: wait = appearAt.map { $0 - now }
-        case .hide:
-            if current.duration > 0 { wait = min(end, reduceMotion ? end : frameRate) }
-            else { wait = now - started < 0.35 && !reduceMotion ? frameRate : appearAt.map { $0 - now } }
-        case .walk, .run, .carry, .circle, .pounce, .popUp, .crouch, .backRoll: wait = reduceMotion ? min(end, doze) : frameRate
-        case .sleep: wait = reduceMotion ? nil : 1.4
-        case .sit, .dropBall: wait = min(end, doze)
+        case .away: wait = dragging ? nil : appearAt.map { $0 - now }
+        case .walk, .run, .carry, .circle, .pounce, .crouch, .backRoll: wait = reduceMotion ? min(end, doze) : frameRate
+        case .sleep: wait = reduceMotion ? nil : min(1.4, max(0.02, napEnd - now))
+        case .sit, .dropBall, .pushPrep: wait = min(end, doze)
         case .look: wait = reduceMotion ? end : 1.0 / 20
         case .leanIn: wait = reduceMotion ? end : min(1.0 / 6, end)
         default: wait = reduceMotion ? end : min(1.0 / 20, end)
@@ -461,15 +460,18 @@ nonisolated struct PetBrain: Sendable {
         return t
     }
 
-    /// Odds of each free-time routine from the current needs, scaled by personality.
+    /// Odds of each free-time routine from the current needs, scaled by personality. Naps dominate: the cat is
+    /// mostly asleep when it is on screen.
     func routineWeights() -> [(Routine, Double)] {
         let t = mood(), n = needs
-        return [(.explore, 0.2 + 1.5 * n.curiosity * (0.4 + t.curiosity)),
-                (.inspect, tiles.isEmpty ? 0 : 0.1 + 1.0 * n.curiosity * (0.4 + t.curiosity) + 0.6 * t.mischief),
+        return [(.nap, 5 + 6 * t.sleepiness),
+                (.explore, 0.2 + 1.5 * n.curiosity * (0.4 + t.curiosity)),
+                (.inspect, tiles.isEmpty ? 0 : 0.1 + 1.0 * n.curiosity * (0.4 + t.curiosity) + 0.6 * t.mischief
+                    + 1.5 * t.curiosity * t.curiosity),
                 (.idle, 0.4 + 1.2 * (1 - n.energy) + 0.8 * t.sleepiness),
                 (.stretch, 0.1 + 0.3 * t.sleepiness),
-                (.shyPeek, 0.03 + 1.0 * t.shyness * t.shyness),
-                (.wander, 0.1 + 1.2 * t.energy * n.energy)]
+                (.wander, 0.1 + 1.2 * t.energy * n.energy),
+                (.bringBall, 0.1 + 0.6 * t.energy * n.play)]
     }
 
     mutating func chooseRoutine() -> Routine {
@@ -491,35 +493,36 @@ nonisolated struct PetBrain: Sendable {
         case .explore:
             return [Step(.walk, to: .x(farSpot())), Step(.sit, Double.random(in: 1.5...3, using: &rng)), Step(.look, 2.4)]
         case .inspect:
+            // Walks to a bottom-row tile, sniffs, maybe bats it (it wiggles), sits beside it.
             let tile = tiles.randomElement(using: &rng) ?? x
-            let bat = Double.random(in: 0..<1, using: &rng) < t.mischief * 0.8
+            let bat = Double.random(in: 0..<1, using: &rng) < min(1, t.mischief + 0.5 * t.curiosity) * 0.8
             return [Step(.walk, to: .x(tile + (tile >= x ? -16 : 16))), Step(.sniff, 1.4, look: tile)]
                 + (bat ? [Step(.batTile, 0.9)] : []) + [Step(.sit, Double.random(in: 2...4, using: &rng))]
         case .idle: return [Step(.sit, Double.random(in: 3...7, using: &rng) * (1 + t.sleepiness))]
         case .stretch: return [Step(.stretch, 1.8), Step(.sit, 2)]
-        case .shyPeek: return [Step(.hide, Double.random(in: 2...4, using: &rng)), Step(.popUp, 0.7)]
         case .wander:
             let spot = min(max(x + Double.random(in: -90...90, using: &rng), 0), track)
             return [Step(.walk, to: .x(spot)), Step(.sit, 2)]
-        case .play: return playPlan()
-        case .fetch: return fetchPlan()
-        case .react: return [Step(.sit, 2)]
+        case .bringBall: return ballPlan()
+        case .follow, .exit, .react: return [Step(.sit, 2)]
         }
     }
 
-    /// Play loop: notice → run over → crouch (butt wiggle) → pounce → bat, or roll on its back holding the ball →
-    /// bat it back toward the pointer.
-    private mutating func playPlan() -> [Step] {
-        let roll = Double.random(in: 0..<1, using: &rng) < 0.25 + 0.4 * traits.mischief
-        return [Step(.perk, 0.5, look: ball), Step(.run, to: .ball), Step(.crouch, 1.0, look: ball), Step(.pounce, 0.45)]
-            + (roll ? [Step(.backRoll, 1.6)] : []) + [Step(.bat, 0.5), Step(.sit, 1.2)]
+    /// The cat's own ball: out of view past a side, back carrying it, put it down, a round or two of play (run
+    /// over, crouch with a butt wiggle, pounce, bat; or roll on its back holding it), then walk around it and
+    /// push it off the nearer edge. The ball is gone for good.
+    private mutating func ballPlan() -> [Step] {
+        let right = Bool.random(using: &rng)
+        let rounds = Int.random(in: 1...2, using: &rng)
+        let spot = right ? track - 50 : 50
+        return exitPlan(right: right) + [Step(.sit, 0.8), Step(.carry, to: .x(spot)), Step(.dropBall, 0.4)]
+            + (0..<rounds).flatMap { _ in playRound() } + [Step(.pushPrep), Step(.sit, 1.5)]
     }
 
-    /// The ball rolled off an end: run there, out of sight, back carrying it, put it down.
-    private func fetchPlan() -> [Step] {
-        let right = (ball ?? x) > track / 2
-        return [Step(.run, to: .x(right ? track : 0)), Step(.run, to: .offstage(right: right)), Step(.sit, 0.8),
-                Step(.carry, to: .x(right ? track - 50 : 50)), Step(.dropBall, 0.4), Step(.sit, 1.5)]
+    private mutating func playRound() -> [Step] {
+        let roll = Double.random(in: 0..<1, using: &rng) < 0.25 + 0.4 * traits.mischief
+        return [Step(.perk, 0.5, look: ball), Step(.run, to: .ball), Step(.crouch, 1.0, look: ball), Step(.pounce, 0.45)]
+            + (roll ? [Step(.backRoll, 1.6)] : []) + [Step(.bat, 0.5), Step(.sit, 1.6)]
     }
 
     private func napPlan(at spot: Double) -> [Step] {
@@ -529,17 +532,8 @@ nonisolated struct PetBrain: Sendable {
     private func wakePlan() -> [Step] { [Step(.stretch, 1.8), Step(.sit, 2)] }
 
     private mutating func nextPlan(_ now: TimeInterval) -> (Routine?, [Step]) {
+        if dragging { return (.exit, [Step(.away)]) }
         if reduceMotion { return (nil, [Step(.sit, 4)]) }
-        if ballGone && needs.play > 0.15 { return (.fetch, fetchPlan()) }
-        if ball != nil && !ballHeld && !ballGone {
-            if needs.play > 0.35 { return (.play, playPlan()) }
-            if rounds > 0 {
-                // Interest used up: wander off, or nap next to the ball. The ball stays where it is.
-                rounds = 0
-                if needs.energy < 0.5, let b = ball { return (.nap, napPlan(at: min(max(b + (b > track / 2 ? -20 : 20), 0), track))) }
-                return (.explore, plan(for: .explore))
-            }
-        }
         if needs.energy < 0.25 { return (.nap, napPlan(at: favorite)) }
         let r = chooseRoutine()
         return (r, plan(for: r))
@@ -550,6 +544,7 @@ nonisolated struct PetBrain: Sendable {
     private mutating func run(_ r: Routine?, _ steps: [Step], _ now: TimeInterval) {
         routine = r
         plan = steps
+        lazyNap = false
         advance(now)
     }
 
@@ -558,6 +553,7 @@ nonisolated struct PetBrain: Sendable {
             let (r, steps) = nextPlan(now)
             routine = r
             plan = steps
+            lazyNap = false
         }
         begin(plan.removeFirst(), now)
     }
@@ -569,12 +565,19 @@ nonisolated struct PetBrain: Sendable {
 
     private mutating func begin(_ step: Step, _ now: TimeInterval) {
         var s = step
+        if s.activity == .pushPrep {
+            // Walk around to the side of the ball away from the nearer edge, then push it that way.
+            let b = ball ?? x
+            let right = b > track / 2
+            let side = min(max(b + (right ? -Self.reach : Self.reach), 0), track)
+            plan = [Step(.run, to: .x(side)), Step(.sit, 0.3), Step(.pushOut, 0.6)] + plan
+            return begin(plan.removeFirst(), now)
+        }
         if reduceMotion {
             // Static pet: no locomotion or animated beats; it sits (or sleeps) where it is.
             switch s.activity {
-            case .sit, .sleep, .leanIn, .perk, .sad, .hide, .dropBall: break
+            case .sit, .sleep, .leanIn, .perk, .sad, .dropBall, .away: break
             case .curl: s = Step(.sleep)
-            case .popUp: s = Step(.sit, 0.1)
             default: s = Step(.sit, max(s.duration, 1.5))
             }
         }
@@ -591,10 +594,15 @@ nonisolated struct PetBrain: Sendable {
             catHasBall = ball != nil
             needs.energy = max(0, needs.energy - 0.03)
         case .bat: kick()
+        case .pushOut: pushBall()
         case .batTile: tileBats += 1
         case .dropBall:
             if catHasBall { dropBallHere() }
-        case .carry: catHasBall = ball != nil
+        case .carry:
+            // The cat's own ball arrives with it.
+            if routine == .bringBall && ball == nil { ball = x }
+            catHasBall = ball != nil
+        case .sleep: napEnd = lazyNap ? .infinity : now + Double.random(in: Self.napLength, using: &rng)
         default: break
         }
     }
@@ -609,8 +617,18 @@ nonisolated struct PetBrain: Sendable {
         ball = start
         ballSpeed = (d >= 0 ? 1 : -1) * min(Self.rollOffSpeed * 0.9, (2 * Self.friction * abs(d)).squareRoot())
         if abs(d) > 1 { ballSpin += 0.3 }
-        rounds += 1
         needs.play = max(0, needs.play - 0.22 * (1.3 - 0.6 * traits.energy))
+    }
+
+    /// Push: a firm shove toward the nearer end; it rolls off the edge.
+    private mutating func pushBall() {
+        guard let b = ball else { return }
+        face(b, lastTick ?? 0)
+        let dir = b >= x ? 1.0 : -1.0
+        catHasBall = false
+        ball = min(max(x + dir * 12, ballRange.lowerBound), ballRange.upperBound)
+        ballSpeed = dir * 400
+        ballSpin += dir * 0.4
     }
 
     private mutating func dropBallHere() {
@@ -620,27 +638,19 @@ nonisolated struct PetBrain: Sendable {
         ball = min(max(x + (facingRight ? 14 : -14), ballRange.lowerBound), ballRange.upperBound)
     }
 
-    /// A new ball situation the cat may react to: play now if awake and interested.
-    private mutating func noticeBall(_ now: TimeInterval) {
-        lastActive = now
-        guard isInteractive, !reduceMotion, needs.play > 0.2 else { return }
-        if isAsleep { return run(.play, [Step(.stretch, 1.8)] + playPlan(), now) }
-        if routine != .play || [.sit, .perk, .look].contains(activity) { run(.play, playPlan(), now) }
-    }
-
     /// Moves toward the step's target; true once there.
     private mutating func moveStep(_ dt: Double, _ now: TimeInterval) -> Bool {
         let speed = activity == .run ? Self.runSpeed : activity == .carry ? Self.carrySpeed : Self.walkSpeed
         switch current.target {
         case .none: return true
         case .x(let goal): return move(toward: min(max(goal, 0), track), speed: speed, dt: dt, now: now)
-        case .offstage(let right): return move(toward: right ? track + 80 : -80, speed: speed, dt: dt, now: now)
+        case .offstage(let right): return move(toward: right ? track + Self.offstageX + 8 : -Self.offstageX - 8, speed: speed, dt: dt, now: now)
         case .ball:
             guard let b = ball, !ballGone else { return true }
             let goal = min(max(b + (b >= x ? -Self.reach : Self.reach), 0), track)
             let there = move(toward: goal, speed: speed, dt: dt, now: now)
             if there { face(b, now) }
-            return there && abs(ballSpeed) < 30 && !ballHeld
+            return there && abs(ballSpeed) < 30
         }
     }
 
@@ -667,7 +677,7 @@ nonisolated struct PetBrain: Sendable {
     }
 
     private mutating func rollBall(_ dt: Double, _ now: TimeInterval) {
-        guard var b = ball, !ballHeld, !ballGone, !catHasBall, ballSpeed != 0, dt > 0 else { return }
+        guard var b = ball, !ballGone, !catHasBall, ballSpeed != 0, dt > 0 else { return }
         let v0 = ballSpeed
         var v = v0 - (v0 > 0 ? 1 : -1) * Self.friction * dt
         if v * v0 <= 0 { v = 0 }
@@ -676,7 +686,7 @@ nonisolated struct PetBrain: Sendable {
         b = nb
         if !ballRange.contains(b) {
             if abs(v) > Self.rollOffSpeed {
-                // Rolls off the end, out of sight; the cat fetches it.
+                // Rolls off the end, out of sight.
                 ballGone = true
                 ballGoneAt = now
                 v = 0
@@ -705,7 +715,7 @@ nonisolated struct PetBrain: Sendable {
         needs.play = min(max(needs.play, 0), 1)
     }
 
-    /// A spot at least 60 pt away when the floor allows.
+    /// A spot at least 60 pt away when the rim allows.
     private mutating func farSpot() -> Double {
         let spot = Double.random(in: 0...max(1, track), using: &rng)
         if abs(spot - x) >= 60 || track < 120 { return min(spot, track) }
