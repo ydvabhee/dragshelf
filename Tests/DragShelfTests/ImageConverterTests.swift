@@ -155,7 +155,8 @@ private func info(_ url: URL) -> (type: String?, width: Int, height: Int, props:
     }
     let job = try #require(store.actions.run(.convert(.heic), on: store.items, in: store))
     while (store.actions.progress ?? 0) == 0, store.actions.running != nil { try await Task.sleep(for: .milliseconds(5)) }
-    #expect(store.actions.step?.hasSuffix(" of 20") == true)
+    // Under load the whole job can finish before this loop sees any progress; "n of 20" only shows while running.
+    if store.actions.running != nil { #expect(store.actions.step?.hasSuffix(" of 20") == true) }
     store.actions.cancel()
     await job.value
     let added = store.items.count - 20

@@ -6,6 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     var onResetPosition: () -> Void
     var onResetTips: () -> Void
+    var onPlayBall: () -> Void = {}
 
     @AppStorage(Preferences.autoShow) private var autoShow = true
     @AppStorage(Preferences.hotKeyEnabled) private var hotKeyEnabled = true
@@ -75,7 +76,7 @@ struct SettingsView: View {
                 Text("A one-line tip under DragShelf now and then. Each tip shows up to 3 times.")
                     .foregroundStyle(.secondary)
             }
-            PetSettingsSection()
+            PetSettingsSection(onPlayBall: onPlayBall)
             Section {
                 Toggle("Show other apps from the developer", isOn: $showPromos)
             } header: {

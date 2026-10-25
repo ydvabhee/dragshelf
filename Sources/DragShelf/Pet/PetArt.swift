@@ -106,7 +106,8 @@ private func heart(_ ctx: GraphicsContext, at c: CGPoint, size s: CGFloat) {
     clay(ctx, [p], .pink)
 }
 
-private enum Face { case happy, sleepy, open, sad, yawn(CGFloat) }
+/// `wink`: the near (right) eye open, the other still asleep.
+private enum Face { case happy, sleepy, open, sad, wink, yawn(CGFloat) }
 
 /// Chibi face: dot eyes with a sparkle or closed "^ ^" / sleepy arcs, blush, tiny nose, "ω" mouth, whiskers.
 /// Local coordinates: (0, 0) = middle of the face. `turn` (-1…1) turns the head: features slide toward that
@@ -122,7 +123,10 @@ private func face(_ ctx: GraphicsContext, _ f: Face, turn k: CGFloat = 0) {
     for s: CGFloat in [-1, 1] {
         let ex = fx(7.2 * s), ey: CGFloat = 1.6, w = 2.6 * near(s)
         var p = Path()
-        switch f {
+        var eye = f
+        if case .wink = f { eye = s > 0 ? .open : .sleepy }
+        switch eye {
+        case .wink: break
         case .happy:
             p.move(to: pt(ex - w, ey + 1))
             p.addQuadCurve(to: pt(ex + w, ey + 1), control: pt(ex, ey - 2.6))
@@ -266,8 +270,8 @@ private func beanPaw(_ ctx: GraphicsContext, _ x: CGFloat, _ y: CGFloat, _ c: Cl
 /// `dy` lowers it (behind the lip); `squash` flattens it (sniff); `paw` raises the right front paw (0…1 = swipe
 /// down); `ears` lifts (+, alert) or droops (−) them; `ball` puts the yarn ball in its mouth.
 private func catSitting(_ ctx: GraphicsContext, face f: Face, turn: CGFloat = 0, dy: CGFloat = 0, stretchUp: CGFloat = 0,
-                        squash: CGFloat = 0, tailSway: CGFloat = 0, paw raised: Double? = nil, paws: Bool = true,
-                        ears lift: CGFloat = 0, ball: Bool = false) {
+                        squash: CGFloat = 0, tailSway: CGFloat = 0, paw raised: Double? = nil, pawUp: Double? = nil,
+                        paws: Bool = true, ears lift: CGFloat = 0, ball: Bool = false) {
     let g = PetArt.ground + dy, top = g - 41 - stretchUp + squash
     catTail(ctx) { t in
         t.move(to: pt(40, g - 6))
@@ -296,7 +300,13 @@ private func catSitting(_ ctx: GraphicsContext, face f: Face, turn: CGFloat = 0,
     if ball { drawYarn(ctx, center: pt(32 + 4 * turn, faceY + 11), radius: 4.6, shadow: false) }
     guard paws else { return }
     beanPaw(ctx, 27.5, g - 2.6)
-    if let a = raised {
+    if let a = pawUp {
+        // Reaching up past its ear, swiping at something above (0…1 = up, swipe, back).
+        let swing = CGFloat(sin(a * .pi))
+        let foot = pt(51 + 3 * swing, top - 1 + 7 * swing)
+        clay(ctx, [catLeg(pt(44, g - 16), foot, hipWidth: 8.5, footWidth: 6.4)], .cream, lift: true)
+        toeBeans(ctx, at: pt(foot.x + 0.6, foot.y + 0.6))
+    } else if let a = raised {
         let foot = pt(50 + 3 * sin(a * .pi), g - 21 + 17 * a)
         clay(ctx, [catLeg(pt(39, g - 12), foot, hipWidth: 8, footWidth: 6)], .cream, lift: true)
         toeBeans(ctx, at: pt(foot.x + 1, foot.y + 0.3))
@@ -468,23 +478,76 @@ private func drawCat(_ ctx: GraphicsContext, _ fr: PetFrame) {
         toeBeans(c, at: pt(26.5, g - 28.5))
         toeBeans(c, at: pt(36, g - 29.5))
 
-    case .sleep:
-        // Flattened mochi loaf, eyes closed, tail wrapped in front.
+    case .sleep, .peekEye:
+        // Flattened mochi loaf, eyes closed, tail wrapped in front. Peek: one eye open, ears up a little. An ear
+        // flicks (`turn`) when the pointer passes.
         let breath: CGFloat = step % 2 == 0 ? 0 : 0.7
+        let peek = fr.pose == .peekEye
+        let flick: CGFloat = turn != 0 ? 3.5 : peek ? 1.5 : 0
         contactShadow(ctx, x: 33, halfWidth: 23)
         catBlob(ctx, body: [Path(roundedRect: CGRect(x: 12, y: g - 21 - breath, width: 42, height: 21 + breath),
                                  cornerRadius: 10.5, style: .continuous)],
-                ears: [(pt(14, g - 15), pt(14.5, g - 27), pt(22, g - 20)), (pt(33, g - 17), pt(30, g - 28), pt(25, g - 21))],
-                faceAt: pt(23, g - 10.5), faceScale: 0.8, face: .sleepy, sheen: pt(30, g - 17))
+                ears: [(pt(14, g - 15), pt(14.5, g - 27 - (peek ? 1.5 : 0)), pt(22, g - 20)),
+                       (pt(33, g - 17), pt(30 + flick * 0.4, g - 28 - flick), pt(25, g - 21))],
+                faceAt: pt(23, g - 10.5), faceScale: 0.8, face: peek ? .wink : .sleepy, sheen: pt(30, g - 17))
         catTail(ctx, width: 6) { t in
             t.move(to: pt(53, g - 5))
             t.addQuadCurve(to: pt(38, g - 1.6), control: pt(51, g - 0.5))
             t.addQuadCurve(to: pt(30, g - 3), control: pt(33, g - 1.6))
         }
         let z = step % 2
-        for (i, (p, size)) in [(pt(42, g - 26), 8.0), (pt(50, g - 36), 10.5)].enumerated() {
+        for (i, (p, size)) in [(pt(42, g - 26), 8.0), (pt(50, g - 36), 10.5)].enumerated() where !peek {
             ctx.draw(Text("z").font(.system(size: size, weight: .heavy, design: .rounded))
                 .foregroundStyle(Clay.caramel.shade.opacity(i == z ? 0.95 : 0.5)), at: pt(p.x, p.y - CGFloat(z)))
+        }
+
+    case .batUp:
+        contactShadow(ctx, x: 33, halfWidth: 21)
+        catSitting(ctx, face: .open, turn: 0.35, pawUp: progress, ears: 2)
+
+    case .headRub:
+        // Leans its cheek into the pointer, eyes shut, ears soft; hearts drift up.
+        contactShadow(ctx, x: 34, halfWidth: 20)
+        var c = ctx
+        c.translateBy(x: 32, y: g)
+        c.rotate(by: .degrees(step % 2 == 0 ? 11 : 14))
+        c.translateBy(x: -32, y: -g)
+        catSitting(c, face: .happy, turn: 0.55, tailSway: step % 2 == 0 ? 0 : 1.5, ears: -1.5)
+        let rise = CGFloat(progress) * 6
+        heart(ctx, at: pt(57, 16 - rise), size: 8)
+        heart(ctx, at: pt(47, 7 - rise), size: 5.5)
+
+    case .bodyRub:
+        // Rubs its side along the pointer: leans in, tail straight up with a hooked tip, purring.
+        let w: CGFloat = step % 2 == 0 ? 0 : 1
+        contactShadow(ctx, x: 31, halfWidth: 21)
+        catSide(ctx, center: pt(31 + 1.2 * w, g - 20), tilt: -3 - 2 * Double(w), squash: 0.97, face: .happy, turn: 1, legs: [
+            (pt(14, 8), pt(15, 17), false), (pt(-10, 8), pt(-9, 17), false),
+            (pt(11, 8), pt(11, 17), true), (pt(-13, 8), pt(-13, 17), true),
+        ]) { t in
+            t.move(to: pt(13 + w, g - 22))
+            t.addQuadCurve(to: pt(10 + w, g - 44), control: pt(6, g - 30))
+            t.addQuadCurve(to: pt(17 + w * 1.5, g - 49), control: pt(10 + w, g - 52))
+        }
+        let rise = CGFloat(progress) * 5
+        heart(ctx, at: pt(25, 12 - rise), size: 6.5)
+
+    case .pounceUp:
+        // Airborne (the view lifts it; the stage draws its shadow): stretched up toward the pointer, front paws
+        // reaching above its head, back legs trailing.
+        let local = CGAffineTransform(translationX: 30, y: g - 22).rotated(by: -50 * .pi / 180)
+        let frontNear = pt(25, 3), frontFar = pt(27, -2)
+        catSide(ctx, center: pt(30, g - 22), tilt: -50, face: .open, turn: 1, legs: [
+            (pt(13, 6), frontFar, false), (pt(-11, 6), pt(-24, 11), false),
+            (pt(10, 7), frontNear, true), (pt(-14, 7), pt(-26, 8), true),
+        ]) { t in
+            t.move(to: pt(18, g - 8))
+            t.addQuadCurve(to: pt(9, g - 2), control: pt(14, g - 1))
+            t.addQuadCurve(to: pt(4, g - 9), control: pt(3, g - 3))
+        }
+        for f in [frontNear, frontFar] {
+            let p = pt(f.x + 1, f.y).applying(local)
+            toeBeans(ctx, at: p)
         }
 
     case .hide:

@@ -1,5 +1,8 @@
 import AppKit
+import os
 import SwiftUI
+
+private let log = Logger(subsystem: PromoConfig.selfBundleID, category: "pet")
 
 // Shelf pet (V3-01): a cat on the shelf's bottom rim (an overlay on the panel content), driven by `PetBrain`.
 
@@ -64,6 +67,8 @@ struct PetSnapshot: Equatable {
     var ball: Double?
     var ballSpin = 0.0
     var bubble: String?
+    /// Height off the rim mid-jump.
+    var lift = 0.0
 }
 
 /// Runs the shelf pet (V3-01): feeds `PetBrain` time and shelf events, publishes what the cat overlay draws.
@@ -73,8 +78,8 @@ final class PetController {
     /// Overlay height (the sprite canvas), the cat's feet above the panel's bottom edge, and where the cat's
     /// track starts (the sprite is centred on it, so a cat at -72 is fully out of view).
     static let stageHeight: CGFloat = 64
-    static let rimInset: CGFloat = 4
-    static let trackInset: CGFloat = 40
+    nonisolated static let rimInset: CGFloat = 4
+    nonisolated static let trackInset: CGFloat = 40
     static let favoriteKey = "petFavoriteSpot"
 
     /// Pet on (or previewing / asking): the shelf shows the cat.
@@ -101,6 +106,7 @@ final class PetController {
     @ObservationIgnored private var previewUntil: TimeInterval = 0
     @ObservationIgnored private var itemIDs: [UUID] = []
     @ObservationIgnored private var personality = PetPersonality.curious
+    @ObservationIgnored private let tracker = PointerTracker()
 
     init(shelf: NSWindow, store: ShelfStore, defaults: UserDefaults = .standard) {
         self.shelf = shelf
@@ -111,6 +117,7 @@ final class PetController {
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.prefsChanged() }
         }
+        tracker.onPointer = { [weak self] p in self?.pointer(p) }
         prefsChanged()
         observeStore()
     }
@@ -146,12 +153,38 @@ final class PetController {
         Preferences.answerPetQuestion(keep: keep, defaults)
     }
 
-    /// Pointer over the shelf at `x` in the panel's content coordinates (nil = it left). Local tracking only: the
-    /// view reports it while the shelf is on screen; nothing watches the mouse while the shelf is hidden.
-    func pointer(x: CGFloat?) {
+    /// Settings → Pet → Play with ball: the cat fetches its ball now (if it is on the shelf).
+    func playBall() {
         guard attached else { return }
-        brain.cursorMoved(x.map { Double($0 - Self.trackInset) }, now: Self.now())
+        brain.playBall(now: Self.now())
         reschedule()
+    }
+
+    /// Pointer over the panel at `p` (content coordinates, top-left origin; nil = it left). Reported by
+    /// `PointerTracker` only while the cat is on a shown shelf; nothing watches the mouse otherwise.
+    func pointer(_ p: CGPoint?) {
+        guard attached else { return }
+        brain.cursorMoved(p.map(rim), now: Self.now())
+        log.debug("cursor \(String(describing: p), privacy: .public) last response \(String(describing: self.brain.lastResponse), privacy: .public)")
+        reschedule()
+    }
+
+    /// Double-click on the cat or on empty shelf space (`ShelfPanel.onPetCall`): the cat comes to jump at it.
+    func call(at p: CGPoint) {
+        guard attached else { return }
+        log.debug("call at \(p.x, privacy: .public), \(p.y, privacy: .public)")
+        brain.call(at: rim(p), now: Self.now())
+        reschedule()
+    }
+
+    private func rim(_ p: CGPoint) -> SIMD2<Double> {
+        Self.rim(p, stage: stageFrame.height > 0 ? stageFrame
+            : CGRect(x: 0, y: (shelf.contentView?.bounds.height ?? 0) - Self.stageHeight, width: shelf.frame.width, height: Self.stageHeight))
+    }
+
+    /// Content point → rim coordinates: x along the cat's track, y above the rim (up = +). `stage` = `stageFrame`.
+    nonisolated static func rim(_ p: CGPoint, stage: CGRect) -> SIMD2<Double> {
+        SIMD2(Double(p.x - stage.minX - trackInset), Double(stage.maxY - rimInset - p.y))
     }
 
     // MARK: State
@@ -194,11 +227,13 @@ final class PetController {
         brain.shelfShown(hasItems: !store.items.isEmpty, now: Self.now())
         if mode == .preview || mode == .ask { brain.place(at: 0) } // Room for the bubble beside it.
         brain.setDragging(store.isDragging || store.isDropTargeted, now: Self.now())
+        if let view = shelf.contentView { tracker.install(on: view) }
         reschedule()
     }
 
     private func detach() {
         attached = false
+        tracker.remove()
         if askShown { answer(keep: false) } // Ignored counts as "No thanks".
         loop?.cancel()
         loop = nil
@@ -311,7 +346,8 @@ final class PetController {
             return
         }
         var bubble: String?
-        if frame.pose == .purr { bubble = "purrr…" }
+        if [.purr, .headRub, .bodyRub].contains(frame.pose) { bubble = "purrr…" }
+        if brain.routine == .call && frame.pose == .perk { bubble = "!" }
         if now < previewUntil { bubble = "Meet \(name) 🐱 — your shelf pet (preview)" }
         var ball: Double?
         if let b = brain.ball {
@@ -324,8 +360,8 @@ final class PetController {
             }
         }
         // Sleep is drawn facing right so the "z z" reads.
-        let new = PetSnapshot(frame: frame, x: brain.x, facingRight: frame.pose == .sleep || brain.facingRight,
-                              ball: ball, ballSpin: brain.ballSpin, bubble: asking ? nil : bubble)
+        let new = PetSnapshot(frame: frame, x: brain.x, facingRight: [.sleep, .peekEye].contains(frame.pose) || brain.facingRight,
+                              ball: ball, ballSpin: brain.ballSpin, bubble: asking ? nil : bubble, lift: brain.lift(at: now))
         if new != snapshot { snapshot = new }
         let fav = brain.track > 0 ? brain.favorite / brain.track : 0
         if abs(fav - defaults.double(forKey: Self.favoriteKey)) > 0.01 { defaults.set(fav, forKey: Self.favoriteKey) }
@@ -343,4 +379,44 @@ final class PetController {
 
     /// The cat takes clicks only while it is in view.
     var interactive: Bool { brain.isInteractive }
+}
+
+/// Pointer over the whole shelf panel (V3-01) for the cat. An AppKit tracking area, `.activeAlways`: the app is
+/// never active and the shelf is usually not the key window. Tracking areas never take clicks, so tiles and drags
+/// are untouched. Installed only while the cat is on a shown shelf; moves are throttled to 30 Hz.
+final class PointerTracker: NSResponder {
+    static let minInterval: TimeInterval = 1.0 / 30
+    /// Content point, top-left origin (nil = left the panel).
+    var onPointer: (CGPoint?) -> Void = { _ in }
+    private(set) weak var view: NSView?
+    private(set) var area: NSTrackingArea?
+    private var last: TimeInterval = -1
+
+    func install(on view: NSView) {
+        guard area == nil || self.view !== view else { return }
+        remove()
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                  owner: self)
+        view.addTrackingArea(area)
+        self.view = view
+        self.area = area
+        last = -1
+    }
+
+    func remove() {
+        if let area { view?.removeTrackingArea(area) }
+        area = nil
+        view = nil
+    }
+
+    override func mouseEntered(with event: NSEvent) { report(event, force: true) }
+    override func mouseMoved(with event: NSEvent) { report(event, force: false) }
+    override func mouseExited(with event: NSEvent) { onPointer(nil) }
+
+    private func report(_ event: NSEvent, force: Bool) {
+        guard let view, force || event.timestamp - last >= Self.minInterval else { return }
+        last = event.timestamp
+        let p = view.convert(event.locationInWindow, from: nil)
+        onPointer(CGPoint(x: p.x, y: view.isFlipped ? p.y : view.bounds.height - p.y))
+    }
 }

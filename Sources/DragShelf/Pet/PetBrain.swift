@@ -6,6 +6,9 @@ import Foundation
 // Continuity: needs (energy, curiosity, play) drift over time and with events; when the current routine ends the
 // cat picks the next one from its needs, scaled by personality. Routines are short step lists (walk to a spot,
 // sit, look around…); the cat always walks between spots, never jumps.
+// The pointer is a stimulus, not a command: on meaningful changes (enter, stop, near, linger, stroke, every few
+// seconds) the cat picks a response from personality × state × an attention budget that wears off with repeated
+// stimulation. A double-click on the cat or empty shelf space always calls it over.
 // Coordinates: `x` is the cat's centre along the shelf's bottom rim, 0…`track`; the ball may roll a little further.
 // Past either end (beyond ±72) the cat is out of view: it enters and leaves that way (appear, drag, own ball).
 
@@ -14,6 +17,8 @@ nonisolated enum PetPose: String, CaseIterable, Sendable {
     case sit, look, perk, sad, sniff, purr, yawn, bat, sleep
     // Side view, drawn facing right (mirrored for left).
     case walk, run, carry, crouch, pounce, stretch, backRoll
+    // Cursor play: jump up at it, bat up at it, cheek and body rubs; sleeping loaf with one eye open.
+    case pounceUp, batUp, headRub, bodyRub, peekEye
     // Unused since the floor band went away (kept so the art and its review sheets stay complete).
     case peek, hide
 }
@@ -70,7 +75,32 @@ nonisolated struct SplitMix64: RandomNumberGenerator, Sendable {
 nonisolated struct PetBrain: Sendable {
     enum Activity: Equatable, Sendable {
         case away, sit, look, perk, sad, sniff, leanIn, yawn, stretch, circle, curl, sleep,
-             walk, run, carry, crouch, pounce, bat, backRoll, batTile, dropBall, pushOut, pushPrep
+             walk, run, carry, crouch, pounce, bat, backRoll, batTile, dropBall, pushOut, pushPrep,
+             watch, peekEye, pounceUp, batUp, headRub, bodyRub,
+             /// Expands when it starts: runs over to the cursor (or the call spot) if it is far.
+             approach
+    }
+
+    /// What the cat does about the pointer.
+    enum CursorResponse: Equatable, Sendable {
+        case ignore, watch, follow, pounce, sneak, bat, backOff, headRub, bodyRub, petting
+
+        var isActive: Bool { [.follow, .pounce, .sneak, .bat].contains(self) }
+        var isAffection: Bool { [.headRub, .bodyRub, .petting].contains(self) }
+    }
+
+    /// A meaningful pointer change; the cat only reconsiders on these.
+    enum Stimulus: Equatable, Sendable {
+        /// Entered the shelf, stopped moving, or still around after a while.
+        case enter, still, periodic
+        /// Moving within `nearDistance`.
+        case near
+        /// Still at the cat's head for `dwellAfter`.
+        case dwell
+        /// Moving slowly along its back.
+        case alongBack
+        /// Back and forth over the cat.
+        case stroke
     }
 
     enum Target: Equatable, Sendable {
@@ -98,7 +128,7 @@ nonisolated struct PetBrain: Sendable {
         }
     }
 
-    enum Routine: Equatable, Sendable { case nap, wake, explore, inspect, idle, stretch, wander, bringBall, follow, exit, react }
+    enum Routine: Equatable, Sendable { case nap, wake, explore, inspect, idle, stretch, wander, bringBall, cursor, call, exit, react }
 
     /// 0…1 each.
     struct Needs: Equatable, Sendable {
@@ -111,8 +141,12 @@ nonisolated struct PetBrain: Sendable {
     static let returnDelay: ClosedRange<TimeInterval> = 0.9...1.1
     /// Routine naps last this long (idle dozing lasts until something happens).
     static let napLength: ClosedRange<TimeInterval> = 60...180
-    /// Mouse follow: at most one cursor update per `followThrottle`; re-aim only past `followSlack`.
-    static let followThrottle: TimeInterval = 0.1, followSlack = 20.0
+    /// Cursor: pause between active responses, re-think interval, "stopped" and "lingering" times, distances.
+    static let cursorCooldown: TimeInterval = 3, pounceCooldown: TimeInterval = 6, reconsiderEvery: TimeInterval = 4
+    static let stillAfter: TimeInterval = 0.35, dwellAfter: TimeInterval = 0.8
+    static let nearDistance = 40.0, pounceReach = 120.0
+    /// A double-click keeps the cat interested this long.
+    static let callInterest: TimeInterval = 20
     /// Where the cat is out of view (the sprite is 64 wide).
     static let offstageX = 72.0
     static let walkSpeed = 38.0, runSpeed = 120.0, carrySpeed = 45.0
@@ -132,8 +166,6 @@ nonisolated struct PetBrain: Sendable {
     var track = 280.0 { didSet { x = min(max(x, -80), track + 80); favorite = min(max(favorite, 0), track) } }
     /// Favorite nap nook (a rim corner), remembered by the controller.
     var favorite = 0.0
-    /// Pointer x on the rim, if known: a batted ball goes back toward it.
-    var cursorX: Double?
     /// Bottom-row tile centres on the rim's axis (for inspecting).
     var tiles: [Double] = []
     var rng: SplitMix64
@@ -151,7 +183,20 @@ nonisolated struct PetBrain: Sendable {
     private(set) var appearAt: TimeInterval?
     /// Side the cat enters from (and left by, during a drag).
     private(set) var entryRight = false
-    private(set) var followX: Double?
+    /// Pointer: x on the rim track, y = height above the rim (nil = not over the shelf).
+    private(set) var cursor: SIMD2<Double>?
+    /// 0…1; each stimulus uses some up (more ignores), it comes back with time.
+    private(set) var attention = 1.0
+    private(set) var lastResponse: CursorResponse?
+    private(set) var lastStimulus: Stimulus?
+    /// Counts decisions (tests watch it to see each one).
+    private(set) var decisions = 0
+    private(set) var cooldownUntil: TimeInterval = 0
+    private(set) var interestUntil: TimeInterval = -1
+    /// Where a pounce goes (the cursor, or a double-click spot).
+    private(set) var aim: SIMD2<Double>?
+    private(set) var twitchAt: TimeInterval = -10
+    private(set) var jumpHeight = 0.0
     private(set) var lastActive: TimeInterval = 0
     private(set) var happiness = 0.0
     private(set) var ball: Double?
@@ -172,6 +217,12 @@ nonisolated struct PetBrain: Sendable {
     private var lastCursor: TimeInterval = -1
     private var napEnd: TimeInterval = .infinity
     private var lazyNap = false
+    private var pendingRoutine = Routine.react
+    private var cursorMovedAt: TimeInterval = 0, lastEval: TimeInterval = 0
+    private var stillPending = false, wasNear = false
+    private var cursorSpeed = 0.0, strokeDir = 0.0
+    private var strokeTurns: [TimeInterval] = []
+    private var backSince: TimeInterval?
 
     init(traits: PetTraits, seed: UInt64) {
         self.traits = traits
@@ -201,8 +252,8 @@ nonisolated struct PetBrain: Sendable {
         case .run: 14
         case .carry: 9
         case .crouch: 10
-        case .leanIn: 3
-        case .sleep, .curl: 0.7
+        case .leanIn, .headRub, .bodyRub: 3
+        case .sleep, .curl, .peekEye: 0.7
         default: 0
         }
         return Int(max(0, now - started) * rate)
@@ -248,8 +299,27 @@ nonisolated struct PetBrain: Sendable {
             pose = .pounce
             turn = 1
         case .backRoll: pose = .backRoll
+        case .watch:
+            // Head follows the pointer: turned toward it, straight on when it is right above.
+            pose = .perk
+            if let c = cursor ?? aim { turn = min(0.9, abs(c.x - x) / 50) }
+        case .peekEye: pose = .peekEye
+        case .pounceUp: pose = .pounceUp
+        case .batUp: pose = .batUp
+        case .headRub: pose = .headRub
+        case .bodyRub:
+            pose = .bodyRub
+            turn = 1
+        case .approach: pose = .sit
         }
+        // Asleep: an ear flicks at the pointer (ignored, but noticed).
+        if pose == .sleep && now - twitchAt < 0.5 && !reduceMotion { turn = 1 }
         return PetFrame(pose: pose, step: step(at: now), progress: p, turn: turn)
+    }
+
+    /// How high the cat is off the rim (pt) mid-jump.
+    func lift(at now: TimeInterval) -> Double {
+        activity == .pounceUp ? sin(progress(at: now) * .pi) * jumpHeight : 0
     }
 
     // MARK: Events
@@ -264,7 +334,8 @@ nonisolated struct PetBrain: Sendable {
         entryRight = favorite > track / 2
         plan = []
         pending = []
-        followX = nil
+        cursor = nil
+        attention = 1
         appearAt = hasItems && !dragging ? now + Double.random(in: Self.appearDelay, using: &rng) : nil
     }
 
@@ -279,7 +350,7 @@ nonisolated struct PetBrain: Sendable {
         ballSpeed = 0
         ballGone = false
         catHasBall = false
-        followX = nil
+        cursor = nil
     }
 
     /// Items changed. `addedAt` / `removedAt`: rim x of a tile that arrived or left (ears perk, look, inspect;
@@ -303,6 +374,7 @@ nonisolated struct PetBrain: Sendable {
         if !isVisible || dragging {
             // Plays once the cat is back in view.
             pending = reaction
+            pendingRoutine = .react
             if activity == .away && appearAt == nil && shelfVisible && !dragging {
                 appearAt = now + Double.random(in: Self.appearDelay, using: &rng)
             }
@@ -318,7 +390,6 @@ nonisolated struct PetBrain: Sendable {
     mutating func setDragging(_ on: Bool, now: TimeInterval) {
         guard on != dragging else { return }
         dragging = on
-        followX = nil
         if on {
             if routine != .react { pending = [] }
             appearAt = nil
@@ -346,33 +417,215 @@ nonisolated struct PetBrain: Sendable {
         run(.react, (isAsleep ? [Step(.stretch, 1.8)] : []) + [Step(.leanIn, 2.4)], now)
     }
 
-    /// The pointer moved over the shelf at rim x `cx` (nil = it left). The cat wakes, runs toward it, then acts
-    /// cute (sit, look up, head tilt, purr). Throttled; ignored while Reduce Motion is on, during a drag, or when
-    /// the cat is out of view (it is not summoned). A shy cat follows less often.
-    mutating func cursorMoved(_ cx: Double?, now: TimeInterval) {
-        cursorX = cx
-        guard let cx else {
-            if routine == .follow {
-                followX = nil
-                run(nil, [Step(.sit, 1.5)], now)
+    // MARK: Cursor
+
+    /// The pointer moved over the shelf: `c.x` on the rim track, `c.y` above the rim (nil = it left). Only meaningful
+    /// changes make the cat reconsider (`Stimulus`); the rest is bookkeeping. Ignored with Reduce Motion, during a
+    /// drag, while out of view, and while busy (a reaction, its own ball, a call, a cursor action under way).
+    mutating func cursorMoved(_ c: SIMD2<Double>?, now: TimeInterval) {
+        let old = cursor
+        cursor = c
+        guard let c else {
+            strokeTurns = []
+            backSince = nil
+            wasNear = false
+            // Leaves: watches where it went out a moment, then back to its routines.
+            if let o = old, routine == .cursor, isVisible, !dragging {
+                lastActive = now
+                run(nil, (isAsleep ? [] : [Step(.perk, 1.2, look: o.x)]), now)
             }
             return
         }
-        guard !reduceMotion, !dragging, isVisible, now - lastCursor >= Self.followThrottle else { return }
-        lastCursor = now
-        lastActive = now
-        let goal = min(max(cx, 0), track)
-        if routine == .follow {
-            // Re-aim only while still on the way; once sitting by the pointer, stay cute.
-            guard let f = followX, abs(goal - f) > Self.followSlack, activity == .run else { return }
-            followX = goal
-            return begin(Step(.run, to: .x(goal)), now)
+        if let o = old {
+            let d = c - o
+            cursorSpeed = (d * d).sum().squareRoot() / max(1.0 / 60, now - cursorMovedAt)
+            if abs(d.x) > 2 {
+                let dir: Double = d.x > 0 ? 1 : -1
+                if strokeDir != 0 && dir != strokeDir && overBody(c) { strokeTurns.append(now) }
+                strokeDir = dir
+            }
         }
-        guard abs(goal - x) > Self.followSlack, routine != .react,
-              Double.random(in: 0..<1, using: &rng) < 1 - 0.7 * mood().shyness else { return }
-        followX = goal
-        run(.follow, (isAsleep ? [Step(.stretch, 0.9)] : []) + [Step(.run, to: .x(goal)), Step(.sit, 0.5),
-                                                                  Step(.look, 2.0), Step(.perk, 1.0), Step(.leanIn, 3.0)], now)
+        cursorMovedAt = now
+        stillPending = true
+        strokeTurns.removeAll { now - $0 > 1.5 }
+        let near = isNear(c), cameNear = near && !wasNear
+        wasNear = near
+        let slowOnBack = alongBack(c)
+        if !slowOnBack { backSince = nil }
+        guard canNotice else { return }
+        if old == nil { return respond(to: .enter, now) }
+        if strokeTurns.count >= 2 {
+            strokeTurns = []
+            return respond(to: .stroke, now)
+        }
+        if cameNear { return respond(to: .near, now) }
+        if slowOnBack {
+            guard let since = backSince else { return backSince = now }
+            if now - since >= 0.5 {
+                backSince = nil
+                respond(to: .alongBack, now)
+            }
+        }
+    }
+
+    /// Double-click on the cat or empty shelf space (`p` like `cursorMoved`): always gets attention. Looks, perks up,
+    /// goes there, crouches and jumps at the spot, then stays interested in the pointer for a while.
+    mutating func call(at p: SIMD2<Double>, now: TimeInterval) {
+        guard shelfVisible, hasItems, !dragging else { return }
+        attention = 1
+        interestUntil = now + Self.callInterest
+        cooldownUntil = 0
+        aim = p
+        lastActive = now
+        if catHasBall {
+            if isOffstage { ball = nil; catHasBall = false } else { dropBallHere() }
+        }
+        let steps = [Step(.perk, 0.7, look: p.x), Step(.approach), Step(.crouch, 0.8, look: p.x),
+                     Step(p.y > 24 ? .pounceUp : .pounce, 0.55), Step(.sit, 1), Step(.watch, 3, look: p.x)]
+        if activity == .away {
+            // Not in yet: comes in right away and answers.
+            pending = steps
+            pendingRoutine = .call
+            appearAt = now
+            return
+        }
+        run(.call, (isAsleep ? [Step(.stretch, 0.6)] : []) + steps, now)
+    }
+
+    /// Settings → Pet → Play with ball: the own-ball routine right now.
+    mutating func playBall(now: TimeInterval) {
+        guard shelfVisible, hasItems, !dragging, !reduceMotion, routine != .bringBall else { return }
+        lastActive = now
+        if activity == .away {
+            pending = ballPlan(enter: true)
+            pendingRoutine = .bringBall
+            appearAt = now
+            return
+        }
+        run(.bringBall, (isAsleep ? [Step(.stretch, 0.6)] : []) + ballPlan(enter: isOffstage), now)
+    }
+
+    /// The cat can take notice: in view, idle enough, and not mid-action on an earlier response.
+    private var canNotice: Bool {
+        guard isVisible, !dragging, !reduceMotion, ![.exit, .react, .bringBall, .call].contains(routine) else { return false }
+        return routine != .cursor || [.watch, .sit, .perk, .peekEye, .sleep].contains(activity)
+    }
+
+    private func isNear(_ c: SIMD2<Double>) -> Bool { hypot(c.x - x, c.y - 20) < Self.nearDistance }
+    private func overBody(_ c: SIMD2<Double>) -> Bool { abs(c.x - x) < 30 && (0...46).contains(c.y) }
+    private func nearHead(_ c: SIMD2<Double>) -> Bool { abs(c.x - x) < 22 && (20...58).contains(c.y) }
+    private func alongBack(_ c: SIMD2<Double>) -> Bool {
+        abs(c.x - x) < 28 && (8...42).contains(c.y) && (6...90).contains(cursorSpeed)
+    }
+
+    /// Stopped, lingering at the head, or every few seconds while the pointer stays around.
+    private mutating func cursorTick(_ now: TimeInterval) {
+        guard let c = cursor, canNotice else { return }
+        let still = now - cursorMovedAt, head = nearHead(c)
+        if stillPending {
+            if head {
+                if still >= Self.dwellAfter {
+                    stillPending = false
+                    return respond(to: .dwell, now)
+                }
+                return
+            }
+            if still >= Self.stillAfter {
+                stillPending = false
+                return respond(to: .still, now)
+            }
+        }
+        // Lingering at its head: rubs again now and then.
+        if head && still >= Self.dwellAfter && now - lastEval >= 1.8 { return respond(to: .dwell, now) }
+        if now - lastEval >= Self.reconsiderEvery { respond(to: .periodic, now) }
+    }
+
+    /// Odds of each response to `s` right now: personality (via mood), state (asleep, tired), attention, cooldown,
+    /// and a recent call. Lazy mostly ignores, Curious mostly watches, Playful pounces and bats, Shy keeps its
+    /// distance, Mischievous pretends not to care and then pounces.
+    func responseWeights(_ s: Stimulus, now: TimeInterval) -> [(CursorResponse, Double)] {
+        guard let c = cursor else { return [(.ignore, 1)] }
+        let t = mood(), a = attention, tired = 1 - needs.energy
+        let boost = now < interestUntil ? 2.0 : 1.0
+        let act = now >= cooldownUntil ? a * boost * (isAsleep ? 0.35 : 1) : 0
+        let canJump = c.y <= Self.pounceReach
+        let ignore = (0.4 + 3 * t.sleepiness + 1.2 * tired + (isAsleep ? 2 + 3 * t.sleepiness : 0)) * (1 + 2 * (1 - a)) / boost
+        let watch = (0.8 + 2.5 * t.curiosity + 1.5 * t.shyness) * (0.4 + 0.6 * a)
+        let affection = (0.5 + 2.5 * (1 - t.shyness) + 2 * happiness) * (isAsleep ? 0.6 : 1)
+        switch s {
+        case .enter, .still, .periodic:
+            return [(.ignore, ignore), (.watch, watch),
+                    (.follow, (0.3 + 1.4 * t.curiosity * (1 - t.shyness) + 0.6 * t.energy) * act),
+                    (.pounce, canJump ? (0.1 + 3.2 * t.energy * t.energy * (0.5 + 0.5 * t.mischief)) * act : 0),
+                    (.sneak, canJump ? 3 * t.mischief * t.mischief * act : 0)]
+        case .near:
+            return [(.ignore, ignore), (.watch, watch),
+                    (.bat, (0.2 + 3 * t.energy * (0.3 + t.mischief)) * act),
+                    (.backOff, isAsleep ? 0 : 6 * max(0, t.shyness - 0.4))]
+        case .dwell:
+            return [(.ignore, ignore * 0.5), (.watch, 0.5), (.headRub, affection)]
+        case .alongBack:
+            return [(.ignore, ignore * 0.5), (.watch, 0.5), (.bodyRub, affection)]
+        case .stroke:
+            return [(.ignore, ignore * 0.3), (.petting, affection * 1.5), (.bat, t.mischief * act)]
+        }
+    }
+
+    private mutating func respond(to s: Stimulus, _ now: TimeInterval) {
+        lastEval = now
+        let options = responseWeights(s, now: now)
+        var r = Double.random(in: 0..<max(1e-9, options.reduce(0) { $0 + $1.1 }), using: &rng)
+        var pick = CursorResponse.ignore
+        for (response, w) in options {
+            if r < w { pick = response; break }
+            r -= w
+        }
+        attention = max(0, attention - (pick.isAffection ? 0.03 : 0.12))
+        lastResponse = pick
+        lastStimulus = s
+        decisions += 1
+        guard let c = cursor else { return }
+        if pick == .ignore {
+            if isAsleep { twitchAt = now }
+            return
+        }
+        lastActive = now
+        if pick.isActive { cooldownUntil = now + ([.pounce, .sneak].contains(pick) ? Self.pounceCooldown : Self.cursorCooldown) }
+        if pick.isAffection { happiness = min(1, happiness + 0.08) }
+        let t = mood()
+        let wake = isAsleep ? [Step(.stretch, 0.6)] : []
+        let toward: Double = c.x >= x ? 1 : -1
+        let steps: [Step]
+        switch pick {
+        case .ignore: return
+        case .watch:
+            // A sleepy cat just opens one eye.
+            steps = isAsleep && t.sleepiness >= 0.6 ? [Step(.peekEye, 3), Step(.sleep)] : wake + [Step(.watch, 3, look: c.x)]
+        case .follow:
+            // Walks or trots over and stops short (a shy cat keeps its distance); a curious one sniffs.
+            let gap = t.shyness > 0.6 ? 70.0 : 20.0
+            let spot = min(max(c.x - toward * gap, 0), track)
+            let gait: Activity = t.energy * needs.energy > 0.45 ? .run : .walk
+            steps = wake + [Step(.perk, 0.4, look: c.x), Step(gait, to: .x(spot))]
+                + (t.curiosity > 0.7 ? [Step(.sniff, 1.2, look: c.x)] : []) + [Step(.watch, 2.5, look: c.x)]
+        case .pounce:
+            steps = wake + [Step(.approach), Step(.crouch, 0.9, look: c.x), Step(c.y > 24 ? .pounceUp : .pounce, 0.55),
+                            Step(.sit, 0.8), Step(.watch, 2, look: c.x)]
+        case .sneak:
+            // Looks away as if it does not care… then turns and pounces.
+            steps = wake + [Step(.sit, Double.random(in: 1.5...3, using: &rng), look: x - toward * 50), Step(.approach),
+                            Step(.crouch, 0.7, look: c.x), Step(.pounceUp, 0.55), Step(.sit, 0.8)]
+        case .bat:
+            steps = wake + [Step(.batUp, 0.5, look: c.x), Step(.batUp, 0.5), Step(.watch, 1.5, look: c.x)]
+        case .backOff:
+            steps = [Step(.walk, to: .x(min(max(x - toward * 60, 0), track))), Step(.watch, 2.5, look: c.x)]
+        case .headRub: steps = wake + [Step(.headRub, 1.8, look: c.x)]
+        case .bodyRub:
+            if !isAsleep { face(x + strokeDir * 10, now) }
+            steps = wake + [Step(.bodyRub, 2)]
+        case .petting: steps = wake + [Step(.leanIn, 2.4)]
+        }
+        run(.cursor, steps, now)
     }
 
     // MARK: Time
@@ -382,6 +635,7 @@ nonisolated struct PetBrain: Sendable {
         lastTick = now
         let dt = min(0.25, raw)
         updateNeeds(raw)
+        attention = min(1, attention + raw * (cursor == nil ? 0.04 : 0.01))
         rollBall(dt, now)
         if ballGone && now - ballGoneAt >= 0.4 { // Pushed off the edge: gone for good.
             ball = nil
@@ -400,9 +654,12 @@ nonisolated struct PetBrain: Sendable {
             pending = []
             let spot = entryRight ? track - 30 : 30
             if !reduceMotion { x = entryRight ? track + Self.offstageX + 8 : -Self.offstageX - 8 }
-            run(reaction.isEmpty ? nil : .react, [Step(.walk, to: .x(reduceMotion ? x : spot))] + reaction, now)
+            // Its own ball comes in with it (carried); anything else walks in first.
+            if pendingRoutine == .bringBall && !reaction.isEmpty { return run(.bringBall, reaction, now) }
+            run(reaction.isEmpty ? nil : pendingRoutine, [Step(.walk, to: .x(reduceMotion ? x : spot))] + reaction, now)
             return
         }
+        cursorTick(now)
         switch activity {
         case .walk, .run, .carry:
             if moveStep(dt, now) { return advance(now) }
@@ -411,8 +668,10 @@ nonisolated struct PetBrain: Sendable {
                 circled = true
                 flip(now)
             }
-        case .pounce:
+        case .pounce, .pounceUp:
             x = from + (pounceTo - from) * progress(at: now)
+        case .watch:
+            if let c = cursor { face(c.x, now) }
         case .sleep:
             if now >= napEnd { return run(.wake, wakePlan(), now) }
         default:
@@ -436,15 +695,18 @@ nonisolated struct PetBrain: Sendable {
         let wait: TimeInterval?
         switch activity {
         case .away: wait = dragging ? nil : appearAt.map { $0 - now }
-        case .walk, .run, .carry, .circle, .pounce, .crouch, .backRoll: wait = reduceMotion ? min(end, doze) : frameRate
-        case .sleep: wait = reduceMotion ? nil : min(1.4, max(0.02, napEnd - now))
-        case .sit, .dropBall, .pushPrep: wait = min(end, doze)
+        case .walk, .run, .carry, .circle, .pounce, .pounceUp, .crouch, .backRoll: wait = reduceMotion ? min(end, doze) : frameRate
+        case .sleep:
+            wait = reduceMotion ? nil : now - twitchAt < 0.5 ? 1.0 / 20 : min(1.4, max(0.02, napEnd - now))
+        case .sit, .dropBall, .pushPrep, .approach, .watch: wait = min(end, doze)
         case .look: wait = reduceMotion ? end : 1.0 / 20
         case .leanIn: wait = reduceMotion ? end : min(1.0 / 6, end)
         default: wait = reduceMotion ? end : min(1.0 / 20, end)
         }
-        guard let wait, wait.isFinite else { return nil }
-        return max(0.02, wait)
+        // Pointer over the shelf: a slow tick notices when it stops or lingers (≤ 10 Hz; moves tick on their own).
+        let attentive = cursor != nil && canNotice ? min(wait ?? .infinity, 0.1) : wait
+        guard let attentive, attentive.isFinite else { return nil }
+        return max(0.02, attentive)
     }
 
     // MARK: Choice
@@ -471,7 +733,8 @@ nonisolated struct PetBrain: Sendable {
                 (.idle, 0.4 + 1.2 * (1 - n.energy) + 0.8 * t.sleepiness),
                 (.stretch, 0.1 + 0.3 * t.sleepiness),
                 (.wander, 0.1 + 1.2 * t.energy * n.energy),
-                (.bringBall, 0.1 + 0.6 * t.energy * n.play)]
+                // Its own ball: a regular game for an awake cat, most of all a playful or curious one.
+                (.bringBall, 0.3 + 2.5 * t.energy * n.play + 1.0 * t.curiosity * n.play)]
     }
 
     mutating func chooseRoutine() -> Routine {
@@ -504,18 +767,19 @@ nonisolated struct PetBrain: Sendable {
             let spot = min(max(x + Double.random(in: -90...90, using: &rng), 0), track)
             return [Step(.walk, to: .x(spot)), Step(.sit, 2)]
         case .bringBall: return ballPlan()
-        case .follow, .exit, .react: return [Step(.sit, 2)]
+        case .cursor, .call, .exit, .react: return [Step(.sit, 2)]
         }
     }
 
     /// The cat's own ball: out of view past a side, back carrying it, put it down, a round or two of play (run
     /// over, crouch with a butt wiggle, pounce, bat; or roll on its back holding it), then walk around it and
     /// push it off the nearer edge. The ball is gone for good.
-    private mutating func ballPlan() -> [Step] {
-        let right = Bool.random(using: &rng)
+    /// `enter`: already out of view; it just comes back in with the ball.
+    private mutating func ballPlan(enter: Bool = false) -> [Step] {
+        let right = enter ? (isOffstage ? x > track / 2 : entryRight) : Bool.random(using: &rng)
         let rounds = Int.random(in: 1...2, using: &rng)
         let spot = right ? track - 50 : 50
-        return exitPlan(right: right) + [Step(.sit, 0.8), Step(.carry, to: .x(spot)), Step(.dropBall, 0.4)]
+        return (enter ? [] : exitPlan(right: right) + [Step(.sit, 0.8)]) + [Step(.carry, to: .x(spot)), Step(.dropBall, 0.4)]
             + (0..<rounds).flatMap { _ in playRound() } + [Step(.pushPrep), Step(.sit, 1.5)]
     }
 
@@ -565,6 +829,15 @@ nonisolated struct PetBrain: Sendable {
 
     private mutating func begin(_ step: Step, _ now: TimeInterval) {
         var s = step
+        if s.activity == .approach {
+            // Over to the pointer (or the call spot) first if it is out of paw's reach.
+            if let goal = routine == .call ? aim : cursor ?? aim, abs(goal.x - x) > 40 {
+                let spot = min(max(goal.x + (goal.x >= x ? -24 : 24), 0), track)
+                plan.insert(Step(.run, to: .x(spot)), at: 0)
+            }
+            guard !plan.isEmpty else { return begin(Step(.sit, 0.5), now) }
+            return begin(plan.removeFirst(), now)
+        }
         if s.activity == .pushPrep {
             // Walk around to the side of the ball away from the nearer edge, then push it that way.
             let b = ball ?? x
@@ -577,19 +850,32 @@ nonisolated struct PetBrain: Sendable {
             // Static pet: no locomotion or animated beats; it sits (or sleeps) where it is.
             switch s.activity {
             case .sit, .sleep, .leanIn, .perk, .sad, .dropBall, .away: break
+            case .watch: s.activity = .perk
             case .curl: s = Step(.sleep)
             default: s = Step(.sit, max(s.duration, 1.5))
             }
         }
         set(s, now)
         if let l = s.lookAt { face(l, now) }
+        // Cursor play aims at where the pointer is now; a call keeps its spot.
+        if routine == .cursor, let c = cursor, [.crouch, .pounce, .pounceUp, .batUp, .headRub, .watch].contains(s.activity) {
+            aim = c
+            face(c.x, now)
+        }
         switch s.activity {
         case .circle: circled = false
         case .pounce:
             from = x
-            let b = ball ?? x + (facingRight ? 30 : -30)
+            let b = [.cursor, .call].contains(routine) ? aim?.x ?? x : ball ?? x + (facingRight ? 30 : -30)
             face(b, now)
             pounceTo = min(max(b - (facingRight ? 10 : -10), 0), track)
+        case .pounceUp:
+            // Up at the pointer: a short hop sideways, as high as the canvas allows.
+            let goal = aim ?? SIMD2(x + (facingRight ? 20 : -20), 40)
+            from = x
+            face(goal.x, now)
+            pounceTo = min(max(x + min(max(goal.x - x, -30), 30) * 0.8, 0), track)
+            jumpHeight = min(max(goal.y * 0.75, 16), 46)
         case .backRoll:
             catHasBall = ball != nil
             needs.energy = max(0, needs.energy - 0.03)
@@ -612,7 +898,7 @@ nonisolated struct PetBrain: Sendable {
         guard let b = ball, abs(b - x) < 40 || catHasBall else { return }
         catHasBall = false
         let start = min(max(x + (facingRight ? 12 : -12), ballRange.lowerBound), ballRange.upperBound)
-        let goal = min(max(cursorX ?? (x + (facingRight ? 100 : -100)), 0), track)
+        let goal = min(max(cursor?.x ?? (x + (facingRight ? 100 : -100)), 0), track)
         let d = goal - start
         ball = start
         ballSpeed = (d >= 0 ? 1 : -1) * min(Self.rollOffSpeed * 0.9, (2 * Self.friction * abs(d)).squareRoot())
@@ -705,7 +991,7 @@ nonisolated struct PetBrain: Sendable {
         if isAsleep {
             needs.energy += 0.06 * dt
         } else {
-            let busy: Set<Activity> = [.walk, .run, .carry, .pounce, .crouch, .backRoll, .bat]
+            let busy: Set<Activity> = [.walk, .run, .carry, .pounce, .pounceUp, .crouch, .backRoll, .bat, .batUp]
             needs.energy -= dt * 0.006 * (0.5 + 1.5 * t.sleepiness) * (busy.contains(activity) ? 2.5 : 1)
         }
         if [.look, .sniff].contains(activity) { needs.curiosity -= dt * 0.15 } else { needs.curiosity += dt * 0.012 * (0.3 + t.curiosity) }
@@ -728,6 +1014,8 @@ nonisolated struct PetBrain: Sendable {
     mutating func start(_ r: Routine, now: TimeInterval) { run(r, plan(for: r), now) }
     /// Sets needs directly (tests).
     mutating func setNeeds(_ n: Needs) { needs = n }
+    /// One decision about the pointer right now (tests; the pointer must be set).
+    mutating func stimulate(_ s: Stimulus, now: TimeInterval) { respond(to: s, now) }
     /// Puts the cat at `x` while it is not visible (first appearance spot).
     mutating func place(at newX: Double) { x = min(max(newX, 0), track) }
 }

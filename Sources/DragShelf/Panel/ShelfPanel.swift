@@ -10,6 +10,8 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     var onCancel: (() -> Void)?
     /// User edge-drag resize: each step (`ended == false`) and the end (T-16 AC-4).
     var onUserResize: ((_ ended: Bool) -> Void)?
+    /// Double-click on the cat or empty shelf space (content point, top-left origin): calls the pet (V3-01).
+    var onPetCall: ((CGPoint) -> Void)?
 
     init() {
         super.init(
@@ -54,7 +56,27 @@ final class ShelfPanel: NSPanel, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     /// Keys are handled before SwiftUI sees them; Cmd/Ctrl/Option combos pass through (Cmd-C).
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, handleKey(event) { return }
+        if event.type == .leftMouseDown, event.clickCount == 2, let onPetCall, let content = contentView,
+           let frame = content.superview {
+            let p = content.convert(event.locationInWindow, from: nil)
+            let top = CGPoint(x: p.x, y: content.isFlipped ? p.y : content.bounds.height - p.y)
+            if Self.callsPet(hit: content.hitTest(frame.convert(event.locationInWindow, from: nil)), yFromTop: top.y) {
+                onPetCall(top)
+            }
+        }
         super.sendEvent(event)
+    }
+
+    /// A double-click calls the pet unless it lands on the header (its double-click resets the position), a tile
+    /// or Recent row, or a control or text field.
+    static func callsPet(hit: NSView?, yFromTop: CGFloat) -> Bool {
+        guard yFromTop >= ShelfView.headerHeight else { return false }
+        var view = hit
+        while let v = view {
+            if v is DragOutHandleView || v is WindowDragView || v is NSControl || v is NSText { return false }
+            view = v.superview
+        }
+        return true
     }
 
     override func cancelOperation(_ sender: Any?) {

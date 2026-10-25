@@ -46,6 +46,10 @@ func petSnapshots() throws {
         ("pounce", PetFrame(pose: .pounce, progress: 0.5, turn: 1)), ("stretch", PetFrame(pose: .stretch, progress: 0.8)),
         ("back-roll", PetFrame(pose: .backRoll, progress: 0.1)), ("peek", PetFrame(pose: .peek, progress: 0.4)),
         ("hide", PetFrame(pose: .hide, progress: 1)),
+        ("pounce-up", PetFrame(pose: .pounceUp, progress: 0.5, turn: 1)), ("bat-up", PetFrame(pose: .batUp, progress: 0.5)),
+        ("bat-up-start", PetFrame(pose: .batUp, progress: 0.05)), ("head-rub", PetFrame(pose: .headRub, step: 1, progress: 0.3)),
+        ("body-rub", PetFrame(pose: .bodyRub, step: 0, progress: 0.3, turn: 1)), ("peek-eye", PetFrame(pose: .peekEye)),
+        ("sleep-twitch", PetFrame(pose: .sleep, turn: 1)), ("watch-up", PetFrame(pose: .perk, turn: 0.1)),
     ]
     for (name, f) in frames {
         try write(HStack(spacing: 0) { tile(f, dark: false); tile(f, dark: true) }, "pet-\(name).png")
@@ -56,7 +60,7 @@ func petSnapshots() throws {
     }, "pet-walk-left-right.png")
     try write(tile(PetFrame(pose: .crouch, step: 0, turn: 1), dark: false, ball: true), "pet-ball.png")
     try write(VStack(spacing: 0) {
-        ForEach(0..<4, id: \.self) { row in
+        ForEach(0..<(frames.count + 5) / 6, id: \.self) { row in
             HStack(spacing: 0) {
                 ForEach(0..<6, id: \.self) { i in
                     if row * 6 + i < frames.count { tile(frames[row * 6 + i].1, dark: false) }
@@ -65,7 +69,7 @@ func petSnapshots() throws {
         }
     }.background(.white), "pet-sheet.png")
     try write(VStack(spacing: 0) {
-        ForEach(0..<6, id: \.self) { row in
+        ForEach(0..<(frames.count + 3) / 4, id: \.self) { row in
             HStack(spacing: 0) {
                 ForEach(0..<4, id: \.self) { i in
                     if row * 4 + i < frames.count { tile(frames[row * 4 + i].1, dark: false) }
@@ -91,6 +95,18 @@ func petSnapshots() throws {
         ("purr", PetSnapshot(frame: PetFrame(pose: .purr, progress: 0.4), x: 60, facingRight: true, bubble: "purrr…")),
         ("ball", PetSnapshot(frame: PetFrame(pose: .crouch, step: 0, turn: 1), x: 160, facingRight: true, ball: 195)),
         ("exit", PetSnapshot(frame: PetFrame(pose: .run, step: 1, turn: 1), x: 262, facingRight: true)),
+        ("pounce-up", PetSnapshot(frame: PetFrame(pose: .pounceUp, progress: 0.5, turn: 1), x: 140, facingRight: true, lift: 38)),
+        ("bat-up", PetSnapshot(frame: PetFrame(pose: .batUp, progress: 0.5), x: 100, facingRight: false)),
+        ("head-rub", PetSnapshot(frame: PetFrame(pose: .headRub, step: 1, progress: 0.4), x: 180, facingRight: true,
+                                 bubble: "purrr…")),
+        ("body-rub", PetSnapshot(frame: PetFrame(pose: .bodyRub, progress: 0.4, turn: 1), x: 120, facingRight: false,
+                                 bubble: "purrr…")),
+        ("petting-hearts", PetSnapshot(frame: PetFrame(pose: .purr, step: 1, progress: 0.5), x: 90, facingRight: true,
+                                       bubble: "purrr…")),
+        ("ball-play", PetSnapshot(frame: PetFrame(pose: .backRoll, progress: 0.1), x: 150, facingRight: true)),
+        ("ball-bat", PetSnapshot(frame: PetFrame(pose: .bat, progress: 0.2), x: 150, facingRight: true, ball: 178, ballSpin: 2)),
+        ("call", PetSnapshot(frame: PetFrame(pose: .perk, turn: 0.7), x: 70, facingRight: true, bubble: "!")),
+        ("peek-eye", PetSnapshot(frame: PetFrame(pose: .peekEye), x: 30, facingRight: true)),
     ]
     for (scene, snap) in scenes {
         pet.snapshot = snap

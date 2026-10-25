@@ -1,9 +1,10 @@
+import AppKit
 import Foundation
 import Testing
 @testable import DragShelf
 
 /// Brain on a shown shelf with items: 280 pt floor track, three first-row tiles, clock at 0, midday.
-private func brain(_ p: PetPersonality = .playful, seed: UInt64 = 7, reduceMotion: Bool = false) -> PetBrain {
+nonisolated private func brain(_ p: PetPersonality = .playful, seed: UInt64 = 7, reduceMotion: Bool = false) -> PetBrain {
     var b = PetBrain(traits: p.traits, seed: seed)
     b.track = 280
     b.tiles = [40, 140, 240]
@@ -13,7 +14,7 @@ private func brain(_ p: PetPersonality = .playful, seed: UInt64 = 7, reduceMotio
 }
 
 /// Ticks every `dt` from `from` to `to`, calling `each` after every tick.
-private func run(_ b: inout PetBrain, from: Double, to: Double, dt: Double = 0.05,
+nonisolated private func run(_ b: inout PetBrain, from: Double, to: Double, dt: Double = 0.05,
                  _ each: (inout PetBrain, Double) -> Void = { _, _ in }) {
     var t = from
     while t <= to {
@@ -24,20 +25,20 @@ private func run(_ b: inout PetBrain, from: Double, to: Double, dt: Double = 0.0
 }
 
 /// Distinct activities in order of appearance from `from` to `to`.
-private func trace(_ b: inout PetBrain, from: Double, to: Double) -> [PetBrain.Activity] {
+nonisolated private func trace(_ b: inout PetBrain, from: Double, to: Double) -> [PetBrain.Activity] {
     var out: [PetBrain.Activity] = []
     run(&b, from: from, to: to) { b, _ in if out.last != b.activity { out.append(b.activity) } }
     return out
 }
 
 /// Visible and settled (popped up) at t = 6.
-private func awake(_ p: PetPersonality = .playful, seed: UInt64 = 7) -> PetBrain {
+nonisolated private func awake(_ p: PetPersonality = .playful, seed: UInt64 = 7) -> PetBrain {
     var b = brain(p, seed: seed)
     run(&b, from: 0, to: 6)
     return b
 }
 
-private func isSubsequence(_ needle: [PetBrain.Activity], of hay: [PetBrain.Activity]) -> Bool {
+nonisolated private func isSubsequence(_ needle: [PetBrain.Activity], of hay: [PetBrain.Activity]) -> Bool {
     var i = 0
     for a in hay where i < needle.count && a == needle[i] { i += 1 }
     return i == needle.count
@@ -45,14 +46,14 @@ private func isSubsequence(_ needle: [PetBrain.Activity], of hay: [PetBrain.Acti
 
 // MARK: Personality and needs
 
-private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
+nonisolated private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     var b = brain(p, seed: 42)
     var counts: [PetBrain.Routine: Double] = [:]
     for _ in 0..<4000 { counts[b.chooseRoutine(), default: 0] += 1 }
     return counts.mapValues { $0 / 4000 }
 }
 
-@Test func personalitiesShapeRoutines() {
+@Test nonisolated func personalitiesShapeRoutines() {
     let playful = shares(.playful), lazy = shares(.lazy), curious = shares(.curious)
     let mischievous = shares(.mischievous)
     func s(_ d: [PetBrain.Routine: Double], _ r: PetBrain.Routine) -> Double { d[r] ?? 0 }
@@ -64,7 +65,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 }
 
 /// The cat is mostly asleep: napping is the likeliest routine for every personality, and over half for most.
-@Test func sleepIsTheDefault() {
+@Test nonisolated func sleepIsTheDefault() {
     for p in PetPersonality.concrete {
         let d = shares(p)
         let nap = d[.nap] ?? 0
@@ -80,7 +81,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(asleep / max(total, 1) > 0.6, "\(asleep / max(total, 1))")
 }
 
-@Test func routineNapsAreLong() {
+@Test nonisolated func routineNapsAreLong() {
     var b = awake(.lazy)
     b.setNeeds(PetBrain.Needs(energy: 0.9, curiosity: 0.2, play: 0.2))
     b.start(.nap, now: 6)
@@ -93,7 +94,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(woke - start >= 59 && woke - start <= 181, "\(woke - start)")
 }
 
-@Test func needsDriftByPersonality() {
+@Test nonisolated func needsDriftByPersonality() {
     var lazy = awake(.lazy), playful = awake(.playful)
     run(&lazy, from: 6, to: 26) { b, t in if Int(t * 20) % 100 == 0 { b.pet(now: t) } }
     run(&playful, from: 6, to: 26) { b, t in if Int(t * 20) % 100 == 0 { b.pet(now: t) } }
@@ -101,7 +102,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(playful.needs.play > 0.4)
 }
 
-@Test func tiredCatNapsAtItsFavoriteSpot() {
+@Test nonisolated func tiredCatNapsAtItsFavoriteSpot() {
     var b = awake(.playful)
     b.favorite = 0
     b.setNeeds(PetBrain.Needs(energy: 0.1, curiosity: 0.2, play: 0.1))
@@ -114,7 +115,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 
 // MARK: Routines and continuity
 
-@Test func napRoutineRunsInOrder() {
+@Test nonisolated func napRoutineRunsInOrder() {
     var b = awake()
     b.favorite = 0
     b.place(at: 200)
@@ -129,7 +130,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(isSubsequence([.stretch, .leanIn], of: trace(&b, from: 20, to: 25)))
 }
 
-@Test func exploreAndInspectRoutines() {
+@Test nonisolated func exploreAndInspectRoutines() {
     var e = awake(.curious)
     e.start(.explore, now: 6)
     #expect(isSubsequence([.walk, .sit, .look], of: trace(&e, from: 6, to: 30)))
@@ -138,7 +139,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(isSubsequence([.walk, .sniff, .sit], of: trace(&i, from: 6, to: 30)))
 }
 
-@Test func neverTeleports() {
+@Test nonisolated func neverTeleports() {
     for seed: UInt64 in 1...6 {
         var b = brain(.playful, seed: seed)
         var last: Double?
@@ -148,7 +149,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
             case 400: b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: t)
             case 1200: b.setDragging(true, now: t)
             case 1300: b.setDragging(false, now: t)
-            case 1500: b.cursorMoved(200, now: t)
+            case 1500: b.cursorMoved(SIMD2(200, 30), now: t)
             case 2200: b.pet(now: t)
             default: break
             }
@@ -160,7 +161,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     }
 }
 
-@Test func facesWhereItWalks() {
+@Test nonisolated func facesWhereItWalks() {
     var b = awake()
     b.place(at: 250)
     b.start(.explore, now: 6)
@@ -180,7 +181,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 
 // MARK: Reactions
 
-@Test func reactionsFire() {
+@Test nonisolated func reactionsFire() {
     var b = awake()
     b.place(at: 140)
     b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: 6)
@@ -203,7 +204,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 
 // MARK: Drag
 
-@Test func runsOutToNearerSideDuringDragAndWalksBack() {
+@Test nonisolated func runsOutToNearerSideDuringDragAndWalksBack() {
     for (start, right) in [(40.0, false), (240.0, true)] {
         var b = awake()
         b.place(at: start)
@@ -229,7 +230,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     }
 }
 
-@Test func hiddenShelfStopsEverything() {
+@Test nonisolated func hiddenShelfStopsEverything() {
     var b = awake()
     b.start(.bringBall, now: 6)
     b.shelfHidden(now: 7)
@@ -237,7 +238,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(b.nextWake(now: 7) == nil)
 }
 
-@Test func appearsTwoToFiveSecondsAfterShow() {
+@Test nonisolated func appearsTwoToFiveSecondsAfterShow() {
     for seed: UInt64 in 1...20 {
         var b = brain(.playful, seed: seed)
         var first: Double?
@@ -248,7 +249,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
 
 // MARK: Own ball
 
-@Test func catBringsItsOwnBallPlaysAndPushesItOut() {
+@Test nonisolated func catBringsItsOwnBallPlaysAndPushesItOut() {
     var b = awake(.playful)
     b.setNeeds(PetBrain.Needs(energy: 0.9, curiosity: 0.2, play: 0.9))
     #expect(b.ball == nil)
@@ -256,30 +257,32 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     var seen: [PetBrain.Activity] = []
     var wentOffstage = false, ballShown = false, ballGoneSeen = false
     var ballAtPush: Double?
+    var cleared = false
     run(&b, from: 6, to: 80) { b, _ in
         if seen.last != b.activity { seen.append(b.activity) }
         if b.isOffstage { wentOffstage = true }
         if b.ballVisible { ballShown = true }
         if b.ballGone { ballGoneSeen = true }
+        if ballGoneSeen && b.ball == nil && !b.catHasBall { cleared = true }
         if b.activity == .pushOut && ballAtPush == nil { ballAtPush = b.ball }
     }
     #expect(wentOffstage && ballShown && ballGoneSeen)
     #expect(isSubsequence([.run, .carry, .dropBall, .perk, .run, .crouch, .pounce, .bat, .run, .pushOut], of: seen), "\(seen)")
-    #expect(b.ball == nil && !b.ballGone && !b.catHasBall) // Pushed off the edge: gone.
+    #expect(cleared) // Pushed off the edge: gone.
 }
 
-@Test func ownBallIsOccasionalAndNeverWhileStatic() {
+@Test nonisolated func ownBallIsOccasionalAndNeverWhileStatic() {
     var b = brain(.playful, seed: 42)
     var n = 0
     for _ in 0..<2000 where b.chooseRoutine() == .bringBall { n += 1 }
-    #expect(n > 20 && n < 400, "\(n)") // Occasional, not constant.
+    #expect(n > 160 && n < 500, "\(n)") // A regular game, not constant.
     var s = brain(.playful, reduceMotion: true)
     run(&s, from: 0, to: 200) { s, _ in #expect(s.ball == nil) }
 }
 
 // MARK: Sleep, Reduce Motion
 
-@Test func sleepsAfterIdle() {
+@Test nonisolated func sleepsAfterIdle() {
     for p in PetPersonality.concrete {
         var b = brain(p, seed: 3)
         var asleepAt: Double?
@@ -290,7 +293,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     }
 }
 
-@Test func reduceMotionKeepsPetStatic() {
+@Test nonisolated func reduceMotionKeepsPetStatic() {
     var b = brain(.playful, reduceMotion: true)
     var poses = Set<PetPose>()
     var xs = Set<Double>()
@@ -300,7 +303,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
             #expect(f.step == 0)
         }
         xs.insert(b.x)
-        if Int(t * 20) == 200 { b.cursorMoved(200, now: t) } // Static: no follow.
+        if Int(t * 20) == 200 { b.cursorMoved(SIMD2(200, 30), now: t) } // Static: no cursor play.
         if Int(t * 20) == 240 { b.pet(now: t) }
         if Int(t * 20) == 300 { b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: t) }
     }
@@ -309,7 +312,7 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(b.nextWake(now: 60) == nil) // Asleep and static: no ticks at all.
 }
 
-@Test func sameSeedSameBehavior() {
+@Test nonisolated func sameSeedSameBehavior() {
     func once() -> [PetBrain.Activity] {
         var b = brain(.curious, seed: 99)
         return trace(&b, from: 0, to: 90)
@@ -318,94 +321,337 @@ private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Double] {
     #expect(once().count > 5)
 }
 
-// MARK: Mouse follow
+// MARK: Cursor play
 
-@Test func catWakesRunsToCursorAndActsCute() {
-    var b = awake(.playful)
-    b.place(at: 30)
-    b.start(.nap, now: 6)
-    run(&b, from: 6, to: 20)
-    #expect(b.isAsleep)
-    let at = b.x
-    b.cursorMoved(220, now: 20)
-    #expect(b.routine == .follow && b.followX == 220)
-    #expect(b.frame(at: 20)?.pose == .stretch) // Wakes first.
-    var seen: [PetBrain.Activity] = []
-    var faced: Bool?, arrived: Double?
-    run(&b, from: 20, to: 40) { b, _ in
-        if seen.last != b.activity { seen.append(b.activity) }
-        if b.activity == .run && faced == nil { faced = b.facingRight }
-        if b.activity == .sit && arrived == nil { arrived = b.x }
-    }
-    #expect(isSubsequence([.stretch, .run, .sit, .look, .perk, .leanIn], of: seen), "\(seen)")
-    #expect(faced == (220 > at)) // Faces where it runs.
-    #expect(arrived.map { abs($0 - 220) < 1 } == true, "\(String(describing: arrived))")
-}
-
-@Test func followIsThrottledAndStopsWhenCursorLeaves() {
-    var b = awake(.playful)
-    b.place(at: 30)
+/// Awake and sitting at x = 140 at t = 6.
+nonisolated private func sitting(_ p: PetPersonality, seed: UInt64) -> PetBrain {
+    var b = awake(p, seed: seed)
+    b.place(at: 140)
     b.start(.idle, now: 6)
-    b.cursorMoved(250, now: 6)
-    #expect(b.followX == 250)
-    // Inside the throttle window: ignored (no re-aim, no RNG use).
-    b.cursorMoved(100, now: 6.05)
-    #expect(b.followX == 250)
-    run(&b, from: 6, to: 6.4)
-    #expect(b.activity == .run && b.x > 30)
-    // A small move is ignored; a big move re-aims the run.
-    b.cursorMoved(255, now: 6.5)
-    #expect(b.followX == 250)
-    b.cursorMoved(40, now: 6.7)
-    #expect(b.followX == 40 && b.activity == .run)
-    run(&b, from: 6.7, to: 7.5)
-    // Cursor leaves: back to routines (sits a moment, then picks its own).
-    b.cursorMoved(nil, now: 7.5)
-    #expect(b.followX == nil && b.routine == nil && b.activity == .sit)
-    run(&b, from: 7.5, to: 20)
-    #expect(b.routine != .follow)
+    return b
 }
 
-@Test func followIgnoredWhenStaticOrDraggingOrAway() {
+/// Share of each response to a pointer at `at` for `s` over 400 seeds.
+nonisolated private func responseShares(_ p: PetPersonality, _ s: PetBrain.Stimulus, at: SIMD2<Double>) -> [PetBrain.CursorResponse: Double] {
+    var counts: [PetBrain.CursorResponse: Double] = [:]
+    for seed: UInt64 in 1...400 {
+        var b = sitting(p, seed: seed)
+        b.cursorMoved(at, now: 6)
+        b.stimulate(s, now: 30) // Fresh decision: attention back up, no cooldown.
+        counts[b.lastResponse!, default: 0] += 1
+    }
+    return counts.mapValues { $0 / 400 }
+}
+
+/// Every decision (time, stimulus, response) while `drive` moves the pointer from `from` to `to`.
+nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double, dt: Double = 1.0 / 30,
+                       _ drive: (inout PetBrain, Double) -> Void) -> [(Double, PetBrain.Stimulus, PetBrain.CursorResponse)] {
+    var out: [(Double, PetBrain.Stimulus, PetBrain.CursorResponse)] = []
+    var seen = b.decisions
+    run(&b, from: from, to: to, dt: dt) { b, t in
+        drive(&b, t)
+        if b.decisions != seen {
+            seen = b.decisions
+            out.append((t, b.lastStimulus!, b.lastResponse!))
+        }
+    }
+    return out
+}
+
+@Test nonisolated func personalitiesRespondToThePointerDifferently() {
+    let above = SIMD2(170.0, 70.0)
+    func share(_ p: PetPersonality, _ r: PetBrain.CursorResponse) -> Double { responseShares(p, .enter, at: above)[r] ?? 0 }
+    // Lazy mostly ignores; curious mostly watches; playful pounces most; mischievous sneaks (fake ignore, then pounce).
+    #expect(share(.lazy, .ignore) > 0.45)
+    #expect(share(.curious, .watch) > max(share(.curious, .follow), share(.curious, .pounce), share(.curious, .ignore)))
+    #expect(share(.curious, .follow) > 0.12) // Sometimes walks over and sniffs.
+    #expect(share(.playful, .pounce) > share(.curious, .pounce) + 0.1)
+    #expect(share(.playful, .pounce) > share(.mischievous, .pounce))
+    #expect(share(.mischievous, .sneak) > 0.2 && share(.mischievous, .sneak) > share(.playful, .sneak) * 2)
+    #expect(share(.shy, .watch) > 0.4 && share(.shy, .follow) < 0.1)
+    // A pointer far above the cat is out of jumping range.
+    #expect((responseShares(.playful, .enter, at: SIMD2(170, 200))[.pounce] ?? 0) == 0)
+    // Very close: shy backs off, playful bats.
+    let close = SIMD2(150.0, 25.0)
+    #expect((responseShares(.shy, .near, at: close)[.backOff] ?? 0) > 0.3)
+    #expect((responseShares(.playful, .near, at: close)[.backOff] ?? 0) == 0)
+    #expect((responseShares(.playful, .near, at: close)[.bat] ?? 0) > 0.3)
+}
+
+@Test nonisolated func repeatedStimulationWearsAttentionOff() {
+    var early = 0, late = 0
+    for seed: UInt64 in 1...100 {
+        var b = sitting(.playful, seed: seed)
+        b.cursorMoved(SIMD2(200, 60), now: 6)
+        for i in 0..<12 {
+            b.stimulate(.periodic, now: 7 + Double(i) * 0.01)
+            if b.lastResponse == .ignore { if i < 3 { early += 1 } else if i >= 9 { late += 1 } }
+        }
+    }
+    #expect(late > early * 2, "early \(early), late \(late)")
+    // Comes back once the pointer has been gone a while.
+    var b = sitting(.playful, seed: 1)
+    b.cursorMoved(SIMD2(200, 60), now: 6)
+    for i in 0..<10 { b.stimulate(.periodic, now: 6 + Double(i) * 0.01) }
+    let worn = b.attention
+    b.cursorMoved(nil, now: 6.2)
+    run(&b, from: 6.2, to: 40)
+    #expect(worn < 0.2 && b.attention > 0.9)
+}
+
+@Test nonisolated func activeResponsesHaveACooldown() {
+    // Find a pounce.
+    var seed: UInt64 = 0, b = sitting(.playful, seed: 0)
+    let t = 30.0
+    while b.lastResponse != .pounce && seed < 50 {
+        seed += 1
+        b = sitting(.playful, seed: seed)
+        b.cursorMoved(SIMD2(150, 60), now: 6)
+        b.stimulate(.periodic, now: t)
+    }
+    #expect(b.lastResponse == .pounce)
+    func active(_ now: Double) -> Double {
+        b.responseWeights(.periodic, now: now).filter { $0.0.isActive }.reduce(0) { $0 + $1.1 }
+    }
+    #expect(active(t + 1) == 0 && active(t + 5) == 0)
+    #expect(active(t + PetBrain.pounceCooldown + 0.1) > 0)
+    // In real time, active responses never come closer together than the cooldown.
+    for seed: UInt64 in 1...30 {
+        var c = sitting(.playful, seed: seed)
+        var last: Double?
+        let made = decisions(&c, from: 6, to: 40) { c, t in
+            // Wanders over the shelf, above the cat, now and then stopping.
+            if Int(t * 30) % 45 < 30 { c.cursorMoved(SIMD2(100 + 80 * sin(t), 60 + 20 * cos(t * 0.7)), now: t) }
+        }
+        for (time, _, r) in made where r.isActive {
+            if let l = last { #expect(time - l >= PetBrain.cursorCooldown - 0.05, "seed \(seed)") }
+            last = time
+        }
+    }
+}
+
+@Test nonisolated func pointerIsNotChasedEveryPixel() {
+    // Constant motion over the shelf: a handful of decisions, not one per move.
+    var b = sitting(.curious, seed: 5)
+    let made = decisions(&b, from: 6, to: 26) { b, t in b.cursorMoved(SIMD2(140 + 100 * sin(t * 0.8), 90), now: t) }
+    #expect(made.count >= 2 && made.count <= 12, "\(made.count)")
+    #expect(made.first?.1 == .enter)
+}
+
+@Test nonisolated func enterWakesSleepingCatOnlySometimesAndRunsOrWalksOver() {
+    var woke = 0, ignored = 0, twitched = 0
+    for seed: UInt64 in 1...60 {
+        var b = awake(.playful, seed: seed)
+        b.place(at: 30)
+        b.start(.nap, now: 6)
+        run(&b, from: 6, to: 20)
+        guard b.isAsleep else { continue }
+        b.cursorMoved(SIMD2(220, 60), now: 20)
+        if b.lastResponse == .ignore {
+            ignored += 1
+            if b.frame(at: 20.1)?.turn == 1 { twitched += 1 } // An ear flicks.
+        } else if b.activity == .stretch {
+            woke += 1
+            let seen = trace(&b, from: 20, to: 30)
+            #expect(seen.contains(.run) || seen.contains(.walk) || seen.contains(.watch), "\(seen)")
+        }
+    }
+    #expect(woke > 3 && ignored > 10 && twitched == ignored, "woke \(woke) ignored \(ignored)")
+}
+
+@Test nonisolated func pounceUpAtAPointerAbove() {
+    var jumped = 0
+    for seed: UInt64 in 1...60 {
+        var b = sitting(.playful, seed: seed)
+        var maxLift = 0.0
+        var seen: [PetBrain.Activity] = []
+        run(&b, from: 6, to: 16) { b, t in
+            if t < 6.1 { b.cursorMoved(SIMD2(150, 80), now: t) }
+            if seen.last != b.activity { seen.append(b.activity) }
+            maxLift = max(maxLift, b.lift(at: t))
+        }
+        if isSubsequence([.crouch, .pounceUp, .sit], of: seen) {
+            jumped += 1
+            #expect(maxLift > 30 && maxLift <= 46, "\(maxLift)")
+        }
+    }
+    #expect(jumped > 15, "\(jumped)")
+}
+
+@Test nonisolated func lingeringAtTheHeadGetsAHeadRub() {
+    var rubs = 0
+    for seed: UInt64 in 1...40 {
+        var b = sitting(.curious, seed: seed)
+        var arrived: Double?
+        let made = decisions(&b, from: 6, to: 14) { b, t in
+            // Rests on the cat's head (following it if it moves).
+            if arrived == nil { arrived = t }
+            b.cursorMoved(SIMD2(b.x + 4, 38), now: arrived!)
+        }
+        for (time, s, r) in made where s == .dwell {
+            #expect(time - arrived! >= PetBrain.dwellAfter - 0.05)
+            if r == .headRub { rubs += 1 }
+        }
+    }
+    #expect(rubs > 20, "\(rubs)")
+}
+
+@Test nonisolated func slowAlongTheBackGetsABodyRubAndStrokingGetsPetting() {
+    var bodyRubs = 0, petting = 0
+    for seed: UInt64 in 1...40 {
+        var b = sitting(.curious, seed: seed)
+        b.stimulate(.enter, now: 6) // (no pointer yet: ignored)
+        let slow = decisions(&b, from: 6, to: 9) { b, t in
+            // 30 pt/s along the back, one way.
+            b.cursorMoved(SIMD2(120 + 30 * (t - 6) * 0.5, 24), now: t)
+        }
+        if slow.contains(where: { $0.1 == .alongBack && $0.2 == .bodyRub }) { bodyRubs += 1 }
+        var c = sitting(.curious, seed: seed)
+        let strokes = decisions(&c, from: 6, to: 9) { c, t in
+            // Back and forth over the cat, about twice a second.
+            c.cursorMoved(SIMD2(c.x + 16 * sin(t * 12), 22), now: t)
+        }
+        if strokes.contains(where: { $0.1 == .stroke && $0.2 == .petting }) { petting += 1 }
+    }
+    #expect(bodyRubs > 10, "\(bodyRubs)")
+    #expect(petting > 15, "\(petting)")
+}
+
+@Test nonisolated func pointerLeavingEndsCursorPlay() {
+    var b = sitting(.curious, seed: 2)
+    b.cursorMoved(SIMD2(150, 60), now: 6)
+    var t = 6.0
+    while b.routine != .cursor && t < 40 { t += 0.01; b.stimulate(.periodic, now: t) }
+    #expect(b.routine == .cursor)
+    b.cursorMoved(nil, now: t)
+    #expect(b.routine == nil && b.activity == .perk) // Watches where it went out.
+    run(&b, from: t, to: t + 15)
+    #expect(b.routine != .cursor && b.cursor == nil)
+}
+
+@Test nonisolated func cursorIgnoredWhenStaticOrDraggingOrAway() {
     var s = brain(.playful, reduceMotion: true)
     run(&s, from: 0, to: 8)
-    s.cursorMoved(200, now: 8)
-    #expect(s.followX == nil && s.routine != .follow)
+    s.cursorMoved(SIMD2(200, 50), now: 8)
+    #expect(s.decisions == 0)
     var d = awake()
     d.setDragging(true, now: 6)
-    d.cursorMoved(200, now: 7)
-    #expect(d.followX == nil)
+    d.cursorMoved(SIMD2(200, 50), now: 7)
+    #expect(d.decisions == 0)
     var away = brain()
-    away.cursorMoved(200, now: 0.5)
-    #expect(away.activity == .away && away.followX == nil) // Not summoned before it appears.
+    away.cursorMoved(SIMD2(200, 50), now: 0.5)
+    #expect(away.activity == .away && away.decisions == 0) // Not summoned by hovering before it appears.
 }
 
-@Test func shyCatFollowsLessOften() {
-    func follows(_ p: PetPersonality) -> Int {
-        var n = 0
-        for seed: UInt64 in 1...200 {
+@Test nonisolated func doubleClickAlwaysCallsTheCat() {
+    for p in PetPersonality.concrete {
+        for seed: UInt64 in 1...10 {
             var b = awake(p, seed: seed)
             b.place(at: 30)
-            b.start(.idle, now: 6)
-            b.cursorMoved(250, now: 6)
-            if b.routine == .follow { n += 1 }
+            b.start(.nap, now: 6)
+            run(&b, from: 6, to: 20)
+            b.call(at: SIMD2(220, 50), now: 20)
+            #expect(b.routine == .call && b.attention == 1)
+            var seen: [PetBrain.Activity] = []
+            var landed: Double?
+            run(&b, from: 20, to: 30) { b, _ in
+                if seen.last != b.activity { seen.append(b.activity) }
+                if b.activity == .watch && landed == nil { landed = b.x }
+            }
+            #expect(isSubsequence([.perk, .run, .crouch, .pounceUp, .sit, .watch], of: seen), "\(p) \(seen)")
+            #expect(landed.map { abs($0 - 220) < 30 } == true)
+            // Hangs around, more interested in the pointer for a while.
+            #expect(b.interestUntil > 30)
         }
-        return n
     }
-    #expect(follows(.playful) > follows(.shy) + 30)
+    // A low spot: a ground pounce. Not on the shelf yet: comes in right away and answers.
+    var low = awake(.lazy, seed: 4)
+    low.call(at: SIMD2(150, 5), now: 6)
+    #expect(isSubsequence([.perk, .crouch, .pounce], of: trace(&low, from: 6, to: 16)))
+    var away = brain(.lazy)
+    away.call(at: SIMD2(200, 40), now: 0.2)
+    #expect(isSubsequence([.walk, .perk, .run, .crouch, .pounceUp], of: trace(&away, from: 0.2, to: 15)))
+    // Never during a drag.
+    var d = awake()
+    d.setDragging(true, now: 6)
+    d.call(at: SIMD2(100, 40), now: 6.5)
+    #expect(d.routine != .call)
 }
 
-@Test func curiousCatBatsATile() {
-    var b = awake(.curious, seed: 3)
-    var bats = 0
-    for seed: UInt64 in 1...40 {
-        var c = awake(.curious, seed: seed)
-        c.start(.inspect, now: 6)
-        if trace(&c, from: 6, to: 30).contains(.batTile) { bats += 1 }
+@MainActor @Test func doubleClickSkipsTilesHeaderAndControls() {
+    let root = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 300))
+    let tile = DragOutHandleView(frame: NSRect(x: 10, y: 10, width: 60, height: 60))
+    let inTile = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
+    tile.addSubview(inTile)
+    let header = WindowDragView(frame: .zero)
+    let field = NSTextField(frame: .zero)
+    for v in [tile, header, field] { root.addSubview(v) }
+    #expect(ShelfPanel.callsPet(hit: root, yFromTop: 200))       // Empty grid space / bottom rim / the cat.
+    #expect(ShelfPanel.callsPet(hit: nil, yFromTop: 200))
+    #expect(!ShelfPanel.callsPet(hit: root, yFromTop: 20))       // Header band: double-click resets the position.
+    #expect(!ShelfPanel.callsPet(hit: tile, yFromTop: 200))
+    #expect(!ShelfPanel.callsPet(hit: inTile, yFromTop: 200))
+    #expect(!ShelfPanel.callsPet(hit: header, yFromTop: 200))
+    #expect(!ShelfPanel.callsPet(hit: field, yFromTop: 200))
+}
+
+@Test nonisolated func playWithBallStartsTheBallRoutineNow() {
+    var b = sitting(.lazy, seed: 8)
+    b.playBall(now: 6)
+    #expect(b.routine == .bringBall)
+    var shown = false
+    run(&b, from: 6, to: 30) { b, _ in if b.ballVisible { shown = true } }
+    #expect(shown)
+    // Before the cat is in: it comes in carrying the ball.
+    var away = brain(.lazy)
+    away.playBall(now: 0.1)
+    let seen = trace(&away, from: 0.1, to: 10)
+    #expect(away.routine == .bringBall && seen.first == .carry, "\(seen)")
+    var s = brain(.playful, reduceMotion: true)
+    s.playBall(now: 0.1)
+    #expect(s.routine != .bringBall)
+}
+
+@Test nonisolated func ballIsMoreFrequentForPlayfulAndCuriousCats() {
+    func ballShare(_ p: PetPersonality) -> Double { shares(p)[.bringBall] ?? 0 }
+    #expect(ballShare(.playful) > 0.08 && ballShare(.curious) > 0.07, "\(ballShare(.playful)) \(ballShare(.curious))")
+    #expect(ballShare(.playful) > ballShare(.lazy) * 2)
+}
+
+// MARK: Pointer tracking
+
+@MainActor @Test func pointerTrackerCoversThePanelAndThrottles() throws {
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: .borderless,
+                          backing: .buffered, defer: true)
+    let view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+    window.contentView = view
+    let tracker = PointerTracker()
+    var got: [CGPoint?] = []
+    tracker.onPointer = { got.append($0) }
+    tracker.install(on: view)
+    let area = try #require(view.trackingAreas.first { $0.owner === tracker })
+    #expect(area.options.isSuperset(of: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect]))
+    func event(_ type: NSEvent.EventType, _ x: CGFloat, _ y: CGFloat, _ time: TimeInterval) -> NSEvent {
+        type == .mouseMoved
+            ? NSEvent.mouseEvent(with: type, location: NSPoint(x: x, y: y), modifierFlags: [], timestamp: time,
+                                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!
+            : NSEvent.enterExitEvent(with: type, location: NSPoint(x: x, y: y), modifierFlags: [], timestamp: time,
+                                     windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!
     }
-    #expect(bats > 15, "\(bats)")
-    b.start(.inspect, now: 6)
-    #expect(isSubsequence([.walk, .sniff], of: trace(&b, from: 6, to: 20)))
+    tracker.mouseEntered(with: event(.mouseEntered, 10, 150, 1))
+    tracker.mouseMoved(with: event(.mouseMoved, 20, 150, 1.01))  // Within 1/30 s: dropped.
+    tracker.mouseMoved(with: event(.mouseMoved, 30, 40, 1.05))
+    tracker.mouseExited(with: event(.mouseExited, 400, 40, 1.1))
+    // Top-left origin, x and y.
+    #expect(got == [CGPoint(x: 10, y: 50), CGPoint(x: 30, y: 160), nil])
+    tracker.remove()
+    #expect(!view.trackingAreas.contains { $0.owner === tracker })
+}
+
+@Test nonisolated func pointerMapsToRimCoordinates() {
+    let stage = CGRect(x: 0, y: 236, width: 360, height: 64)
+    #expect(PetController.rim(CGPoint(x: 140, y: 200), stage: stage) == SIMD2<Double>(140 - 40, 300 - 4 - 200))
+    #expect(PetController.rim(CGPoint(x: 40, y: 296), stage: stage) == SIMD2<Double>(0, 0)) // Track start, on the rim.
 }
 
 // MARK: Opt-in, preferences

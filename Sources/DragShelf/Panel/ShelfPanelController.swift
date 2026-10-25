@@ -46,6 +46,7 @@ final class ShelfPanelController {
         panel.contentView = receiver
         panel.store = store
         panel.onCancel = { [weak self] in self?.hide() }
+        panel.onPetCall = { [weak self] p in self?.pet.call(at: p) }
         panel.onUserResize = { [weak self] ended in ended ? self?.userResized() : self?.liveResized() }
         panel.minSize = ShelfView.minSize
     }

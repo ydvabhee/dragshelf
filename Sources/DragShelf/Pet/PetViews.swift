@@ -26,9 +26,18 @@ struct PetStage: View {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
+                if s.lift > 1 {
+                    // Mid-jump: its shadow stays on the rim, smaller the higher it goes.
+                    Ellipse()
+                        .fill(Color.black.opacity(0.16 * (1 - s.lift / 70)))
+                        .frame(width: 34 - s.lift / 3, height: 4)
+                        .blur(radius: 1.2)
+                        .offset(x: cx - 17 + s.lift / 6, y: C.stageHeight - C.rimInset - 2)
+                        .allowsHitTesting(false)
+                }
                 PetSprite(frame: s.frame, facingRight: s.facingRight)
                     .contentShape(Rectangle().path(in: CGRect(x: 10, y: 10, width: 44, height: 48)))
-                    .offset(x: cx - PetArt.size.width / 2, y: C.stageHeight - C.rimInset - PetArt.ground)
+                    .offset(x: cx - PetArt.size.width / 2, y: C.stageHeight - C.rimInset - PetArt.ground - s.lift)
                     .onTapGesture { pet.petTapped() }
                     .contextMenu {
                         Button("Pet \(pet.name)") { pet.petTapped() }
@@ -122,6 +131,7 @@ private struct PetWiggle: ViewModifier {
 
 /// Settings → Pet.
 struct PetSettingsSection: View {
+    var onPlayBall: () -> Void = {}
     @AppStorage(Preferences.petEnabled) private var enabled = false
     @AppStorage(Preferences.petPersonality) private var personality = PetPersonality.curious.rawValue
     @AppStorage(Preferences.petName) private var name = Preferences.defaultPetName
@@ -136,10 +146,13 @@ struct PetSettingsSection: View {
                 }
                 TextField("Name", text: $name, prompt: Text(Preferences.defaultPetName))
                 Toggle("Preview on the 2nd and 3rd drag, then ask", isOn: $preview)
+                Button("Play with ball", action: onPlayBall)
+                    .disabled(!enabled)
+                    .help("Shows DragShelf and sends \(name.isEmpty ? Preferences.defaultPetName : name) off to fetch its ball")
             } header: {
                 Text("Pet")
             } footer: {
-                Text("A little cat sleeps on the bottom edge of DragShelf, follows your mouse when you hover, and plays with its own ball now and then. It runs off while you drag and never touches your items. Click it to pet it; right-click to send it home.")
+                Text("A little cat lives on the bottom edge of DragShelf. It notices your pointer in its own way: watches, follows, pounces, or enjoys a rub. Double-click it or empty shelf space to call it over. It plays with its own ball, runs off while you drag, and never touches your items. Click it to pet it; right-click to send it home.")
                     .foregroundStyle(.secondary)
             }
         }

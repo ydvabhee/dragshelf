@@ -49,7 +49,7 @@ struct ShelfView: View {
     static let defaultWidth: CGFloat = 360
     private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
     /// ponytail: fixed header and tile heights; `tileHeightMatchesLayout` test catches drift.
-    private static let headerHeight: CGFloat = 52
+    static let headerHeight: CGFloat = 52
     static let tileHeight: CGFloat = 103
     /// Tip / promo row, always reserved (empty when neither shows): a tip never grows the panel.
     static let footerRowHeight = PromoFooter.rowHeight + PromoFooter.bottomPadding
@@ -126,14 +126,6 @@ struct ShelfView: View {
         .frame(width: width)
         .frame(minHeight: Self.minHeight, alignment: .top)
         .overlay(alignment: .bottom) { if let pet { PetStage(pet: pet) } }
-        // Local pointer tracking for the pet (only while the shelf is on screen; no global monitor).
-        .onContinuousHover { phase in
-            guard let pet else { return }
-            switch phase {
-            case .active(let p): pet.pointer(x: p.x)
-            case .ended: pet.pointer(x: nil)
-            }
-        }
         .shelfBackground(isTargeted: store.isDropTargeted)
         // Clicks make the panel key; never draw the system focus ring (T-16 AC-1). Selection is the tile's own style.
         .focusEffectDisabled()
