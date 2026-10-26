@@ -1,13 +1,33 @@
-<p align="center"><img src="Resources/AppIcon.png" width="128" alt="DragShelf icon"></p>
+<p align="center">
+  <img src="Resources/AppIcon.png" width="128" alt="DragShelf icon">
+</p>
 
-# DragShelf
+<h1 align="center">DragShelf</h1>
 
-**A floating shelf for drag and drop on macOS.** Start dragging anything, and the shelf slides in. Drop your files on it, switch to the target app at your own pace, then drag them out where they need to go.
+<p align="center">
+  <b>A floating shelf for drag and drop on macOS.</b><br>
+  Start dragging anything and the shelf slides in. Drop your files on it, switch apps at your own pace, then drag them out where they need to go.
+</p>
 
-[![Latest release](https://img.shields.io/github/v/release/ydvabhee/dragshelf?label=release)](https://github.com/ydvabhee/dragshelf/releases/latest)
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
-![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
-![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
+<p align="center">
+  <a href="https://github.com/ydvabhee/dragshelf/releases/latest"><img src="https://img.shields.io/github/v/release/ydvabhee/dragshelf?label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
+  <img src="https://img.shields.io/badge/dependencies-none-brightgreen" alt="No dependencies">
+</p>
+
+<p align="center">
+  <a href="https://github.com/ydvabhee/dragshelf/releases/latest"><b>Download</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#meet-mochi">Meet Mochi</a> ·
+  <a href="#install">Install</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+<!-- Demo: record ~10–15 s with ⌘⇧5 (drag a file, switch apps, drag it out, Mochi appears),
+     convert to docs/assets/demo.gif (~800 px wide, < 5 MB), then uncomment:
+<p align="center"><img src="docs/assets/demo.gif" width="720" alt="DragShelf demo"></p>
+-->
 
 ---
 
@@ -19,35 +39,86 @@ DragShelf removes the rush. The shelf holds your files for as long as you need, 
 
 ## Features
 
-- **Appears when you drag.** Start dragging a file, image, link or text and the shelf slides down at the top center of the screen. Moving or resizing windows never triggers it.
-- **Holds anything.** Files, folders, links, text, images from browsers, and attachments from Mail and Photos (file promises).
-- **Drag out to copy, or hold ⌘ to move.** It works the way Finder does. Apps that can only copy, such as Mail, Slack and upload fields, still get a copy.
-- **Multi-select.** ⌘-click and ⇧-click to select several items, then drag them all at once, or use **Drag All**.
-- **Quick Look, keyboard and clipboard.** Space previews, the arrow keys move the selection, Delete removes, ⌘C copies, and Esc hides the shelf.
-- **Movable and resizable.** Drag the header to move the shelf, or drag its edges to resize it. Position and size are remembered for each display.
-- **Global shortcut.** ⌃⌥⌘D shows or hides the shelf from any app, including full-screen apps.
-- **Native look.** Liquid Glass on macOS 26, with a vibrancy fallback on macOS 14–15. It follows light and dark mode, Reduce Motion, Reduce Transparency, Increase Contrast and VoiceOver.
-- **Light on resources.** About 0% CPU and roughly 20 MB of memory when idle. There's no item limit: adding to a shelf of 5,000 items takes about 0.05 ms.
-- **No permission prompts.** It needs no Accessibility, Input Monitoring or Full Disk Access.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-## Requirements
+### The shelf
+- **Appears when you drag** anything: files, folders, images, links, text, Mail and Photos attachments
+- **Drag out to copy, hold ⌘ to move**, just like Finder
+- **Paste with ⌘V**, or "Paste to DragShelf" from the menu bar
+- **Text to .txt and back**: text drops as text into apps and as a `.txt` file into Finder
+- **Movable and resizable**, remembered per display
 
-- macOS 14 Sonoma or later. Liquid Glass needs macOS 26.
-- Building from source needs Xcode 26 or later (Swift 6.2 toolchain).
+</td>
+<td width="50%" valign="top">
+
+### Actions
+- **Compress** items into a zip
+- **Convert** images to HEIC, JPEG, PNG or TIFF
+- **Resize** to presets or a custom size (pixels or percent)
+- **Rename** the shelf's copy (originals are never touched)
+- **Share and AirDrop** from the Actions menu
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Organize
+- **Pin** items you use often; they survive Clear and restarts
+- **Search** with ⌘F and **filter** by Files, Folders, Images, Links, Text or Pinned
+- **Recent**: your last 5 drag-outs, with **⌘Z** to undo
+- **Quick Look** with Space, multi-select with ⌘ and ⇧
+
+</td>
+<td width="50%" valign="top">
+
+### Native and light
+- **Liquid Glass** on macOS 26, vibrancy on macOS 14–15
+- **Your own global shortcut** (default ⌃⌥⌘D)
+- **Light and dark**, Reduce Motion, VoiceOver, keyboard access
+- **About 0% CPU and 20 MB** when idle, no item limit
+- **No permission prompts**, no third-party code
+
+</td>
+</tr>
+</table>
+
+## Meet Mochi
+
+<p align="center">
+  <img src="docs/assets/mochi-sit.png" width="120" alt="Mochi sitting">
+  <img src="docs/assets/mochi-wave.png" width="120" alt="Mochi waving">
+  <img src="docs/assets/mochi-head-rub.png" width="120" alt="Mochi purring">
+  <img src="docs/assets/mochi-pounce-up.png" width="120" alt="Mochi pouncing">
+  <img src="docs/assets/mochi-sleep.png" width="120" alt="Mochi asleep">
+</p>
+
+Mochi is an optional shelf pet: a soft clay cat that lives on the bottom rim of DragShelf.
+
+- **Has a personality.** Curious, Playful, Lazy, Shy or Mischievous. Mochi naps a lot, wanders over to sniff and bat at your items, and sometimes brings its own ball to play with.
+- **Notices you, on its own terms.** Move your cursor over the shelf and Mochi may watch, stroll over, pounce or ignore you. Linger near its head for a purr. Double-click the shelf to call it.
+- **Teaches you DragShelf.** Tips come from Mochi in a small speech bubble, one at a time, never during a drag.
+- **Never gets in the way.** It runs off the shelf while you drag, never touches your items, and costs almost nothing while asleep.
+
+<p align="center">
+  <img src="docs/assets/mochi-tip.png" width="360" alt="Mochi showing a tip on the shelf">
+</p>
+
+Mochi is off by default. New users get a short preview, then DragShelf asks once whether to keep it. Turn it on any time in **Settings → Pet**, and right-click Mochi to send it home.
 
 ## Install
 
 ### Download
 
-Get the latest **`DragShelf.dmg`** from the **[Releases page](https://github.com/ydvabhee/dragshelf/releases/latest)**: open the newest release and download `DragShelf.dmg` under **Assets**. The changes in each version are in the [changelog](CHANGELOG.md).
+Get **`DragShelf.dmg`** from the **[Releases page](https://github.com/ydvabhee/dragshelf/releases/latest)** (under **Assets**).
 
 1. Open the DMG and drag **DragShelf** into **Applications**.
-2. Preview builds aren't notarized yet, so the first time you open DragShelf, macOS will block it:
-   - On **macOS 15 or later**, try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
-   - On **macOS 14**, right-click DragShelf in Applications, choose **Open**, then click **Open** again.
-
-   Developer ID signed, notarized builds are coming.
-3. DragShelf runs in the menu bar (the app icon as a monochrome glyph) and has no Dock icon. Turn on **Launch at login** in Settings to keep it running.
+2. Preview builds aren't notarized yet, so macOS blocks the first launch:
+   - **macOS 15 or later:** try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+   - **macOS 14:** right-click DragShelf in Applications, choose **Open**, then **Open** again.
+3. DragShelf lives in the menu bar and has no Dock icon. Turn on **Launch at login** in Settings to keep it running.
 
 ### Build from source
 
@@ -58,46 +129,43 @@ scripts/build-app.sh release
 open build/DragShelf.app
 ```
 
-Building from source avoids the Gatekeeper prompt, because a locally built app isn't quarantined.
+A locally built app isn't quarantined, so there's no Gatekeeper prompt.
+
+**Requirements:** macOS 14 or later (Liquid Glass needs macOS 26). Building needs Xcode 26 or later (Swift 6.2).
 
 ## Usage
 
 | Action | How |
 |---|---|
-| Show the shelf | Start dragging anything, press **⌃⌥⌘D**, or choose **Show DragShelf** from the menu bar |
-| Add items | Drop them onto the shelf |
-| Copy out | Drag an item to any app or folder |
-| Move out | Hold **⌘** while dragging a file out |
-| Select several | ⌘-click, ⇧-click, or the arrow keys |
-| Preview | Select an item and press **Space** |
-| Remove | Hover and click ✕, right-click and choose **Remove from DragShelf**, or press **Delete** |
-| Copy to clipboard | Select items and press **⌘C** |
-| Move the shelf | Drag its header |
-| Resize the shelf | Drag its bottom or side edges |
-| Reset position and size | Double-click the header, or choose **Reset DragShelf Position** |
-| Hide | **Esc**, the close button, or ⌃⌥⌘D |
+| Show DragShelf | Start dragging anything, press your shortcut (default **⌃⌥⌘D**), or **Show DragShelf** in the menu bar |
+| Add items | Drop them on the shelf, or press **⌘V** |
+| Copy out / move out | Drag an item to any app or folder; hold **⌘** to move a file |
+| Actions | Select items, then the **⋯** menu or right-click: Compress, Rename, Share, AirDrop, Convert To, Resize |
+| Pin | Right-click → **Pin** |
+| Search | **⌘F** or the magnifying glass; filter from the menu next to it |
+| Undo a drag-out | **⌘Z**, or the clock button for your last 5 |
+| Preview | Select and press **Space** |
+| Remove / clear | Hover ✕, **Delete**, or **Clear** (pinned items stay) |
+| Move / resize | Drag the header / drag the edges; double-click the header to reset |
+| Hide | **Esc**, the close button, or your shortcut |
 
-Items leave the shelf once they've been dragged out. Cancelled drags keep them. The shelf is temporary: it empties when you quit.
+Unpinned items leave the shelf once they're dragged out, and the shelf empties when you quit.
 
 ## Settings
 
 Open **Settings…** from the menu bar icon.
 
-- **Launch at login**
-- **Auto-show on drag**: turn off to show the shelf only with the shortcut or the menu
-- **Global shortcut ⌃⌥⌘D**
-- **Keep items after drag out**
-- **Reset DragShelf Position**
-- **Show other apps from the developer**: the one-line suggestion described below
+- **General:** launch at login, show DragShelf when dragging, global shortcut (record your own)
+- **DragShelf:** keep items after drag out, reset position
+- **Tips:** show tips, reset tips
+- **Pet:** show Mochi, personality, name, preview
+- **More Apps:** show other apps from the developer
 
 ## Privacy
 
-- DragShelf never reads your files' contents. It only keeps references to them, and stores its own temporary copies (dropped images, promised files) in `~/Library/Caches/com.abhishekyadav.DragShelf`, which is wiped on launch and on quit.
-- **Network:** DragShelf makes one network request. Once a day, it downloads a small public JSON list of other apps by the same developer and shows one as a single, dismissible line under the shelf.
-  - The request is a plain HTTPS GET with no identifiers, cookies or analytics.
-  - Links open in your browser only if they're `https` links on an allowlisted domain.
-  - Turn it off in Settings to stop all network access.
-  - The feed format is in [`backend/promos.schema.json`](backend/promos.schema.json).
+- DragShelf never reads your files' contents. It keeps references, and its own temporary copies (dropped images, file promises, action results) live in `~/Library/Caches/com.abhishekyadav.DragShelf`, cleaned while running and wiped on launch and quit.
+- **Pinned** items are stored in `~/Library/Application Support/com.abhishekyadav.DragShelf/Pinned/`: originals by bookmark, plus copies of items that only exist on the shelf.
+- **Network:** one request, once a day: a small public JSON list of other apps by the same developer, shown as one dismissible line. It's a plain HTTPS GET with no identifiers, cookies or analytics; links open only for allowlisted `https` domains. Turn it off in Settings to stop all network access. The format is in [`backend/promos.schema.json`](backend/promos.schema.json).
 
 ## Build and test
 
@@ -107,50 +175,49 @@ swift test                      # unit tests (Swift Testing)
 scripts/build-app.sh            # debug .app → build/DragShelf.app
 scripts/build-app.sh release    # optimized .app, ad-hoc signed
 scripts/make-dmg.sh             # release .app packaged as build/DragShelf.dmg
-scripts/make-icon.sh            # regenerate the app icon from scripts/make-icon.swift
+scripts/make-icon.sh            # regenerate the app icon
 ```
 
-The version lives in [`VERSION`](VERSION) and follows [Semantic Versioning](https://semver.org/). The build number is the git commit count.
+The version lives in [`VERSION`](VERSION) ([Semantic Versioning](https://semver.org/)); the build number is the git commit count. To work in Xcode, open `Package.swift`. Warnings are errors, with Swift 6 strict concurrency and the main actor as default isolation.
 
-To work in Xcode, open `Package.swift`.
-
-The package treats warnings as errors and uses Swift 6 strict concurrency, with the main actor as the default isolation.
-
-## Project structure
+<details>
+<summary><b>Project structure</b></summary>
 
 ```
 Sources/DragShelf/
-  App/      app entry, menu bar, settings, global hotkey, preferences
-  Model/    shelf items, store (ordered items + O(1) dedupe index), cache
+  App/      app entry, menu bar, settings, global shortcut, preferences
+  Actions/  compress, convert/resize, rename; the action runner
+  Model/    shelf items, store (ordered items + O(1) dedupe), cache, pins, tips
   Panel/    floating non-activating panel, drag detection, drop in, drag out
+  Pet/      Mochi: art drawn in code, behavior engine, controller
   Promos/   remote "more apps" feed: strict decoding, allowlist, loader
-  UI/       SwiftUI views, Liquid Glass styling, thumbnails
+  UI/       SwiftUI views, Liquid Glass styling, search, forms, share, thumbnails
 Tests/DragShelfTests/   unit tests
 backend/                example promo feed and its JSON schema
-docs/                   product spec, architecture and ADRs, task list, QA plan
-scripts/build-app.sh    builds and signs the .app bundle
+docs/                   product spec, architecture and ADRs, tasks, QA plan, release checklist
+scripts/                build, DMG and icon scripts
 ```
 
-Design decisions are recorded as ADRs in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and the product spec is in [`docs/PRD.md`](docs/PRD.md).
+Design decisions are recorded as ADRs in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); the product spec is in [`docs/PRD.md`](docs/PRD.md).
+
+</details>
 
 ## Roadmap
 
-- **Next:** Recent drag-outs with ⌘Z undo, and gentle one-line tips
-- **Release:** a Developer ID signed and notarized DMG
-- **v2, Shelf Actions:** zip everything, rename, share or AirDrop, convert or resize images
-
-See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+- **Signed and notarized** builds (Developer ID)
+- **More pets:** a penguin, a baby dino and a bee, with a pet picker
+- See [`docs/TASKS.md`](docs/TASKS.md) for the full plan
 
 ## Contributing
 
 Issues and pull requests are welcome.
 
 1. Keep it native: AppKit and SwiftUI, with **no third-party dependencies** unless an ADR justifies one.
-2. `swift build`, `swift test` and `scripts/build-app.sh release` must all pass with zero warnings. The optimized build can catch compiler issues that the debug build misses.
-3. Add a unit test for any new logic.
-4. Use [Conventional Commits](https://www.conventionalcommits.org/), such as `feat: …`, `fix: …` and `docs: …`, with a short, imperative subject.
+2. `swift build`, `swift test` and `scripts/build-app.sh release` must pass with zero warnings.
+3. Add a unit test for new logic.
+4. Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat: …`, `fix: …`, `docs: …`).
 5. Add a line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for every user-visible change.
-5. UI changes should follow Apple's Human Interface Guidelines and keep VoiceOver, keyboard access and Reduce Motion working.
+6. Follow Apple's Human Interface Guidelines and keep VoiceOver, keyboard access and Reduce Motion working.
 
 ## License
 
@@ -158,4 +225,4 @@ No license has been chosen yet. Until a `LICENSE` file is added, all rights are 
 
 ---
 
-Made by [Abhishek Yadav](https://github.com/ydvabhee).
+<p align="center">Made by <a href="https://github.com/ydvabhee">Abhishek Yadav</a></p>
