@@ -84,6 +84,8 @@ DragShelf removes the rush. The shelf holds your files for as long as you need, 
 
 ## Meet Mochi
 
+<p align="center"><img src="docs/assets/mochi.png" width="192" alt="Mochi, the DragShelf shelf pet"></p>
+
 Mochi is an optional shelf pet: a soft clay cat that lives on the bottom rim of DragShelf.
 
 - **Has a personality.** Curious, Playful, Lazy, Shy or Mischievous. Mochi naps a lot, wanders over to sniff and bat at your items, and sometimes brings its own ball to play with.
