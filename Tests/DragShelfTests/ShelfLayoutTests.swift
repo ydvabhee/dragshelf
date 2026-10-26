@@ -53,9 +53,7 @@ private let visible = NSRect(x: 0, y: 0, width: 1512, height: 945)
 
 /// T-16 AC-7: size saved per screen next to the offset; reset forgets both.
 @Test func savedSizePerScreenAndReset() throws {
-    let suite = "DragShelfTests-\(UUID().uuidString)"
-    let defaults = try #require(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+    let defaults = TestDefaults.make("Layout")
     typealias C = ShelfPanelController
     C.save([400, 500], as: C.sizesKey, screen: "A", in: defaults)
     C.save([10, 20], as: C.offsetsKey, screen: "A", in: defaults)
@@ -167,9 +165,7 @@ private func scrollViews(in view: NSView) -> [NSScrollView] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = ShelfStore(cache: ItemCache(root: root))
     for i in 0..<4 { store.add(ShelfItem(kind: .text("item \(i)"))) }
-    let suite = "DragShelfTests-\(UUID().uuidString)"
-    let defaults = try #require(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+    let defaults = TestDefaults.make("Layout")
     let pet = PetController(shelf: NSPanel(), store: store, defaults: defaults)
     let without = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600)).fittingSize
     let with = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600, pet: pet)).fittingSize

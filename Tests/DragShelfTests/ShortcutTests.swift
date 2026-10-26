@@ -67,7 +67,7 @@ private func layout(_ id: String) -> Data? {
 }
 
 @Test func shortcutPersistence() {
-    let d = UserDefaults(suiteName: "ShortcutTests-\(UUID().uuidString)")!
+    let d = TestDefaults.make("ShortcutTests")
     #expect(Preferences.shortcut(d) == .standard)
     d.set(false, forKey: Preferences.hotKeyEnabled)
     let s = Shortcut(keyCode: code(kVK_ANSI_K), modifiers: UInt32(controlKey | shiftKey))

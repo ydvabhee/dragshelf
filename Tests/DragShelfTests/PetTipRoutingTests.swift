@@ -7,8 +7,7 @@ import Testing
 @MainActor private func rig(petOn: Bool = true, preview: Bool = false, introSeen: Bool = true, dragging: Bool = false)
     throws -> (PetController, ShelfStore, UserDefaults, () -> Void) {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("TipRoute-\(UUID())")
-    let suite = "TipRoute-\(UUID().uuidString)"
-    let d = try #require(UserDefaults(suiteName: suite))
+    let d = TestDefaults.make("TipRoute")
     d.set(petOn, forKey: Preferences.petEnabled)
     d.set(preview, forKey: Preferences.petPreview)
     if preview { d.set(2, forKey: Preferences.petSessions) }
@@ -19,7 +18,7 @@ import Testing
     store.isDragging = dragging
     let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 260), styleMask: [], backing: .buffered, defer: true)
     let pet = PetController(shelf: panel, store: store, defaults: d)
-    return (pet, store, d, { try? FileManager.default.removeItem(at: root); d.removePersistentDomain(forName: suite) })
+    return (pet, store, d, { try? FileManager.default.removeItem(at: root) })
 }
 
 /// Polls the main actor (observation hops asynchronously) for up to `seconds`.

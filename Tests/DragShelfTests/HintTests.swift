@@ -4,7 +4,7 @@ import Testing
 @testable import DragShelf
 
 private func engine() -> (HintEngine, UserDefaults) {
-    let d = UserDefaults(suiteName: "HintTests-\(UUID().uuidString)")!
+    let d = TestDefaults.make("HintTests")
     let e = HintEngine(defaults: d)
     e.shortcutRegistered = { true }
     e.visible = true
@@ -191,7 +191,7 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
 @MainActor @Test func introFirstThenClickDismissesIntroAndTipUnlearned() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("Intro-\(UUID())")
     defer { try? FileManager.default.removeItem(at: root) }
-    let d = try #require(UserDefaults(suiteName: "Intro-\(UUID().uuidString)"))
+    let d = TestDefaults.make("Intro")
     let store = ShelfStore(cache: ItemCache(root: root), hints: HintEngine(defaults: d))
     d.set(true, forKey: Preferences.petEnabled)
     d.set("Pixel", forKey: Preferences.petName)

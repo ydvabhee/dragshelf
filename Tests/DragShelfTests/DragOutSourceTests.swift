@@ -95,7 +95,7 @@ private let web = URL(string: "https://example.com/x")!
 }
 
 @Test func preferencesDefaults() {
-    let d = UserDefaults(suiteName: "prefs-\(UUID())")!
+    let d = TestDefaults.make("prefs")
     #expect(Preferences.autoShowEnabled(d) && Preferences.hotKeyOn(d) && !Preferences.keepAfterDrag(d) && Preferences.promosOn(d))
     d.set(false, forKey: Preferences.autoShow)
     #expect(!Preferences.autoShowEnabled(d))

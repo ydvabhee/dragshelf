@@ -86,9 +86,7 @@ func petSnapshots() throws {
     defer { try? FileManager.default.removeItem(at: cacheRoot) }
     let store = ShelfStore(cache: ItemCache(root: cacheRoot))
     for i in 1...5 { store.add(ShelfItem(kind: .text("Snippet \(i)"))) }
-    let suite = "PetSnap-\(UUID().uuidString)"
-    let defaults = try #require(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+    let defaults = TestDefaults.make("Test")
     let pet = PetController(shelf: NSPanel(), store: store, defaults: defaults)
     let scenes: [(String, PetSnapshot)] = [
         ("sleep", PetSnapshot(frame: PetFrame(pose: .sleep), x: 20, facingRight: true)),

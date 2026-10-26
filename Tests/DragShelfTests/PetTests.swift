@@ -855,7 +855,7 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
 }
 
 @Test func previewThenAskOnce() throws {
-    let d = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    let d = TestDefaults.make("PetTests")
     #expect(Preferences.petMode(d) == .off) // Default: pet off, preview off.
     d.set(true, forKey: Preferences.petPreview)
     var modes: [PetOptIn.Mode] = []
@@ -869,7 +869,7 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
     Preferences.recordPetSession(d)
     #expect(Preferences.petMode(d) == .off) // Never asked again.
 
-    let keep = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    let keep = TestDefaults.make("PetTests")
     keep.set(true, forKey: Preferences.petPreview)
     keep.set(4, forKey: Preferences.petSessions)
     Preferences.answerPetQuestion(keep: true, keep)
@@ -877,7 +877,7 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
 }
 
 @Test func sendHomeTurnsPetOff() throws {
-    let d = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    let d = TestDefaults.make("PetTests")
     d.set(true, forKey: Preferences.petEnabled)
     #expect(Preferences.petMode(d) == .on)
     Preferences.sendPetHome(d)
@@ -886,7 +886,7 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
 }
 
 @Test func nameAndPersonalityDefaults() throws {
-    let d = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    let d = TestDefaults.make("PetTests")
     #expect(Preferences.petDisplayName(d) == "Mochi")
     d.set("  ", forKey: Preferences.petName)
     #expect(Preferences.petDisplayName(d) == "Mochi")
@@ -908,7 +908,7 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
 }
 
 @Test func previewDefaultsOnForNewUsersAndSavedValueWins() throws {
-    let d = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    let d = TestDefaults.make("PetTests")
     #expect(!d.bool(forKey: Preferences.petEnabled)) // Pet itself stays off until Keep.
     var modes: [PetOptIn.Mode] = []
     for _ in 1...4 {
@@ -920,7 +920,7 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
     Preferences.recordPetSession(d)
     #expect(Preferences.petMode(d) == .off) // Answered: never again.
 
-    let saved = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    let saved = TestDefaults.make("PetTests")
     saved.set(false, forKey: Preferences.petPreview)
     saved.set(3, forKey: Preferences.petSessions)
     #expect(Preferences.petMode(saved) == .off)

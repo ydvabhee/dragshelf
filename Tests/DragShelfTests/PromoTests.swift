@@ -165,7 +165,7 @@ nonisolated final class StubProtocol: URLProtocol {
 
 @Suite(.serialized) struct PromoLoaderTests {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    let defaults = UserDefaults(suiteName: "PromoLoaderTests")!
+    let defaults = TestDefaults.make("PromoLoaderTests")
     let session: URLSession = {
         let c = PromoLoader.configuration()
         c.protocolClasses = [StubProtocol.self]
@@ -176,7 +176,6 @@ nonisolated final class StubProtocol: URLProtocol {
 
     init() {
         StubProtocol.reset()
-        defaults.removePersistentDomain(forName: "PromoLoaderTests")
     }
 
     func loader(at time: Date) -> PromoLoader {
