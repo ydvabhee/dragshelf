@@ -121,7 +121,7 @@ final class PetController {
     @ObservationIgnored private(set) var introShowing = false
     @ObservationIgnored private var introCapTask: Task<Void, Never>?
     @ObservationIgnored private var clickMonitor: Any?
-    static let introCap: Duration = .seconds(30)
+    static let introCap: Duration = .seconds(10)
     @ObservationIgnored private var itemIDs: [UUID] = []
     @ObservationIgnored private var personality = PetPersonality.curious
     @ObservationIgnored private let tracker = PointerTracker()
