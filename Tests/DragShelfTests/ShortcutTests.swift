@@ -114,3 +114,22 @@ private final class FakeHotKey: HotKey {
     #expect(!hotKey.register(other))
     #expect(hotKey.current == nil)
 }
+
+@Test func recorderShowsHeldModifiers() {
+    #expect(ShortcutRecording.heldDisplay([.control, .option, .command]) == "⌃⌥⌘")
+    #expect(ShortcutRecording.heldDisplay([.shift, .capsLock]) == "⇧")
+    #expect(ShortcutRecording.heldDisplay([]) == "")
+}
+
+@Test func commandComboMapsToShortcut() {
+    // ⌘K arrives via performKeyEquivalent with the same keyCode/flags as keyDown.
+    let s = Shortcut(keyCode: UInt16(kVK_ANSI_K), flags: [.command])
+    #expect(s.isValid && s.modifiers == UInt32(cmdKey))
+}
+
+@Test func keyDedupeDropsSamePressOnly() {
+    var d = KeyDedupe()
+    let results = [d.isDuplicate(code: 2, time: 1.0), d.isDuplicate(code: 2, time: 1.0),
+                   d.isDuplicate(code: 2, time: 1.5), d.isDuplicate(code: 3, time: 1.5)]
+    #expect(results == [false, true, false, false])
+}
