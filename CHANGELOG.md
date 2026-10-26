@@ -33,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Menu, header, tooltips and Settings now call the panel "DragShelf" instead of "Shelf" (for example "Show DragShelf", "Clear DragShelf").
 
 ### Fixed
+- Pet: the 2nd/3rd-drag preview and the one-time "keep the pet?" question now start on for new users (the pet itself stays off until you keep it); Reduce Motion changes apply to the cat immediately; a pointer resting on the shelf no longer keeps the cat ticking at 10 Hz, and its light nap ticks slower.
 - Settings: the global shortcut recorder now reliably captures keys (it brings Settings forward first), and shows the modifiers you hold while recording.
 - Pinned items: a Recent drag of a pinned item no longer shows "Missing" after you unpin or rename it, leftover copies of pinned files are cleaned up at launch, and a damaged pin list keeps every backup instead of overwriting the first.
 - Rename and Compress: names that differ only in accents (typed vs. decomposed) or case now get the Finder-style number instead of colliding, and control characters or a name made too long by that number are rejected.

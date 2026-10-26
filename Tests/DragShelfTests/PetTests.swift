@@ -906,3 +906,22 @@ nonisolated private func decisions(_ b: inout PetBrain, from: Double, to: Double
         DispatchQueue.global().async { callback() }
     }
 }
+
+@Test func previewDefaultsOnForNewUsersAndSavedValueWins() throws {
+    let d = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    #expect(!d.bool(forKey: Preferences.petEnabled)) // Pet itself stays off until Keep.
+    var modes: [PetOptIn.Mode] = []
+    for _ in 1...4 {
+        Preferences.recordPetSession(d)
+        modes.append(Preferences.petMode(d))
+    }
+    #expect(modes == [.off, .preview, .preview, .ask])
+    Preferences.answerPetQuestion(keep: false, d)
+    Preferences.recordPetSession(d)
+    #expect(Preferences.petMode(d) == .off) // Answered: never again.
+
+    let saved = try #require(UserDefaults(suiteName: "PetTests-\(UUID().uuidString)"))
+    saved.set(false, forKey: Preferences.petPreview)
+    saved.set(3, forKey: Preferences.petSessions)
+    #expect(Preferences.petMode(saved) == .off)
+}

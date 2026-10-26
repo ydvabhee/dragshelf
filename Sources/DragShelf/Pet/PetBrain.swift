@@ -807,14 +807,19 @@ nonisolated struct PetBrain: Sendable {
         case .away: wait = dragging ? nil : appearAt.map { $0 - now }
         case .walk, .run, .carry, .circle, .pounce, .pounceUp, .crouch, .backRoll: wait = reduceMotion ? min(end, doze) : frameRate
         case .sleep:
-            wait = reduceMotion ? nil : now - twitchAt < 0.5 ? 1.0 / 20 : min(1.4, max(0.02, napEnd - now))
+            wait = reduceMotion ? nil : now - twitchAt < 0.5 ? 1.0 / 20 : min(3.0, max(0.02, napEnd - now))
         case .sit, .dropBall, .pushPrep, .approach, .watch: wait = min(end, doze)
         case .look: wait = reduceMotion ? end : 1.0 / 20
         case .leanIn: wait = reduceMotion ? end : min(1.0 / 6, end)
         default: wait = reduceMotion ? end : min(1.0 / 20, end)
         }
-        // Pointer over the shelf: a slow tick notices when it stops or lingers (≤ 10 Hz; moves tick on their own).
-        var attentive = cursor != nil && canNotice ? min(wait ?? .infinity, 0.1) : wait
+        // Pointer over the shelf: 10 Hz only while waiting for it to stop or while it lingers at the head;
+        // a resting pointer otherwise wakes just for the next periodic reconsideration (moves tick on their own).
+        var attentive = wait
+        if let c = cursor, canNotice {
+            let fast = stillPending || nearHead(c)
+            attentive = min(wait ?? .infinity, fast ? 0.1 : max(0.02, lastEval + Self.reconsiderEvery - now))
+        }
         // The tip bubble's deadline and fade.
         if let edge = [tipDeadline, tipAt.map { $0 + Self.tipLength }].compactMap({ $0 }).filter({ $0 > now }).min() {
             attentive = min(attentive ?? .infinity, edge - now)

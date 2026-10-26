@@ -10,7 +10,7 @@ extension Preferences {
     static let petEnabled = "petEnabled"
     static let petPersonality = "petPersonality"
     static let petName = "petName"
-    /// Preview on the 2nd and 3rd drag session, then ask once (default off).
+    /// Preview on the 2nd and 3rd drag session, then ask once (default on until answered).
     static let petPreview = "petPreview"
     static let petSessions = "petSessions"
     static let petAsked = "petAsked"
@@ -20,10 +20,13 @@ extension Preferences {
     static let petFeature = "petFeature"
     static let defaultPetName = "Mochi"
 
+    /// New users start with the preview flow on; a saved value always wins.
+    static func petPreviewOn(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: petPreview) as? Bool ?? true }
+
     static func petFeatureOn(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: petFeature) as? Bool ?? true }
 
     static func petMode(_ d: UserDefaults = .standard) -> PetOptIn.Mode {
-        PetOptIn.mode(feature: petFeatureOn(d), enabled: d.bool(forKey: petEnabled), preview: d.bool(forKey: petPreview),
+        PetOptIn.mode(feature: petFeatureOn(d), enabled: d.bool(forKey: petEnabled), preview: petPreviewOn(d),
                       sessions: d.integer(forKey: petSessions), asked: d.bool(forKey: petAsked))
     }
 
@@ -39,7 +42,7 @@ extension Preferences {
     /// Counts drag sessions only while the preview flow still needs them.
     static func recordPetSession(_ d: UserDefaults = .standard) {
         let sessions = d.integer(forKey: petSessions)
-        guard petFeatureOn(d), d.bool(forKey: petPreview), !d.bool(forKey: petEnabled), !d.bool(forKey: petAsked),
+        guard petFeatureOn(d), petPreviewOn(d), !d.bool(forKey: petEnabled), !d.bool(forKey: petAsked),
               sessions < 4 else { return }
         d.set(sessions + 1, forKey: petSessions)
     }
@@ -113,6 +116,7 @@ final class PetController {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var observer: NSObjectProtocol?
+    @ObservationIgnored private var motionObserver: NSObjectProtocol?
     @ObservationIgnored private var mode = PetOptIn.Mode.off
     @ObservationIgnored private var shelfShown = false
     @ObservationIgnored private var attached = false
@@ -134,6 +138,15 @@ final class PetController {
         observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil,
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.prefsChanged() }
+        }
+        // Reduce Motion applies live, not just when the shelf next shows.
+        motionObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.attached, !self.asking else { return }
+                self.brain.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                self.reschedule()
+            }
         }
         tracker.onPointer = { [weak self] p in self?.pointer(p) }
         prefsChanged()

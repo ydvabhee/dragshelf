@@ -240,7 +240,7 @@ struct PetSettingsSection: View {
     @AppStorage(Preferences.petEnabled) private var enabled = false
     @AppStorage(Preferences.petPersonality) private var personality = PetPersonality.curious.rawValue
     @AppStorage(Preferences.petName) private var name = Preferences.defaultPetName
-    @AppStorage(Preferences.petPreview) private var preview = false
+    @AppStorage(Preferences.petPreview) private var preview = true
 
     var body: some View {
         if Preferences.petFeatureOn() {
