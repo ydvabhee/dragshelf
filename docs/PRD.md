@@ -244,7 +244,7 @@ As a user, I convert an image to another format or make it smaller before I uplo
 - **Text ↔ .txt (V2-07).** Dragging a text item out offers text to text fields and a real `.txt` file to Finder and the Desktop; a taken file name becomes "name 2.txt" instead of failing. "Save as .txt" adds a file item. "Use as Text" turns plain-text files ≤ 1 MB into text items.
 - **Pin (V2-08).** Pin/Unpin in the context menu. Pinned items show a pin badge, stay first, and survive Clear, drag out and quit. Originals are tracked by bookmark (shown Missing if gone), other content is stored in Application Support until unpinned. A pinned file is never moved by a ⌘-drag. Clear and Remove-shown skip pinned items.
 - **Custom shortcut (V2-09).** Settings records another global shortcut (needs ⌘, ⌃ or ⌥). Key names follow the keyboard layout. A shortcut another app owns is refused with a message and the old one stays.
-- **Search and filter (V2-10).** ⌘F or the magnifier shows a search field; chips filter by All, Files, Folders, Images, Links, Text, Pinned. Drag All, Clear, select-all, Quick Look, ⌘C and Actions apply to the visible items only. Esc clears and closes search.
+- **Search and filter (V2-10).** ⌘F or the magnifier shows a search field; a Filter menu limits to All, Files, Folders, Images, Links, Text, Pinned. Drag All, Clear, select-all, Quick Look, ⌘C and Actions apply to the visible items only. Esc clears and closes search.
 - **Cache hygiene (T-21).** Unreferenced cache folders are swept; Recent expires after 24 h and the cache stays near or under 1 GB.
 
 ### v2 non-goals

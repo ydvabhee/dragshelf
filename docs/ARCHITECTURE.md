@@ -61,7 +61,7 @@ Sources/DragShelf/
     ShelfView.swift           # header, grid / Recent / empty state, footer slot; WindowDragView, OverlayScroller
     ShelfItemView.swift       # tile: thumbnail, caption, pin badge, Missing state, a11y; ShelfItem.displayName
     ActionsMenu.swift         # header Actions menu + Sharer (Share…/AirDrop, activation rules)
-    SearchField.swift         # header NSSearchField bound to store.query; filter chips live in ShelfView
+    SearchField.swift         # header NSSearchField bound to store.query; Filter menu lives in ShelfView
     RenameField.swift         # inline Finder-style rename over the caption (AppKit field)
     ResizeForm.swift          # Resize ▸ Custom… form shown in place of the grid
     RecentList.swift          # in-panel Recent drag-outs list (ADR-018)
