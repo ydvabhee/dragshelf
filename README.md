@@ -99,7 +99,7 @@ Mochi is off by default. New users get a short preview, then DragShelf asks once
 
 ### Download
 
-Get **`DragShelf.dmg`** from the **[Releases page](https://github.com/ydvabhee/dragshelf/releases/latest)** (under **Assets**).
+Get the latest **`DragShelf-<version>.dmg`** (for example `DragShelf-0.2.0.dmg`) from the **[Releases page](https://github.com/ydvabhee/dragshelf/releases/latest)** (under **Assets**).
 
 1. Open the DMG and drag **DragShelf** into **Applications**.
 2. Preview builds aren't notarized yet, so macOS blocks the first launch:
@@ -161,7 +161,7 @@ swift build                     # debug build
 swift test                      # unit tests (Swift Testing)
 scripts/build-app.sh            # debug .app → build/DragShelf.app
 scripts/build-app.sh release    # optimized .app, ad-hoc signed
-scripts/make-dmg.sh             # release .app packaged as build/DragShelf.dmg
+scripts/make-dmg.sh             # release .app packaged as build/DragShelf-<version>.dmg
 scripts/make-icon.sh            # regenerate the app icon
 ```
 

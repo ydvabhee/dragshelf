@@ -78,7 +78,7 @@ Right content and name arrive; copy by default, ⌘-drag moves files only; remov
 
 ## Release build and DMG
 - [ ] `scripts/build-app.sh release` bundle launches; menu bar glyph shows, no Dock icon
-- [ ] `scripts/make-dmg.sh`: `build/DragShelf.dmg` opens, shows the app and an Applications link
+- [ ] `scripts/make-dmg.sh`: `build/DragShelf-<version>.dmg` opens, shows the app and an Applications link
 - [ ] Copy to `/Applications`, launch; launch at login toggle works after logout and login
 - [ ] Gatekeeper: ad-hoc build opens via Open Anyway; notarized build (M5) opens with no warning and `spctl -a -vv` accepts it
 - [ ] `VERSION`, About/Info.plist version and `CHANGELOG.md` section agree
