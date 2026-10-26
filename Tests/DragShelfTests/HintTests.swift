@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import DragShelf
@@ -185,4 +186,38 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
     }
     #expect(HintEngine.Hint.hotkey.bubbleText == "\(Preferences.shortcut().display) brings DragShelf back from anywhere")
     #expect(HintEngine.Hint.paste.spokenBubble == "Tip: Command-V pastes your clipboard here")
+}
+
+@MainActor @Test func introFirstThenClickDismissesIntroAndTipUnlearned() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("Intro-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = ShelfStore(cache: ItemCache(root: root))
+    let d = try #require(UserDefaults(suiteName: "Intro-\(UUID().uuidString)"))
+    d.set(true, forKey: Preferences.petEnabled)
+    d.set("Pixel", forKey: Preferences.petName)
+    let pet = PetController(shelf: NSPanel(), store: store, defaults: d)
+    #expect(PetController.introText(name: pet.name) == "Meet Pixel 🐱, your shelf pet")
+    #expect(pet.introPending) // Tips wait for it.
+    pet.showIntro()
+    #expect(pet.introShowing)
+    pet.shelfClicked()
+    #expect(!pet.introShowing && !pet.introPending)
+    #expect(d.bool(forKey: Preferences.petIntroSeen))
+    // A click hides a tip bubble without learning it.
+    store.hints.visible = true
+    store.hints.record(.cleared)
+    pet.tip = .clear
+    pet.shelfClicked()
+    #expect(pet.tip == nil)
+    #expect(store.hints.dismissed.isEmpty)
+    pet.tip = .clear
+    pet.tipLearned()
+    #expect(store.hints.dismissed == [HintEngine.Hint.clear.rawValue])
+}
+
+@Test func resetTipsResetsIntro() {
+    let (e, d) = engine()
+    d.set(true, forKey: Preferences.petIntroSeen)
+    e.reset()
+    #expect(!d.bool(forKey: Preferences.petIntroSeen))
 }

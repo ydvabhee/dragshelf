@@ -116,9 +116,9 @@ final class HintEngine {
         self.current = nil
     }
 
-    /// Settings → Reset Tips: every hint shows again from zero; a tip on screen goes away now.
+    /// Settings → Reset Tips (also the pet's intro): every hint shows again from zero; a tip on screen goes away now.
     func reset() {
-        for key in [Self.countsKey, Self.dismissedKey, Self.showsKey, Self.menuShowsKey] { defaults.removeObject(forKey: key) }
+        for key in [Self.countsKey, Self.dismissedKey, Self.showsKey, Self.menuShowsKey, Preferences.petIntroSeen] { defaults.removeObject(forKey: key) }
         pending.removeAll()
         current = nil
     }

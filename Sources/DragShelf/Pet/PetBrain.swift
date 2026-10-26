@@ -520,6 +520,9 @@ nonisolated struct PetBrain: Sendable {
         run(.react, (isAsleep ? [Step(.stretch, 0.6)] : []) + [Step(.hop, 0.35), Step(.hop, 0.35), Step(.leanIn, 1.6)], now)
     }
 
+    /// A click elsewhere on the shelf: the bubble goes away, the tip is not learned.
+    mutating func hideTip() { endTip() }
+
     private mutating func endTip() {
         tipAt = nil
         tipDeadline = nil

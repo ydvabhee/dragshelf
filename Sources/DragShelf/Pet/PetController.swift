@@ -14,6 +14,8 @@ extension Preferences {
     static let petPreview = "petPreview"
     static let petSessions = "petSessions"
     static let petAsked = "petAsked"
+    /// The "Meet Mochi" bubble was dismissed by a click; Reset Tips and Show preview clear it.
+    static let petIntroSeen = "petIntroSeen"
     /// Internal kill switch: `defaults write com.abhishekyadav.DragShelf petFeature -bool NO` removes the pet entirely.
     static let petFeature = "petFeature"
     static let defaultPetName = "Mochi"
@@ -116,7 +118,11 @@ final class PetController {
     @ObservationIgnored private var shelfShown = false
     @ObservationIgnored private var attached = false
     @ObservationIgnored private var askShown = false
-    @ObservationIgnored private var previewUntil: TimeInterval = 0
+    /// The intro bubble is up; it stays until a click on the shelf (or `introCap` seconds).
+    @ObservationIgnored private(set) var introShowing = false
+    @ObservationIgnored private var introCapTask: Task<Void, Never>?
+    @ObservationIgnored private var clickMonitor: Any?
+    static let introCap: Duration = .seconds(30)
     @ObservationIgnored private var itemIDs: [UUID] = []
     @ObservationIgnored private var personality = PetPersonality.curious
     @ObservationIgnored private let tracker = PointerTracker()
@@ -156,6 +162,27 @@ final class PetController {
     func petTapped() {
         brain.pet(now: Self.now())
         reschedule()
+    }
+
+    /// The intro comes first (pet on or previewing) until a click has dismissed it once; tips wait for it.
+    var introPending: Bool { [.on, .preview].contains(mode) && !defaults.bool(forKey: Preferences.petIntroSeen) }
+
+    static func introText(name: String) -> String { "Meet \(name) 🐱, your shelf pet" }
+
+    /// Any click on the shelf (it still does its normal action): the intro is seen; a tip bubble goes away unlearned.
+    /// A left click-up on the tip bubble itself learns it first (`tipLearned` clears `tip`), so that path is a no-op.
+    func shelfClicked(tipToo: Bool = true) {
+        if introShowing {
+            introShowing = false
+            introCapTask?.cancel()
+            defaults.set(true, forKey: Preferences.petIntroSeen)
+            refreshTips()
+        }
+        if tipToo, tip != nil {
+            brain.hideTip()
+            tip = nil
+            reschedule()
+        }
     }
 
     func sendHome() { Preferences.sendPetHome(defaults) }
@@ -220,7 +247,7 @@ final class PetController {
     private func refreshTips() {
         let onStage = attached && mode == .on && !store.items.isEmpty
         if onStage != tipsOnStage { tipsOnStage = onStage }
-        let hint = Preferences.tipsOn(defaults) ? store.hints.current : nil
+        let hint = Preferences.tipsOn(defaults) && !introPending ? store.hints.current : nil
         guard hint != delivered else { return }
         delivered = onStage ? hint : nil
         guard onStage, let hint else { return }
@@ -291,12 +318,17 @@ final class PetController {
         brain.setDragging(store.isDragging || store.isDropTargeted, now: Self.now())
         brain.tiles = visibleRow().map(\.x)
         if let view = shelf.contentView { tracker.install(on: view) }
+        installClickMonitor()
         reschedule()
     }
 
     private func detach() {
         attached = false
         tracker.remove()
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = nil
+        introShowing = false
+        introCapTask?.cancel()
         if askShown { answer(keep: false) } // Ignored counts as "No thanks".
         loop?.cancel()
         loop = nil
@@ -305,8 +337,25 @@ final class PetController {
         tileFrames = [:]
         delivered = nil
         tip = nil
-        previewUntil = 0
         snapshot = nil
+    }
+
+    /// Local monitor, this panel only; the event always passes on untouched. Downs dismiss at once (a right-click's
+    /// menu would swallow the up); a left tip click waits for its up, deferred so the bubble's own action runs first.
+    private func installClickMonitor() {
+        guard clickMonitor == nil else { return }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseUp]) { [weak self] event in
+            nonisolated(unsafe) let e = event // Monitors run on the main thread.
+            MainActor.assumeIsolated {
+                guard let self, e.window === self.shelf else { return }
+                if e.type == .leftMouseUp {
+                    DispatchQueue.main.async { MainActor.assumeIsolated { self.shelfClicked() } }
+                } else {
+                    self.shelfClicked(tipToo: e.type == .rightMouseDown)
+                }
+            }
+            return event
+        }
     }
 
     /// Track length follows the panel width.
@@ -408,17 +457,26 @@ final class PetController {
         publish(now)
     }
 
-    /// First appearance this show: the preview note or the question.
+    /// First appearance this show: the intro bubble or the question.
     private func appeared(_ now: TimeInterval) {
         switch mode {
-        case .preview where previewUntil == 0:
-            previewUntil = now + 5
         case .ask where !askShown:
             askShown = true
             asking = true
             brain.reduceMotion = true // Sits still beside the question.
         default:
-            break
+            showIntro()
+        }
+    }
+
+    func showIntro() {
+        guard introPending, !introShowing else { return }
+        introShowing = true
+        introCapTask?.cancel()
+        introCapTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.introCap)
+            guard !Task.isCancelled else { return }
+            self?.shelfClicked(tipToo: false) // Safety cap: counts as seen.
         }
     }
 
@@ -432,7 +490,7 @@ final class PetController {
         var bubble: String?
         if [.purr, .headRub, .bodyRub].contains(frame.pose) { bubble = "purrr…" }
         if brain.routine == .call && frame.pose == .perk { bubble = "!" }
-        if now < previewUntil { bubble = "Meet \(name) 🐱, your shelf pet (preview)" }
+        if introShowing { bubble = Self.introText(name: name) }
         var ball: Double?
         if let b = brain.ball {
             if brain.ballGone {

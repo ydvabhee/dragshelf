@@ -251,6 +251,7 @@ struct PetSettingsSection: View {
                 }
                 TextField("Name", text: $name, prompt: Text(Preferences.defaultPetName))
                 Toggle("Preview on the 2nd and 3rd drag, then ask", isOn: $preview)
+                    .onChange(of: preview) { _, on in if on { UserDefaults.standard.removeObject(forKey: Preferences.petIntroSeen) } }
                 Button("Play with ball", action: onPlayBall)
                     .disabled(!enabled)
                     .help("Shows DragShelf and sends \(name.isEmpty ? Preferences.defaultPetName : name) off to fetch its ball")
