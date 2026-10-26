@@ -605,3 +605,33 @@ Manual:
 1. Drop a folder, an `.app`, a PDF, an image. Folders shows only the folder; Files shows `.app` and PDF.
 2. Rename the folder: still in Folders. Delete it on disk: stays in Folders as Missing.
 3. Empty shelf caption reads "Files, folders, links, and text".
+
+## V3-01 Shelf pet Mochi (merge cc33e77) - FAIL (1)
+- Build debug, release build: green. `swift test` 235 tests: 4 of 5 full runs green; 1 run failed `catAppearsOnEmptyShelfWithinASecondOrTwo` (PetTipRoutingTests.swift:80, `pet.interactive` false at the 8 s wall-clock cap while another suite held the main actor ~8 s). Isolated pet tests: 6 of 6 green.
+- FAIL (Med, test flake): `until` (PetTipRoutingTests.swift:25) times out on wall clock; under parallel load the main actor is busy, so the cat's appear Task runs after the deadline. `tipWaitsDuringDragThenCatTellsIt` has the same risk (took 9.3 s). Fix: mark the pet-controller suites `.serialized`, or poll a fixed number of main-actor turns, or raise the cap to ~30 s.
+- ADR-016 audit: OK. `PointerTracker` is an NSResponder (main) and the tracking-area callbacks are delivered on main. Click monitor (local, main) uses `assumeIsolated` and returns the event. UserDefaults observer uses `queue: .main`. Observation `onChange` hops with `Task { @MainActor }`. Loop, intro-cap and new-tile Tasks inherit MainActor and hold `[weak self]`. Canvas renders synchronously on main. `keyframeAnimator` `apply` is nonisolated. Hide completion was already `assumeIsolated`.
+- Resources: tracker and click monitor are installed in `attach` and removed in `detach`. `detach` runs on every `hide()`, on pet off (Settings), on Send Home, and on `petFeature` off (prefs change → `refresh`). Loop and intro cap are cancelled, `nextWake` is nil when hidden, and moves are throttled to 30 Hz. Pet code never calls activate/makeKey and never mutates the store.
+- Hit-testing: only the cat (44×48 content shape) and the tip/question bubbles take clicks. Ball, shadow and text bubbles have `allowsHitTesting(false)`. The double-click passes through (`super.sendEvent`).
+- Tips: pet on/preview → `tipRoute` never uses the footer. Intro first, 10 s cap, the monitor never swallows. Tips off → nil. Reset Tips clears `petIntroSeen`.
+- Defaults: `petEnabled` false, Curious, name "Mochi" (trimmed, 20 chars max, empty → Mochi). No emoji in pet strings. Tests use suite defaults only.
+- Med (spec): `petPreview` defaults to false (PetController.swift:14, PetViews.swift:243), so a new user never gets the 2nd/3rd-drag preview or the question unless they turn it on in Settings. The spec reads as preview on by default. Fix: default it to on, or record the decision in TASKS.
+- Low (spec): Settings has no species picker (cat only; the spec lists Penguin for v0.3.0). Fix: add it when the penguin ships, or move it out of v0.3.0 in TASKS.
+- Low: Reduce Motion is read only in `attach` (PetController.swift:312); toggling it while the shelf is shown takes effect on the next show. Fix: observe `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification`.
+- Low (perf): a pointer resting over a shown shelf keeps 10 Hz ticks (PetBrain.swift:817), and an endless lazy nap ticks every 1.4 s (PetBrain.swift:810). Cheap but not 0. Fix: stop the 10 Hz tick once attention decays, and no ticks during a lazy nap after the zzz settles.
+- Low: a double-click on a SwiftUI plain button below the header (footer ✕, tip bubble) also calls the cat (ShelfPanel.swift:72 only excludes NSControl). Harmless, because the click still goes through.
+
+Manual (debug build, Settings → Pet → Show pet on unless noted):
+1. Fresh state: `defaults delete com.abhishekyadav.DragShelf petEnabled; defaults delete com.abhishekyadav.DragShelf petIntroSeen`. Settings → Pet: Show pet off, Personality Curious, Name placeholder Mochi. Turn Show pet on.
+2. Show the shelf (menu). After about 1 s the cat walks in on the bottom rim and says "Hey, I'm Mochi!". Click any tile: the tile still selects and the intro goes. Repeat with Reset Tips; leave it alone: the intro goes by itself after 10 s.
+3. With the intro gone, tips come only from the cat's bubble. The footer never shows a tip, while a promo can still show. Click the bubble: that tip never comes back. Settings → Tips off: no bubble.
+4. Click the cat: it purrs. Right-click → menu "Pet Mochi / Send Home". Send Home: the cat leaves and Settings → Show pet turns off.
+5. Hit-testing: click, double-click and drag tiles near and under the cat; empty-space click clears the selection; the scroll bar works; the search field and filter chips work. Double-click empty grid space: the cat runs over and pounces. Double-click a tile, header or search field: no call, and the normal action still happens.
+6. Drags: drag a Finder file in. The cat runs out to the nearer side, the drop lands, and the cat walks back about 1 s later and plays with the new tile (the tile wiggles; nothing moves, renames or disappears). Drag a tile out to Finder: delivered as before, no item change from the cat.
+7. Focus: with Safari frontmost, show the shelf, click and pet the cat, use the bubble. Safari stays frontmost and keeps typing focus.
+8. Mouse follow: move over the shelf; the cat wakes and comes toward the pointer. Leave it about 30 s without input; it naps (zzz).
+9. Cost: Activity Monitor with the shelf hidden: DragShelf 0.0 % CPU. Shelf shown and cat asleep, pointer away: about 0 %. Hide and show 20 times: memory flat, no growth.
+10. Reduce Motion on, then show the shelf: the cat appears in place, sits or sleeps, no walking, no tile wiggles; the bubble fades without the spring.
+11. VoiceOver: the cat is one element "Pet, Mochi, button" with actions Pet and Send Home. The bubble reads the tip (shortcuts spoken, e.g. "Command-V"). The ball and "purrr…" are silent.
+12. Name: set "Biscuit", show the shelf: the intro (after Reset Tips) and the context menu say Biscuit. Relaunch: the name is kept. Clear the field: back to Mochi.
+13. Preview flow: Show pet off, then turn "Preview on the 2nd and 3rd drag" on and run `defaults write com.abhishekyadav.DragShelf petSessions -int 1`. Drags 2 and 3 show the cat. Drag 4 asks "Keep Mochi on DragShelf? Keep / No thanks". Hide without answering → never asked again, and the pet stays off.
+14. Kill switch: `defaults write com.abhishekyadav.DragShelf petFeature -bool NO`. The Pet section and the cat are gone. `defaults delete` it to restore.
