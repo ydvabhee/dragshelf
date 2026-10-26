@@ -32,11 +32,11 @@ final class HintEngine {
             case .dragOut: "Oops? ⌘Z brings it back"
             case .firstDrop: "I'll hold it! Switch apps, then drag it out of here"
             case .hotkey: "\(Preferences.shortcut().display) brings DragShelf back from anywhere"
-            case .recent: "Your recent drags are under the clock 🕘"
+            case .recent: "Your recent drags are under the clock"
             case .holdCommand: "Hold ⌘ while dragging out to move it"
             case .moveResize: "Drag the top bar to move DragShelf, the edges to resize"
             case .paste: "⌘V pastes your clipboard here"
-            case .pin: "Pin things you use often 📌"
+            case .pin: "Pin things you use often"
             case .search: "⌘F finds anything on the shelf"
             }
         }

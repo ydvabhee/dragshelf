@@ -14,7 +14,7 @@ extension Preferences {
     static let petPreview = "petPreview"
     static let petSessions = "petSessions"
     static let petAsked = "petAsked"
-    /// The "Meet Mochi" bubble was dismissed by a click; Reset Tips and Show preview clear it.
+    /// The "Hey, I'm Mochi!" intro bubble was dismissed by a click; Reset Tips and Show preview clear it.
     static let petIntroSeen = "petIntroSeen"
     /// Internal kill switch: `defaults write com.abhishekyadav.DragShelf petFeature -bool NO` removes the pet entirely.
     static let petFeature = "petFeature"
@@ -166,7 +166,7 @@ final class PetController {
     /// The intro comes first (pet on or previewing) until a click has dismissed it once; tips wait for it.
     var introPending: Bool { [.on, .preview].contains(mode) && !defaults.bool(forKey: Preferences.petIntroSeen) }
 
-    static func introText(name: String) -> String { "Meet \(name) 🐱, your shelf pet" }
+    static func introText(name: String) -> String { "Hey, I'm \(name)!" }
 
     /// Any click on the shelf (it still does its normal action): the intro is seen; a tip bubble goes away unlearned.
     /// A left click-up on the tip bubble itself learns it first (`tipLearned` clears `tip`), so that path is a no-op.

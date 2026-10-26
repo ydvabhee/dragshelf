@@ -196,7 +196,7 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
     d.set(true, forKey: Preferences.petEnabled)
     d.set("Pixel", forKey: Preferences.petName)
     let pet = PetController(shelf: NSPanel(), store: store, defaults: d)
-    #expect(PetController.introText(name: pet.name) == "Meet Pixel 🐱, your shelf pet")
+    #expect(PetController.introText(name: pet.name) == "Hey, I'm Pixel!")
     #expect(pet.introPending) // Tips wait for it.
     pet.showIntro()
     #expect(pet.introShowing)
@@ -220,4 +220,11 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
     d.set(true, forKey: Preferences.petIntroSeen)
     e.reset()
     #expect(!d.bool(forKey: Preferences.petIntroSeen))
+}
+
+@Test func mochiLinesHaveNoEmoji() {
+    let lines = HintEngine.Hint.allCases.map(\.bubbleText) + [PetController.introText(name: "Mochi")]
+    for line in lines {
+        #expect(!line.unicodeScalars.contains { $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value > 0x2000) }, "\(line)")
+    }
 }
