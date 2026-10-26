@@ -292,7 +292,8 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - On drag: do NOT duck behind a floor/lip. The cat runs out of the shelf to the nearer side (left or right edge), out of view, and walks back in after the drag ends.
 - Default personality: **Curious** (user 2026-10-24) — plays with the items on the shelf: walks to tiles, sniffs, bats a tile (wiggle), sits beside or on one; purely visual, never changes items.
 - Keep: soft clay cat, facing direction, routines, personalities, Send Home, Settings.
-- Still deferred: cat teaches tips (speech bubbles).
+- Default cat name confirmed: **Mochi** (user 2026-10-26). Future pet name ideas: Penguin Pip/Pebble/Waddles, Baby dino Rexy/Pickle/Chomp, Bee Bumble/Honey/Buzzy.
+- Cat teaches tips: built on the trial branch.
 
 ## T-10 Settings window + launch at login
 Milestone M4. Depends on: T-06, T-08, T-09. `SettingsView` (SwiftUI `Form`, `.formStyle(.grouped)`).
