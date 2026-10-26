@@ -1,13 +1,13 @@
 # DragShelf — Architecture
 
-Status: v1 as built (synced with code 2026-10-23, T-01..T-20). Scope: `docs/PRD.md`. Tasks: `docs/TASKS.md`.
+Status: v1 + v2 as built on `main` (synced with code 2026-10-26: T-01..T-21, V2-01..V2-10). The shelf pet (V3-01) is a trial branch only and is not part of this doc. Scope: `docs/PRD.md`. Tasks: `docs/TASKS.md`.
 
 ## 1. Stack
 - Swift 6 language mode, strict concurrency, default actor isolation `MainActor` (ADR-011). Off-main callbacks: ADR-016.
 - AppKit: shelf panel, drop destination, drag source and drag handles, event monitors, Quick Look, window move/resize.
 - SwiftUI: shelf content, menu bar menu (`MenuBarExtra`), Settings window.
 - Frameworks only from the SDK: AppKit, SwiftUI, Quartz (QuickLookUI), QuickLookThumbnailing, UniformTypeIdentifiers,
-  ServiceManagement, CryptoKit, os, Carbon (hotkey only). **No third-party deps.**
+  ServiceManagement, CryptoKit, os, ImageIO/CoreGraphics (convert, resize), Carbon (hotkey only, plus TIS for key names). **No third-party deps.**
 - Toolchain on dev machine: macOS 26.5, Xcode 26.6, SDK macOS 26.5, Swift 6.3.3. Build with SwiftPM (ADR-013);
   `xcodebuild` is broken on this machine (OQ-15). No xcodegen/tuist.
 - Deployment target: **macOS 14.0** (ADR-002).
@@ -32,13 +32,20 @@ Sources/DragShelf/
   App/
     DragShelfApp.swift        # @main: MenuBarExtra menu + Settings scene, AppDelegate adaptor
     AppDelegate.swift         # owns ShelfStore, PromoLoader, ShelfPanelController, DragMonitor, HotKey; applies prefs; cache wipe
-    HotKey.swift              # Carbon RegisterEventHotKey wrapper (⌃⌥⌘D)
-    Preferences.swift         # UserDefaults keys + default readers
-    SettingsView.swift        # grouped Form: General, DragShelf, Tips, More Apps
+    HotKey.swift              # Shortcut value type (layout-aware names) + Carbon RegisterEventHotKey wrapper (ADR-026)
+    Preferences.swift         # UserDefaults keys + default readers (incl. hotKeyShortcut)
+    SettingsView.swift        # grouped Form: General, DragShelf, Tips, More Apps; shortcut recorder (KeyRecorder)
+  Actions/                    # off-main jobs, native tools only (§11)
+    ActionRunner.swift        # ShelfAction enum + ActionRunner (one job at a time, in-flight dir, rename)
+    Zipper.swift              # ditto zip; Zipper.key / uniqueName (NFC, case-folded collision names)
+    ImageConverter.swift      # ImageIO convert/resize; ResizeSpec (custom size math, caps)
+    Renamer.swift             # validate, name rules, APFS-clone rename of the shelf copy
   Model/
     ShelfItem.swift           # item value type
-    ShelfStore.swift          # @Observable items, dedupe index, selection, Recent, missing, drag flags
-    ItemCache.swift           # injectable cache root, per-item dirs, wipe
+    ShelfStore.swift          # @Observable items, dedupe index, selection, Recent, pins, search/filter, sweep, uniqueName
+    ItemCache.swift           # injectable cache root, per-item dirs, wipe, scan; TestRun guard (ADR-028)
+    PinStore.swift            # Application Support/Pinned: manifest, stored copies, bookmarks (ADR-023)
+    TextFile.swift            # text <-> .txt: names, decode, Use as Text, Save as .txt, TextPromiseProvider (ADR-024)
     HintEngine.swift          # footer tips: triggers, priority, show counts (§13)
   Panel/
     ShelfPanel.swift          # NSPanel subclass: config, keys, Quick Look data source, live-resize hooks
@@ -52,14 +59,19 @@ Sources/DragShelf/
     PromoLoader.swift         # HTTPS fetch, ETag, disk cache, retry timing, redirect guard
   UI/
     ShelfView.swift           # header, grid / Recent / empty state, footer slot; WindowDragView, OverlayScroller
-    ShelfItemView.swift       # tile: thumbnail, caption, Missing state, a11y; ShelfItem.displayName
+    ShelfItemView.swift       # tile: thumbnail, caption, pin badge, Missing state, a11y; ShelfItem.displayName
+    ActionsMenu.swift         # header Actions menu + Sharer (Share…/AirDrop, activation rules)
+    SearchField.swift         # header NSSearchField bound to store.query; Filter menu lives in ShelfView
+    RenameField.swift         # inline Finder-style rename over the caption (AppKit field)
+    ResizeForm.swift          # Resize ▸ Custom… form shown in place of the grid
     RecentList.swift          # in-panel Recent drag-outs list (ADR-018)
     PromoFooter.swift         # PromoFooter + HintFooter (shared row height)
     Glass.swift               # the only availability branch for styling (Liquid Glass / material / solid)
     MenuBarIcon.swift         # template menu bar glyph drawn in code (ADR-021)
     Thumbnail.swift           # QLThumbnailGenerator + NSWorkspace icon fallback
-Tests/DragShelfTests/         # Swift Testing: store, cache, pasteboard, drop, drag out, auto-show, layout,
-                              # Recent, hints, promos, snapshot, smoke, off-main drawing (ADR-016)
+Tests/DragShelfTests/         # Swift Testing: store, cache + sweep, pasteboard, drop, drag out, auto-show, layout, Recent,
+                              # hints, promos, snapshot, smoke, off-main drawing (ADR-016), actions, convert, rename, share,
+                              # text, pins, shortcut, search
 ```
 - No `main.swift` (conflicts with `@main`). No asset catalog: icons are drawn in code (ADR-021).
 - `.gitignore` has `.build/`, `.swiftpm/`, `build/`.
@@ -108,21 +120,28 @@ open build/DragShelf.app         # run; never run the bare binary
 |---|---|---|
 | `DragShelfApp` | SwiftUI `App` | `MenuBarExtra` with `MenuBarIcon.image` label: Show/Hide DragShelf (⌃⌥⌘D shown), Undo Drag Out (⌘Z, disabled when Recent empty), Reset DragShelf Position, More Apps ▸ (eligible promos, hidden when none or promos off), Settings… (activates app), Quit DragShelf (⌘Q). `Settings { SettingsView }` |
 | `AppDelegate` | `NSObject, NSApplicationDelegate` | Owns and wires store, promos, panel controller, monitor, hotkey. `store.cache.wipe()` on launch and terminate. `applyPreferences()` on every `UserDefaults.didChangeNotification`, acting only when a value changed (start/stop monitor, register/unregister hotkey, promo refresh on toggle-on) |
-| `ShelfItem` | `struct`, `Identifiable, Hashable` | `id`, `kind: Kind { file(URL), url(URL), text(String) }`, `isCached`, `contentHash: SHA256.Digest?` (dropped image data). Images and promises are cache files → `.file`, `isCached = true` (ADR-012). `displayName`: file name / link host / first non-empty text line |
-| `ShelfStore` | `@Observable final class` | Ordered `items` + `keys: [Key: UUID]` dedupe index (§5). `selection` + Finder-style `select(_:command:shift:)`, `moveSelection(by:)`. `missingIDs` via `refreshMissing()` on show. `recent` (≤ 5 `RecentEntry` batches), `recordDragOut`, `restore`, `undoDragOut`, `clearRecent`. `showRecent`, `isDropTargeted`, `isDragging` (both mirrored into `hints.dragging`). `generation` bumped by `clear()`. Injected `cache: ItemCache`, `hints: HintEngine` |
-| `ItemCache` | `nonisolated struct`, `Sendable` | Injectable `root` (default `~/Library/Caches/com.abhishekyadav.DragShelf/Shelf/`; tests pass a temp dir). `newItemDir()` → `root/<UUID>/`, `remove(dir:)`, `wipe(keeping:)`. Safe to pass to detached tasks |
-| `Preferences` | `enum`, keys + readers | `autoShow` (true), `hotKeyEnabled` (true), `keepAfterDragOut` (false), `showPromos` (true), `dismissedPromoIDs` ([String]), `showTips` (true). Launch at login is read from `SMAppService.mainApp.status`, never stored. No position key (ADR-019) |
+| `ShelfItem` | `struct`, `Identifiable, Hashable` | `id`, `kind: Kind { file(URL), url(URL), text(String) }`, `isCached`, `contentHash: SHA256.Digest?` (dropped image data). Images and promises are cache files → `.file`, `isCached = true` (ADR-012). `displayName`: file name / link host / first non-empty text line. Precomputed `searchKey` (folded name / URL / first 20k chars of text), `isImage` (by extension), `isFolder` (directory, not a package) for search and filters |
+| `ShelfStore` | `@Observable final class` | Ordered `items` + `keys: [Key: UUID]` dedupe index (§5). `selection` + Finder-style `select(_:command:shift:)`, `moveSelection(by:)`. `missingIDs` via `refreshMissing()` on show. `recent` (≤ 5 `RecentEntry` batches), `recordDragOut`, `restore`, `undoDragOut`, `clearRecent`. `showRecent`, `isDropTargeted`, `isDragging` (both mirrored into `hints.dragging`). `generation` bumped by `clear()`. Pins: `pin`/`unpin`/`loadPins`, `pinnedIDs` (§5, ADR-023). Search: `query`, `filter`, `visibleItems` (§5). `uniqueName`, `canRenameInPlace`, `replace(id:with:)` (Rename). `inFlight` dirs + `sweep()` (§5). `actions: ActionRunner`, `renamingID`, `resizing`. Injected `cache: ItemCache`, `hints: HintEngine`, `pins: PinStore` |
+| `ItemCache` | `nonisolated struct`, `Sendable` | Injectable `root` (default `~/Library/Caches/com.abhishekyadav.DragShelf/Shelf/`; tests pass a temp dir). `newItemDir()` → `root/<UUID>/`, `remove(dir:)`, `wipe(keeping:)`. `scan()` lists dirs with size and mtime for the sweep. Safe to pass to detached tasks |
+| `PinStore` | `struct` | Injectable `root` (default `~/Library/Application Support/com.abhishekyadav.DragShelf/Pinned/`): `pinned.json` manifest (v1, atomic write) + `<UUID>/<name>` stored copies. `load()` / `save()` / `store(_:)` / `dir(of:)` (§5, ADR-023) |
+| `TestRun` | `nonisolated enum` | `active` is true only under `swift test` / Xcode tests (never inside a `.app`). `ItemCache` and `PinStore` default roots become temp dirs when it is true (ADR-028) |
+| `ShelfAction` / `ActionRunner` | enum / `@Observable` class | Action list and the one-job runner (§11) |
+| `Sharer` | `NSObject` singleton | Share… picker and AirDrop (§11, activation rules) |
+| `TextFile` / `TextPromiseProvider` | `nonisolated enum` / `NSFilePromiseProvider` | Text name/decode helpers; dual text + `.txt` drag writer (ADR-024) |
+| `SearchField` / `RenameField` / `ResizeForm` | views | In-panel inputs (ADR-022) |
+| `Preferences` | `enum`, keys + readers | `autoShow` (true), `hotKeyEnabled` (true), `hotKeyShortcut` (`{keyCode, modifiers}`, default ⌃⌥⌘D; invalid value → default), `keepAfterDragOut` (false), `showPromos` (true), `dismissedPromoIDs` ([String]), `showTips` (true). Launch at login is read from `SMAppService.mainApp.status`, never stored. No position key (ADR-019) |
 | `HintEngine` | `@Observable final class` | Footer tips (§13). `record(_ Event)`, `current`, `dismiss()`, `reset()`, `visible`/`dragging` gates. Injectable `UserDefaults` |
 | `ShelfPanel` | `NSPanel` subclass | styleMask `[.nonactivatingPanel, .borderless, .resizable, .fullSizeContentView]`, `level = .floating`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]`, `hidesOnDeactivate = false`, clear non-opaque background, shadow, `becomesKeyOnlyIfNeeded`, `canBecomeKey` true, `canBecomeMain` false, `animationBehavior = .none`. `sendEvent` handles Esc, Space, Delete, arrows, ⌘Z. Quick Look data source/delegate. Live resize pins the top edge (`pinTop`) and reports to `onUserResize`; `invalidateShadow()` on every frame change |
 | `ShelfPanelController` | `@Observable final class` | `show(reason:at:)`, `hide()`, `toggle(reason:)`, `dragStarted(at:)`, `dragEnded()`, `undoDragOut()`, `resetPosition()`, `fitToContent()`, `quickLook`, VoiceOver announcements. `ShowReason { manual, hotkey, autoDrag }`. Placement (ADR-019), visibility rules (§5). Hosts `PanelRoot` (SwiftUI) in a `DropReceiver` as `panel.contentView` |
 | `DropReceiver<Content>` | `NSHostingView` subclass | The panel content view **and** drop destination (ADR-006): `registerForDraggedTypes(PasteboardReader.types)`, rejects our own `DragOutSource` drags, `ingest` (§5), file promises via `nonisolated promiseHandler` (ADR-016), Cmd-C (`performKeyEquivalent` / `copy(_:)`). `sizingOptions = [.intrinsicContentSize]` + low hugging/compression so edge resize works; layer clipped to `shelfCornerRadius`; `focusRingType = .none` |
 | `PasteboardReader` | `enum` | `read(_:) -> [Incoming]` with `Incoming { file, promise, image(Data, UTType), url, text }`. Per item: file URL > PNG > TIFF > web URL > non-empty string. Promises (`NSFilePromiseReceiver`) only when no item has a real file URL. `canAccept(_:)` shared with `DragMonitor` |
-| `DragOutSource` | `NSObject, NSDraggingSource` | `begin(items:event:view:store:fromRecent:)`: one `NSDraggingItem` per item (stacked icons), `static current` keeps the session alive. `writer(for:)` = `NSURL` (file/url) / `NSString` (text), used by `copy(_:)` (Cmd-C) and Share; `dragWriter(for:)` gives text a `TextPromiseProvider` (`.string` first + `.txt` file promise, nonisolated delegate, ADR-016; V2-07). `mask(for:modifiers:allFiles:)`, `shouldRemove(operation:keepAfterDragOut:)`, `ended(operation:)` (ADR-017) |
+| `DragOutSource` | `NSObject, NSDraggingSource` | `begin(items:event:view:store:fromRecent:)`: one `NSDraggingItem` per item (stacked icons), `static current` keeps the session alive. `writer(for:)` = `NSURL` (file/url) / `NSString` (text), used by `copy(_:)` (Cmd-C) and Share; `dragWriter(for:)` gives text a `TextPromiseProvider` (`.string` first + `.txt` file promise, ADR-024). `mask(for:modifiers:allFiles:)`, `shouldRemove(operation:keepAfterDragOut:)`, `ended(operation:)` (ADR-017) |
 | `DragOutHandle` / `DragOutHandleView` | `NSViewRepresentable` / `NSView` | Transparent AppKit layer over each tile, the Drag All button, and Recent rows. Owns click selection, ≥ 3 pt drag start, hover, context menu (Quick Look, Remove from DragShelf), Recent row click-to-restore. `acceptsFirstMouse` true |
 | `DragMonitor` | `final class` | Global monitors `.leftMouseDown/.leftMouseDragged/.leftMouseUp`; pure `isDragStart(...)`; 100 ms `pressedMouseButtons` poll as a mouse-up backup. `onDragStart(NSPoint)`, `onDragEnd()`. Runs only while `autoShow` is on |
-| `HotKey` | `final class` | Carbon `RegisterEventHotKey` ⌃⌥⌘D + `InstallEventHandler` → `onPress`. Idempotent `register()` (false + log if taken), `unregister()` |
+| `Shortcut` / `HotKey` | `struct` / `@Observable final class` | `Shortcut`: virtual key code + Carbon modifier mask, valid only with ⌘, ⌃ or ⌥; `symbols`/`spoken` labels use the current input layout (TIS, ADR-026). `HotKey.shared.register(_:)` swaps shortcuts; if Carbon refuses, the previous one is restored and it returns false. `unregister()`, `current` |
 | `PromoFeed` / `PromoLoader` / `PromoFooter` | see §12 | "More apps" feed |
 | `RecentList` | SwiftUI view | §5 Recent; ADR-018 |
+| Paste | `DropReceiver.pasteItems()` | Menu "Paste to DragShelf", context menu "Paste" and ⌘V read the general pasteboard through `PasteboardReader` and the normal ingest path (dedupe, image hashing). Empty → "Nothing to paste" for 3 s |
 | `MenuBarIcon` | `enum` | `image`: 18×18 pt template `NSImage` from a `@Sendable` drawing handler (ADR-016, ADR-021) |
 
 ## 5. Data flow
@@ -206,7 +225,30 @@ open build/DragShelf.app         # run; never run the bare binary
 - Lifetime is shared between shelf and Recent: `release(_:)` deletes a dir only when no shelf item and no Recent entry uses it.
   - remove → released. Drag out → kept (Recent). Recent entry falls off / Clear Recent / restore → released.
   - Clear → `wipe(keeping:)` dirs still used by Recent. Launch and quit → whole root wiped.
-- Original user files are referenced, never copied. The promo cache (`.../Promos/`) is outside `root`.
+- Original user files are referenced, never copied (except Rename, §11, and Pin of cached items). The promo cache (`.../Promos/`) is outside `root`.
+- **Hygiene (T-21):** `ShelfStore.sweep()` runs on launch, panel show and drag-out end. It expires Recent entries older than 24 h, then deletes
+  cache dirs that no shelf item or Recent entry references, skipping dirs in `inFlight` (drops, actions and renames still landing) and dirs
+  changed < 10 s ago. While the cache is over 1 GB it also evicts the oldest Recent entries. Listing and deleting run off main; `clear()` during a scan aborts the pass.
+
+### Pinned items (V2-08, ADR-023)
+- Pinned items survive Clear, drag out and quit. They sit first in `items` (pin = end of the pinned group, unpin = top of the rest).
+- Cached file → cloned into `Pinned/<UUID>/<name>` (the cache dir is released). Original file → plain `bookmarkData` (no sandbox) plus last
+  path; an unresolvable bookmark shows "Missing". Link and text are stored inline in `pinned.json`.
+- A pinned file is never moved by a ⌘-drag (`canMove` is false), so a pin stays where it is. Unpin of a stored copy moves its dir back into the cache, so it is cleaned like any cached item; Recent rows pointing at it are re-pointed
+  (also on rename).
+- `pinned.json` is versioned. A corrupt, unknown-version or invalid manifest moves to `pinned.json.bad` (`.bad.1`, … keep the first) and loading starts
+  empty; stored copies are not deleted then. After a clean load, `Pinned/<UUID>/` dirs the manifest does not list are removed (interrupted pin or rename).
+  Stale bookmarks are refreshed and the manifest rewritten. Paths in the manifest must be exactly `<UUID>/<plain name>`.
+
+### Search and filter (V2-10)
+- ⌘F or the header magnifier shows `SearchField`. `store.query` (folded, trimmed) and `store.filter` (`All, Files, Folders, Images, Links, Text, Pinned`)
+  give `visibleItems`. The grid, Drag All, Clear, select-all, arrows, Quick Look, ⌘C and Actions act on **visible items only**. Selection is pruned to what shows.
+- Clear while filtering removes only the shown, unpinned items. Esc: Quick Look, then search (clears and hides), then the panel.
+- Folder = directory that is not a package (`.app`, `.pages` count as files).
+
+### Text items (V2-07)
+- Text drags out as one pasteboard item with `.string` first and a UTF-8 `.txt` file promise (ADR-024). Name = first usable line, ≤ 60 chars, else `Text.txt`.
+- "Save as .txt" adds a cached `.txt` file item (text stays). "Use as Text" turns plain-text files ≤ 1 MB into text items (UTF-8/UTF-16 by BOM, else UTF-8, else Latin-1).
 
 ## 6. UI design (Apple HIG)
 - **Branding (T-19):** commands, titles, tooltips, and VoiceOver labels that name the panel say **"DragShelf"** ("Show DragShelf",
@@ -240,7 +282,8 @@ open build/DragShelf.app         # run; never run the bare binary
 - Files dropped by the user are readable without TCC prompts (user-intent grant), including Desktop/Documents/Downloads.
 - Network: only the promo feed (§12): one HTTPS GET to a hardcoded URL, at most once per 24 h (3 h after a network error), none when
   promos are off. No identifiers, no analytics, no cookies. No user data leaves the machine.
-- Cache dir holds copies of promised/image content only; wiped per §5.
+- Cache dir holds copies of promised/image content and action outputs; swept and wiped per §5. `Application Support/.../Pinned/` holds what the user pinned (copies, bookmarks, text, links) until unpinned; it is never wiped automatically.
+- Share/AirDrop is the one place besides Settings that activates the app (§11). Still no TCC permission.
 - **Drag out never moves a user's file unless the user holds ⌘** and every dragged item is a file (ADR-017). A plain drag is copy-only.
 
 ## 8. Distribution and versioning
@@ -266,7 +309,7 @@ open build/DragShelf.app         # run; never run the bare binary
 | Quick Look needs a key window without activating app | `canBecomeKey` on non-activating panel; preview ordered front, `hidesOnDeactivate = false` |
 | Slow/large file promises | Background `OperationQueue`; item added when written; 250 ms hide grace; `generation` check vs Clear |
 | `xcodebuild` broken (stale DVTDownloads framework, exit 70) | SwiftPM build (ADR-013); user may run `sudo xcodebuild -runFirstLaunch` (OQ-15) |
-| Hotkey ⌃⌥⌘D taken by another app | `register()` returns false and logs; menu still works; custom recorder later (OQ-04) |
+| Hotkey ⌃⌥⌘D taken by another app | `register()` returns false and logs; menu still works; user can record another shortcut in Settings (V2-09); Carbon refusal keeps the old one and shows an inline message |
 | Promo feed URL is a placeholder | OQ-26 must be answered before release (T-12) |
 
 ## 10. ADRs
@@ -278,55 +321,63 @@ open build/DragShelf.app         # run; never run the bare binary
 - **ADR-006: Drop destination in AppKit, not SwiftUI `onDrop`/`dropDestination`.** Built as `DropReceiver: NSHostingView` so the content view is both the SwiftUI host and the destination. Why: needs `NSFilePromiseReceiver` and full pasteboard access; one view avoids the hosting view swallowing drags. Rejected: SwiftUI drop APIs (weak promise support), a separate `NSView` wrapping the hosting view (drag interception risk).
 - **ADR-007: Drag out copy-only. Superseded by ADR-017.** Why (then): protect originals (OQ-05).
 - **ADR-008: Drag detection = global mouse monitors + `NSPasteboard(name: .drag).changeCount`.** Why: no permission needed, ignores window drags. Rejected: `CGEventTap` (needs Input Monitoring/Accessibility), shake gesture (non-goal).
-- **ADR-009: Global hotkey via Carbon `RegisterEventHotKey`, fixed ⌃⌥⌘D.** Why: only permission-free global hotkey API. Rejected: `NSEvent` global key monitor (needs Accessibility), KeyboardShortcuts package (ADR-001).
-- **ADR-010: Items in memory only; cache wiped on launch/clear/quit. Superseded by ADR-018** (memory-only still holds; Clear now keeps dirs Recent uses).
+- **ADR-009: Global hotkey via Carbon `RegisterEventHotKey`, fixed ⌃⌥⌘D. "Fixed" superseded by ADR-026 (Carbon stays).** Why: only permission-free global hotkey API. Rejected: `NSEvent` global key monitor (needs Accessibility), KeyboardShortcuts package (ADR-001).
+- **ADR-010: Items in memory only; cache wiped on launch/clear/quit. Superseded by ADR-018** (memory-only still holds; Clear now keeps dirs Recent uses) **and amended by ADR-023** (pinned items persist, outside the cache).
 - **ADR-011: Swift 6 mode, default actor isolation `MainActor`, warnings as errors.** Why: app is UI-bound; fewer annotations; zero-warning rule enforced by the compiler. Off-main work uses `Task.detached` / `nonisolated` and hops back to main (rules: ADR-016).
 - **ADR-012: Images and promised files are materialized to cache files; `ShelfItem.Kind` = file/url/text.** Why: one drag-out path, real files work in every target. Image dedupe uses `contentHash` (OQ-16). Rejected: separate image kind with in-memory `NSImage`.
 - **ADR-013: SwiftPM package + `scripts/build-app.sh` instead of an `.xcodeproj` (supersedes ADR-003).** Why: `xcodebuild` exits 70 on this machine (stale `DVTDownloads`); the fix needs `sudo`. `swift build`/`swift test` work, compile `.glassEffect` behind `#available`, run Swift Testing. A short script gives the bundle, Info.plist, icon, and signing. Rejected: keep xcodeproj (cannot build or test), wait for the user, xcbuild backend / universal `--arch` (route through the broken Xcode build system).
-- **ADR-014 (v2): Shelf Actions use native tools only and produce new cached items.** Zip = `/usr/bin/ditto` via `Process`; Share/AirDrop = SwiftUI `ShareLink` + `NSSharingService(named: .sendViaAirDrop)`; Convert/Resize = ImageIO; Rename = rename the shelf copy (APFS clone into the cache), never the original. Work runs off `MainActor`, one job at a time, cancellable. Why: no deps (ADR-001), originals never touched, outputs reuse the cached-file drag-out path (ADR-012). Rejected: `NSFileCoordinator` `.forUploading`, ZIPFoundation/libarchive, Apple Archive, `NSImage`/Core Image resize, libwebp, renaming originals in place (OQ-17).
+- **ADR-014 (v2): Shelf Actions use native tools only and produce new cached items.** Zip = `/usr/bin/ditto` via `Process`; Share/AirDrop = `NSSharingServicePicker` + `NSSharingService(named: .sendViaAirDrop)` (built: `ShareLink` was dropped, the picker gives an anchor and delegate hooks for activation; see §11); Convert/Resize = ImageIO; Rename = rename the shelf copy (APFS clone into the cache), never the original. Work runs off `MainActor`, one job at a time, cancellable. Why: no deps (ADR-001), originals never touched, outputs reuse the cached-file drag-out path (ADR-012). Rejected: `NSFileCoordinator` `.forUploading`, ZIPFoundation/libarchive, Apple Archive, `NSImage`/Core Image resize, libwebp, renaming originals in place (OQ-17).
 - **ADR-015: "More apps" promo = static JSON feed over HTTPS, text only, hardcoded URL + host allowlist, opt-out toggle (T-14, §12).** Why: new apps must appear without a DragShelf update. A static file needs no server code. Text + SF Symbol only: no remote images (no tracking pixels, no decoder attack surface). Rejected: own API server, remote images/HTML/`WKWebView`, CloudKit, Sparkle-style appcast or any package, list bundled in the app.
 - **ADR-016: Off-main AppKit callbacks must be `nonisolated` and `@Sendable` under MainActor default isolation.** With `.defaultIsolation(MainActor.self)` every closure is MainActor-inferred unless marked; Swift 6 inserts a runtime isolation check, so AppKit calling it on another thread traps before the body runs. Seen: the `receivePromisedFiles` reader (called on `promiseQueue`; app quit on a VS Code image drop) and `NSImage(size:flipped:drawingHandler:)` (menu bar glyph, glass mask). Rule: any closure or method AppKit/Foundation may call off main (promise readers, image drawing handlers, notification selectors that may post off main, URLSession delegates) is built in a `nonisolated` func and typed `@Sendable`; it captures only `Sendable` values and hops to main with `Task { @MainActor in }` or `DispatchQueue.main.async` + `MainActor.assumeIsolated`. Main-thread-only callbacks (Carbon app target, `Timer` on main, Quick Look control) use `MainActor.assumeIsolated` instead. Enforced by: QA checklist item on every task (TASKS implicit ACs), off-main tests (`OffMainDrawTests` draws the images on a global queue; promise handler tested via `finishPromise`). Rejected: `@preconcurrency` / `nonisolated(unsafe)` to silence checks (hides the trap, not the bug), dropping MainActor default isolation (many more annotations).
 - **ADR-017: Drag out = copy by default; ⌘ + all-file drags offer `[.move, .copy]` (T-15, supersedes ADR-007).** Writers stay `NSURL` / `NSString`; no `NSFilePromiseProvider` (cached content is already a real file). Mask is computed per callback from live modifiers; mixed selections copy (AppKit has no per-item masks). `.move` always removes the item (the file left its folder), even with "Keep items after drag out" on; other drops remove unless that setting is on. Removed items keep their cache dirs for Recent. Why: Finder convention (⌘ = move), user request; plain drags still never touch originals. Rejected: Shift as modifier (not Finder), honoring Finder's own ⌥/⌘ semantics on a plain drag (could move a file without intent), always offering `.move`.
-- **ADR-018: Recent = last 5 drag-out batches, memory only, shown in the panel (T-17, supersedes ADR-010).** Items still never persist across quit (OQ-03). Cache-dir lifetime is shared between shelf and Recent (§5): a dir goes only when neither uses it; Clear keeps Recent's dirs; launch/quit wipe all. The list replaces the grid inside the panel, not an `NSPopover`. Why: a wrong drop or failed upload otherwise loses the item (items leave after drag out, OQ-08). A popover window is not non-activating: clicking it would activate DragShelf and break rule 6. Rejected: `NSPopover` / separate window (activation), persistent history (non-goal), more than 5 entries (cache growth).
+- **ADR-018: Recent = last 5 drag-out batches, memory only, shown in the panel (T-17, supersedes ADR-010).** Items still never persist across quit (OQ-03; only pins do, ADR-023). Cache-dir lifetime is shared between shelf and Recent (§5): a dir goes only when neither uses it; Clear keeps Recent's dirs; launch/quit wipe all. The list replaces the grid inside the panel, not an `NSPopover`. Why: a wrong drop or failed upload otherwise loses the item (items leave after drag out, OQ-08). A popover window is not non-activating: clicking it would activate DragShelf and break rule 6. Rejected: `NSPopover` / separate window (activation), persistent history (non-goal), more than 5 entries (cache growth).
 - **ADR-019: Placement = top center by default, drag header to move, drag edges to resize, remembered per display (T-13, T-16).** No position preference/picker. `UserDefaults` `panelOffsets` = [display UUID: [dx, dy]] (top-center offset from `visibleFrame` top center), `panelSizes` = [display UUID: [w, h]]; display UUID from `CGDisplayCreateUUIDFromDisplayID` (name fallback). Saved spots clamp into `visibleFrame`. User height = max height; content still fits below it. Reset (menu, Settings, header double-click) forgets both. Why: users wanted to move it anywhere; per-display memory survives reboots and display reordering. Rejected: edge/position picker (fewer options, more UI), `isMovableByWindowBackground` (conflicts with tile drag out), per-screen index (changes with display order).
 - **ADR-020: One footer slot shared by tips and promos; tip wins (T-18).** `HintEngine` is local only (UserDefaults counts, no network), shows one line at a time, never during a drag, each tip ≤ 3 times, ✕ retires it. Why: one quiet line keeps the panel calm and its height stable. Rejected: popovers/coach marks (modal, activation), two footer lines.
 - **ADR-021: Menu bar glyph and app icon are drawn in code.** `MenuBarIcon` draws an 18 pt template image (card dropping into a tray) at runtime; `scripts/make-icon.swift` renders the 1024 pt app icon, `make-icon.sh` builds `Resources/AppIcon.icns` (committed). Why: no asset catalog with SwiftPM + no Xcode (ADR-013); resolution-independent; glyph matches the icon. Rejected: SF Symbol `tray.and.arrow.down` (generic, did not match the icon), PDF/asset catalog (needs Xcode tooling).
 
-## 11. v2: Shelf Actions design (BACKLOG)
-Scope: `docs/PRD.md` §10 (US-11..US-14). Tasks: `docs/TASKS.md` v2 backlog. Not built in v1.
+- **ADR-022: Inputs live inside the panel, not in popovers, sheets or alerts.** Rename (`RenameField`), search (`SearchField`), Custom resize (`ResizeForm`) and Recent (ADR-018) are views in the panel. The panel is non-activating and becomes key only for typing. Why: a popover, sheet or alert is a window of our app, so showing it would activate DragShelf, pull focus from the user's target app and break rule 6. Rejected: `NSPopover`, sheets, `NSAlert`, a separate settings-style window.
+- **ADR-023: Pinned items persist in Application Support, outside the cache.** `PinStore`: `pinned.json` + `Pinned/<UUID>/<name>` copies; originals by bookmark. Supersedes the "nothing persists" part of ADR-010/018/OQ-03 for pins only. Why: the cache is wiped on launch/quit and swept (T-21), so pinned content must live elsewhere; bookmarks follow moved originals without copying big files. Defensive load: versioned manifest, `.bad` backups, orphan-dir cleanup, strict relative paths. Rejected: pins inside the cache root (wiped), copying every original (disk use), `UserDefaults` (size, no files), a database.
+- **ADR-024: Text drags out through a dual-writer `NSFilePromiseProvider` (`TextPromiseProvider`).** One pasteboard item: `.string` first, plus a `.txt` file promise. Text views get text; Finder and the Desktop get a real `.txt`, not a `.textClipping`. The promise write uses `.withoutOverwriting` and moves to "name 2.txt" on a collision, so a drop never fails on a taken name. Amends ADR-017 ("no `NSFilePromiseProvider`"): files and links still use plain `NSURL`. Delegate is `nonisolated` (ADR-016). Rejected: text-only (no file for Finder), always a temp `.txt` file (text fields would paste a path), overwriting.
+- **ADR-025: Share/AirDrop activates the app, then gives focus back.** `Sharer` calls `NSApp.activate()` only when the app is inactive, and `NSApp.deactivate()` when the picker closes without a choice or the service finishes, fails or is cancelled, unless the Settings window is key. Why: picker and service sheets are our windows and open behind the front app otherwise (spike result of V2-02). One share at a time. Rejected: staying inactive (sheets hidden), a custom share UI.
+- **ADR-026: Custom global shortcut with layout-aware names (supersedes the "fixed" part of ADR-009).** Settings recorder stores `{keyCode, modifiers}`; must include ⌘, ⌃ or ⌥. Key names are read from the current input source at display time (TIS `kTISPropertyUnicodeKeyLayoutData`), so an AZERTY user sees the key they actually press, and the display follows layout changes. Recording pauses the hotkey (Carbon would swallow the keys) and always restores it. A refused shortcut restores the previous one. Rejected: a recorder package (ADR-001), US-layout names, `NSEvent` global key monitor (needs Accessibility).
+- **ADR-027: Collision and search keys are NFC-normalized and case-folded.** `Zipper.key` (`precomposedStringWithCanonicalMapping` + lowercased) drives `uniqueName` for zip, convert, rename, text and promises; `ShelfItem.fold` does the same for search. Why: a typed "é" and a Finder-decomposed "é" must collide like on a default APFS volume. Rejected: raw string equality, `localizedCompare`.
+- **ADR-028: Test-run root guard.** `TestRun.active` makes the default `ItemCache` and `PinStore` roots fresh temp dirs, so a test that forgets to inject a root never touches `~/Library/Caches` or Application Support. The bundle path ending in `.app` always means "not a test". Rejected: `precondition` (crashes the run), trusting each test to inject.
 
-New files (all under `Sources/DragShelf/Actions/` unless noted):
+## 11. v2: Shelf Actions (as built)
+Scope: `docs/PRD.md` §10 (US-11..US-14 plus V2-05..V2-10). Tasks: `docs/TASKS.md`. ADR-014, ADR-022, ADR-025, ADR-027.
+
 | Type | Kind | Responsibility |
 |---|---|---|
-| `ActionRunner` | `@Observable final class` (MainActor) | Holds the single running job: `title`, `progress: Double?` (nil = indeterminate), `error: String?`. `run(_ title:, work: @Sendable (ProgressReporter) async throws -> [URL])` starts a `Task`, adds each returned URL to `ShelfStore` as `.file` with `isCached = true`, selects the outputs. `cancel()` cancels the task. Drops results if `store.generation` changed (Clear during a job) |
-| `Zipper` | `enum`, `nonisolated` static funcs | `zip(_ urls: [URL], into dir: URL) async throws -> URL`. 1 source: `ditto -c -k --sequesterRsrc --keepParent <src> <dir>/<name>.zip`. 2+ sources: clone each into `<dir>/stage/` (`FileManager.copyItem`, APFS clone on the same volume), then `ditto -c -k --sequesterRsrc <dir>/stage <dir>/Archive.zip` (contents at top level), then delete `stage/`. `Process` args as an array, never a shell string. Cancel → `withTaskCancellationHandler { process.terminate() }` |
-| `ImageConverter` | `enum`, `nonisolated` static funcs | `convert(_ src: URL, to type: UTType, maxPixel: Int?, into dir: URL) throws -> URL`. `CGImageSourceCreateWithURL` → `CGImageSourceCreateThumbnailAtIndex` with `kCGImageSourceCreateThumbnailFromImageAlways`, `kCGImageSourceCreateThumbnailWithTransform` (upright), `kCGImageSourceThumbnailMaxPixelSize` = `min(maxPixel, source longest edge)` (no upscale) → `CGImageDestinationCreateWithURL` + `kCGImageDestinationLossyCompressionQuality = 0.85` for JPEG/HEIC. No source properties copied (strips GPS/EXIF); the color space stays with the `CGImage`. Alpha → JPEG: draw onto white in a `CGContext` first. `writableTypes` = `[.heic, .jpeg, .png, .tiff]` ∩ `CGImageDestinationCopyTypeIdentifiers()` |
-| `Renamer` | `enum`, `nonisolated` static funcs | `validate(_ name:) -> String?` (error text or nil). `rename(_ item:, to name:, cache:) throws -> ShelfItem`. Cached item: `moveItem` inside its own item dir. Original: `cache.newItemDir()` + `copyItem` (clone) to `<dir>/<name>`, result `isCached = true`. Same `id` so position and selection stay |
-| `ActionsMenu` | SwiftUI view (`UI/ActionsMenu.swift`) | Menu content used by both the header "Actions" menu and the tile context menu: Compress, Rename…, Share… (`ShareLink`), AirDrop, Convert To ▸, Resize ▸. Target = selection if non-empty (or clicked item for context menu), else all |
+| `ShelfAction` | `nonisolated enum` | `compress`, `rename`, `convert(UTType)`, `resize(Int)`, `resizeCustom(ResizeSpec?)`. Titles, running/done/failure text, `applicable(_:)` (what a target set can use; the rest is counted as skipped) and `run(...)` (`@concurrent`, off main) |
+| `ActionRunner` | `@Observable final class` | One job at a time: `running`, `progress` (nil = indeterminate), `count`, `step` ("3 of 20"), `message` (error or "Skipped n items"). `run(_:on:in:)` makes a job dir with `cache.newItemDir()`, marks it in flight (`store.beginInFlight`), runs off main, then adds each output as a cached `.file` (Finder-style unique name), selects them, announces to VoiceOver. Failure, cancel, or `store.generation` changed (Clear) → the dir is deleted and nothing is added. `rename(_:to:in:)` is the Rename commit (below). `nil`-spec Custom resize and Rename do not run a job: they open the in-panel form (`store.resizing`) or field (`store.renamingID`) |
+| `Zipper` | `nonisolated enum` | 1 source: `ditto -c -k --sequesterRsrc --keepParent` → `<name>.zip`. 2+: clone into `stage/`, `ditto` → `Archive.zip`, delete `stage/`. `Process` args as an array. Cancel terminates the process. Also `key(_:)` / `uniqueName(_:used:)` (ADR-027) |
+| `ImageConverter` | `nonisolated enum` | ImageIO: `CGImageSourceCreateThumbnailAtIndex` (upright, `maxPixel`, no upscale for presets) → `CGImageDestination`. HEIC/JPEG quality 0.85. No source properties copied: GPS/EXIF stripped, color profile kept. Alpha → JPEG drawn on white. `writableTypes` = HEIC/JPEG/PNG/TIFF this Mac can encode. Per-image failure: skipped and counted (`failed`), the rest still convert; cancel keeps finished outputs. Names `<base>.<ext>`, `<base> (<N>px).<ext>`, `<base> (<W>×<H>).<ext>` |
+| `ResizeSpec` | `nonisolated enum` | Custom size: `.pixels(width?, height?, fit:)` or `.percent(w, h)`. Pure math shared by the form and the converter. Caps: 16384 px per side and 100 megapixels per output, checked before running over the whole batch (Percent too); custom sizes may upscale. `parse` returns a one-line error |
+| `Renamer` | `nonisolated enum` | `validate`, `fileName` (keeps the old extension unless typed), `baseRange`, `rename(_:to:into:)`: cached file nobody else uses → moved inside its own dir; otherwise cloned to `dir/name` (APFS clone on the same volume). Original is only read |
+| `ActionsMenu` | SwiftUI view | Header "Actions" menu: Compress, Rename…, Share…, AirDrop, Convert To ▸, Resize ▸ (… Custom…). Target = selection, else **visible** items. The tile context menu (AppKit, `DragOutHandleView`) offers the same set plus Pin, Use as Text, Save as .txt |
+| `Sharer` | `NSObject` singleton | `NSSharingServicePicker` / `NSSharingService(named: .sendViaAirDrop)`. Items: present files and links as `NSURL`, text as `NSString`. Items stay on the shelf (OQ-25) |
 
-`ShelfStore` gets one new method: `replace(id:with:)` (Rename; keeps index, selection, and the `keys` entry in sync).
+`ShelfStore` methods used by actions: `replace(id:with:)` (Rename; keeps position, selection, dedupe key), `uniqueName(_:except:)`, `canRenameInPlace(_:)` (false while a Recent entry still points into the cache dir), `beginInFlight`/`endInFlight`.
 
-Data flow: menu → `ActionRunner.run` → `Task.detached` work writes into `store.cache.newItemDir()` →
-returns output URLs → back on `MainActor` → `store.add(ShelfItem(kind: .file(url), isCached: true))` → user drags it out.
-On failure or cancel, the job deletes its own item dir before returning.
+Data flow: menu → `ActionRunner.run` → job dir in flight → off-main work writes only into it → back on main: add outputs, select, `endInFlight`.
 
 Rules:
-- Files produced by actions live in `ItemCache` and follow its lifecycle (§5).
-- Actions never write outside `ItemCache`; sources are only read.
-- Off-main work follows ADR-016.
-- Progress: zip is indeterminate (ditto reports none); convert reports `done/total`; rename is indeterminate and shown only if it takes > 300 ms.
-- UI: while a job runs, the header shows a small `ProgressView`, the job title, and a Cancel (`xmark.circle`) button. Errors show as a one-line caption under the header until the next action or Close. VoiceOver announces start/finish via `AccessibilityNotification.Announcement`.
-- Rename edits text, so the panel must become key (it can: `canBecomeKey` is true). It must not activate the app.
-- Share/AirDrop: the picker and AirDrop sheet are owned by our app. If they do not appear in front from a non-activating panel, call `NSApp.activate()` only for this action (the same exception as Settings, §5 rule 6). While the sheet is open, auto-hide rules must not hide the panel.
+- Outputs are cached items (§5 lifecycle). Actions never write outside `ItemCache`; sources are only read. Off-main work follows ADR-016.
+- Rename: Same-volume clone or in-place move runs instantly on main. A cross-volume original is a full copy run as a cancellable job; the item is replaced only if it is still on the shelf (`ponytail:` `copyItem` cannot stop mid-file).
+- Collision names: any output, rename, text file or promise that matches a shelf file name (NFC, case-insensitive) gets Finder's " 2" suffix.
+- Progress: zip and rename indeterminate; convert/resize report `done/total`. The header shows spinner or progress, the job title, and Cancel. One line under the header shows errors and skips.
+- Forms and fields (Rename, Custom resize, Search) are in-panel views (ADR-022). The panel goes key for typing and the app stays inactive.
+- Share/AirDrop activation: see ADR-025. The panel stays visible meanwhile (`hidesOnDeactivate` is false; no auto-hide rule fires for a non-empty shelf).
 
 v2 risks:
 | Risk | Mitigation |
 |---|---|
-| AirDrop sheet or share picker appears behind other apps from a non-activating panel | Spike first in V2-02; fallback: activate the app for this action only |
-| Renaming a large original across volumes is a full copy (slow, uses disk) | Runs as a cancellable job with progress; same-volume copies are APFS clones (instant, no extra space) |
-| Zipping 2+ items cross-volume copies them into `stage/` first | Same as above; ponytail ceiling documented in `Zipper`; upgrade = `ditto` per item into a shared archive if it matters |
-| ImageIO writers differ by OS (HEIC encode needs hardware support on some Macs) | Menu lists only `writableTypes` computed at runtime |
-| Text field inside a SwiftUI grid in an `NSPanel` loses focus on drag-out handle views | Rename task verifies keyboard focus with the `DragOutHandleView` overlays in place |
+| Share sheet opens behind other apps from a non-activating panel | ADR-025: activate for this action only, give focus back after |
+| Rename or zip of a large original across volumes is a full copy | Cancellable job with progress; same-volume copies are APFS clones |
+| HEIC encode missing on some Macs | Menu lists only runtime `writableTypes` |
+| Huge custom sizes exhaust memory | `ResizeSpec` caps (16384 px, 100 MP) |
+| Text field in a SwiftUI grid inside an `NSPanel` loses keys | AppKit fields; `ShelfPanel.sendEvent` leaves keys to the field while editing rename or search |
+| Pinned manifest corrupt or from a newer version | `.bad` backup, start empty, never delete stored copies (§5) |
 
 ## 12. "More apps" promo feed (T-14, v1)
 Scope: PRD US-15. ADR-015.

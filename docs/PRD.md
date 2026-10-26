@@ -1,6 +1,6 @@
 # DragShelf — Product Requirements
 
-Status: v1 as built (synced with code 2026-10-23, T-01..T-20). Owner: architect. Open questions: `docs/OPEN_QUESTIONS.md`.
+Status: v1 + v2 as built on `main` (synced with code 2026-10-26, T-01..T-21, V2-01..V2-10). Shelf pet (V3-01) is a trial branch, not shipped. Owner: architect. Open questions: `docs/OPEN_QUESTIONS.md`.
 
 ## 1. Problem
 Dragging a file into an app that is hidden or behind other windows fails. The user must
@@ -41,17 +41,17 @@ looks and behaves like part of macOS.
 - Menu bar app, no Dock icon. Settings: launch at login, auto-show on/off, keep items after drag out, hotkey on/off,
   reset position, tips on/off + reset, promos on/off.
 - One-line contextual tips, each shown a few times (US-17).
+- v2 (built): file actions (zip, rename, share/AirDrop, convert/resize incl. custom size), paste, text ↔ `.txt`, pinned items that survive Clear and quit, a custom global shortcut, and search with type filters (§10).
 - Modern Apple look: Liquid Glass on macOS 26, material fallback on macOS 14–15. SF Symbols,
   system fonts, light/dark, VoiceOver, Reduce Motion, Reduce Transparency.
 - One-line "More apps" promo for the developer's other apps, from a remote feed (US-15). Off with one toggle.
 
 ## 6. Non-goals (MVP)
 - Cloud sync, upload, or share extensions.
-- Persistent history, or persistence across app quit (shelf and Recent start empty each launch).
+- Persistent history, or persistence across app quit, except pinned items (V2-08). The shelf and Recent otherwise start empty each launch.
 - Multiple shelves, shelf stacking, named shelves.
 - Shake-to-show gesture.
-- Custom hotkey recorder (fixed default hotkey, on/off only).
-- File actions (rename, convert, compress, AirDrop). Planned for v2, see §10.
+- (v1 only, now built in v2) custom hotkey recorder and file actions: see §10.
 - iOS/iPadOS, Mac App Store build, sandbox.
 - Drag via VoiceOver (we provide Copy as the keyboard alternative instead).
 
@@ -64,7 +64,7 @@ looks and behaves like part of macOS.
 | M3 | Auto-show on drag, global hotkey |
 | M4 | Settings, accessibility and motion polish |
 | M5 | Developer ID signing + notarization (**BLOCKED**: needs user's Developer ID cert) |
-| M6 | v2: Shelf Actions (BACKLOG, starts after v1 ships; §10) |
+| M6 | v2: Shelf Actions, paste, text/.txt, pin, custom shortcut, search (built; §10) |
 
 ## 8. User stories and acceptance criteria
 AC wording is for QA. "Shelf" = the DragShelf floating panel. UI text always names it "DragShelf", never a bare "Shelf" (T-19).
@@ -181,8 +181,8 @@ As a new user, I learn the non-obvious gestures without a tutorial.
 - Zero permission prompts. Idle CPU ~0%, memory < 60 MB with 50 items.
 - Network: at most 1 small request per 24 h (promo feed only), none when promos are off.
 
-## 10. v2: Shelf Actions (next version, BACKLOG)
-Not part of v1. v1 scope and T-01..T-12 do not change. User picked 4 actions (2026-10-20):
+## 10. v2: Shelf Actions and more (built, unreleased)
+Built on `main` after v1. User picked 4 actions (2026-10-20):
 Zip all, Rename, AirDrop / Share, Convert or resize images.
 
 Principle: an action never changes the user's original files. Each output is a **new cached shelf item**
@@ -238,7 +238,16 @@ As a user, I convert an image to another format or make it smaller before I uplo
 - AC-C5: Every menu entry, progress, and error message has a VoiceOver label; start and finish are announced.
 - AC-C6: No permission prompt and no network access, except for what the user's chosen share service does.
 
+### Other v2 features (V2-05..V2-10; full ACs in `docs/TASKS.md`)
+- **Custom resize (V2-05).** "Resize ▸ Custom…" opens a form in the panel (not a sheet, so DragShelf stays inactive): pixels or percent, aspect lock, one image exact size, several images fit into the box. Whole numbers only. Output max 16384 px per side and 100 megapixels; over the cap shows an error and nothing runs. Custom sizes may upscale.
+- **Paste (V2-06).** Menu "Paste to DragShelf", context menu Paste, and ⌘V add the clipboard (files, images, links, text) like a drop. Empty clipboard shows "Nothing to paste".
+- **Text ↔ .txt (V2-07).** Dragging a text item out offers text to text fields and a real `.txt` file to Finder and the Desktop; a taken file name becomes "name 2.txt" instead of failing. "Save as .txt" adds a file item. "Use as Text" turns plain-text files ≤ 1 MB into text items.
+- **Pin (V2-08).** Pin/Unpin in the context menu. Pinned items show a pin badge, stay first, and survive Clear, drag out and quit. Originals are tracked by bookmark (shown Missing if gone), other content is stored in Application Support until unpinned. A pinned file is never moved by a ⌘-drag. Clear and Remove-shown skip pinned items.
+- **Custom shortcut (V2-09).** Settings records another global shortcut (needs ⌘, ⌃ or ⌥). Key names follow the keyboard layout. A shortcut another app owns is refused with a message and the old one stays.
+- **Search and filter (V2-10).** ⌘F or the magnifier shows a search field; a Filter menu limits to All, Files, Folders, Images, Links, Text, Pinned. Drag All, Clear, select-all, Quick Look, ⌘C and Actions apply to the visible items only. Esc clears and closes search.
+- **Cache hygiene (T-21).** Unreferenced cache folders are swept; Recent expires after 24 h and the cache stays near or under 1 GB.
+
 ### v2 non-goals
-WebP or AVIF output, custom pixel sizes, quality slider, batch rename patterns, unzip, PDF actions,
+WebP or AVIF output, quality slider, batch rename patterns, unzip, PDF actions,
 cloud upload, renaming originals in place (unless OQ-17 changes).
 
