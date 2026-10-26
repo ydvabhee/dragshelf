@@ -432,7 +432,7 @@ final class PetController {
         var bubble: String?
         if [.purr, .headRub, .bodyRub].contains(frame.pose) { bubble = "purrr…" }
         if brain.routine == .call && frame.pose == .perk { bubble = "!" }
-        if now < previewUntil { bubble = "Meet \(name) 🐱 — your shelf pet (preview)" }
+        if now < previewUntil { bubble = "Meet \(name) 🐱, your shelf pet (preview)" }
         var ball: Double?
         if let b = brain.ball {
             if brain.ballGone {
