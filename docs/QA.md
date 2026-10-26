@@ -635,3 +635,15 @@ Manual (debug build, Settings → Pet → Show pet on unless noted):
 12. Name: set "Biscuit", show the shelf: the intro (after Reset Tips) and the context menu say Biscuit. Relaunch: the name is kept. Clear the field: back to Mochi.
 13. Preview flow: Show pet off, then turn "Preview on the 2nd and 3rd drag" on and run `defaults write com.abhishekyadav.DragShelf petSessions -int 1`. Drags 2 and 3 show the cat. Drag 4 asks "Keep Mochi on DragShelf? Keep / No thanks". Hide without answering → never asked again, and the pet stays off.
 14. Kill switch: `defaults write com.abhishekyadav.DragShelf petFeature -bool NO`. The Pet section and the cat are gone. `defaults delete` it to restore.
+
+### V3-01 re-verify (f203533, a38d8f7, 3b29a50) - PASS
+- Build debug, release build: green. `swift test` 236 tests: 2 of 2 full runs green (routing suite `.serialized`, 30 s cap).
+- Reduce Motion observer: on `NSWorkspace.shared.notificationCenter` with `queue: .main` + `assumeIsolated`; ADR-016 OK. It is registered once in `init` (not per attach) and returns early unless `attached`, so a hidden shelf does no work and nothing leaks per show. It is not removed on detach; that is OK for the app-lifetime controller.
+- Preview cannot loop: Keep sets `petEnabled` + `petAsked`; No thanks, ignored, and Send Home set `petAsked`. `PetOptIn.mode` returns `.off` once asked, whatever the preview toggle says, and `recordPetSession` stops counting. Test `previewDefaultsOnForNewUsersAndSavedValueWins` covers off→preview→preview→ask→off. A saved `petPreview` false wins.
+- Idle tick: a resting pointer gets 10 Hz only while pending or at the head, else one tick per 4 s reconsider. A lazy nap ticks every 3 s. Any move → `pointer` → `cursorMoved` + `reschedule`, so ticks resume at once.
+- Low: after the question is answered, the Settings "Preview…" toggle does nothing (asked stays true). Fine if intended; else turning it on could clear `petAsked`/`petSessions`.
+- Low (temp data): test `UserDefaults` suites pile up in `~/Library/Preferences` (about 1,970 files: HintTests 1536, PetTests 283, TipRoute 132, Intro 23). `PetTests`/`HintTests` never call `removePersistentDomain`, and even the suites that do leave the plist behind. Not real defaults. Fix: one shared suite name per test file, cleared in `defer`, or `UserDefaults(suiteName:)` plus delete the plist.
+Manual add-on:
+1. Fresh user (`defaults delete com.abhishekyadav.DragShelf petPreview; … petSessions; … petAsked`): drag 1 no cat, drags 2-3 cat, drag 4 the question. Answer No thanks: drags 5+ no cat, Show pet off.
+2. With the shelf shown, toggle System Settings → Accessibility → Display → Reduce motion: the cat goes still (or resumes moving) without hiding the shelf.
+3. Pointer resting on the shelf for a minute: Activity Monitor CPU about 0 %. Move the pointer: the cat reacts at once.
