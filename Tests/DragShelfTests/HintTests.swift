@@ -191,8 +191,8 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
 @MainActor @Test func introFirstThenClickDismissesIntroAndTipUnlearned() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("Intro-\(UUID())")
     defer { try? FileManager.default.removeItem(at: root) }
-    let store = ShelfStore(cache: ItemCache(root: root))
     let d = try #require(UserDefaults(suiteName: "Intro-\(UUID().uuidString)"))
+    let store = ShelfStore(cache: ItemCache(root: root), hints: HintEngine(defaults: d))
     d.set(true, forKey: Preferences.petEnabled)
     d.set("Pixel", forKey: Preferences.petName)
     let pet = PetController(shelf: NSPanel(), store: store, defaults: d)
