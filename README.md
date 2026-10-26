@@ -84,24 +84,12 @@ DragShelf removes the rush. The shelf holds your files for as long as you need, 
 
 ## Meet Mochi
 
-<p align="center">
-  <img src="docs/assets/mochi-sit.png" width="120" alt="Mochi sitting">
-  <img src="docs/assets/mochi-wave.png" width="120" alt="Mochi waving">
-  <img src="docs/assets/mochi-head-rub.png" width="120" alt="Mochi purring">
-  <img src="docs/assets/mochi-pounce-up.png" width="120" alt="Mochi pouncing">
-  <img src="docs/assets/mochi-sleep.png" width="120" alt="Mochi asleep">
-</p>
-
 Mochi is an optional shelf pet: a soft clay cat that lives on the bottom rim of DragShelf.
 
 - **Has a personality.** Curious, Playful, Lazy, Shy or Mischievous. Mochi naps a lot, wanders over to sniff and bat at your items, and sometimes brings its own ball to play with.
 - **Notices you, on its own terms.** Move your cursor over the shelf and Mochi may watch, stroll over, pounce or ignore you. Linger near its head for a purr. Double-click the shelf to call it.
 - **Teaches you DragShelf.** Tips come from Mochi in a small speech bubble, one at a time, never during a drag.
 - **Never gets in the way.** It runs off the shelf while you drag, never touches your items, and costs almost nothing while asleep.
-
-<p align="center">
-  <img src="docs/assets/mochi-tip.png" width="360" alt="Mochi showing a tip on the shelf">
-</p>
 
 Mochi is off by default. New users get a short preview, then DragShelf asks once whether to keep it. Turn it on any time in **Settings → Pet**, and right-click Mochi to send it home.
 
