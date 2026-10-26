@@ -28,13 +28,13 @@ final class HintEngine {
         /// The same tip in the shelf pet's words (V3-01): short, first person, at most two lines.
         var bubbleText: String {
             switch self {
-            case .clear: "Clear only empties me — your files stay put"
+            case .clear: "Clear only empties DragShelf — your files stay put"
             case .dragOut: "Oops? ⌘Z brings it back"
-            case .firstDrop: "I'll hold it! Switch apps, then drag it out of me"
-            case .hotkey: "\(Preferences.shortcut().display) brings me back from anywhere"
+            case .firstDrop: "I'll hold it! Switch apps, then drag it out of here"
+            case .hotkey: "\(Preferences.shortcut().display) brings DragShelf back from anywhere"
             case .recent: "Your recent drags are under the clock 🕘"
             case .holdCommand: "Hold ⌘ while dragging out to move it"
-            case .moveResize: "Drag my top bar to move me, my edges to resize"
+            case .moveResize: "Drag the top bar to move DragShelf, the edges to resize"
             case .paste: "⌘V pastes your clipboard here"
             case .pin: "Pin things you use often 📌"
             case .search: "⌘F finds anything on the shelf"

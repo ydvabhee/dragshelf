@@ -180,8 +180,9 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
 @Test func bubbleTextIsShortFirstPersonAndUsesTheShortcut() {
     for hint in HintEngine.Hint.allCases {
         #expect(hint.bubbleText.count <= 60, "\(hint)")
-        #expect(!hint.bubbleText.contains("Shelf "), "\(hint)")
+        // Branding: the panel is "DragShelf", never a bare "Shelf".
+        #expect(hint.bubbleText.range(of: #"(?<!Drag)Shelf\b"#, options: .regularExpression) == nil, "\(hint)")
     }
-    #expect(HintEngine.Hint.hotkey.bubbleText == "\(Preferences.shortcut().display) brings me back from anywhere")
+    #expect(HintEngine.Hint.hotkey.bubbleText == "\(Preferences.shortcut().display) brings DragShelf back from anywhere")
     #expect(HintEngine.Hint.paste.spokenBubble == "Tip: Command-V pastes your clipboard here")
 }
