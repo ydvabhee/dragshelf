@@ -283,6 +283,9 @@ Milestone M8 (v0.3.0). Depends on: v0.2.0 shipped. Source: user idea 2026-10-24 
 - Art style (user 2026-10-24): soft clay 3D chibi — rounded chunky bodies, matte clay shading via gradients, blush cheeks, dot/closed-eye smiles, soft contact shadow; original designs drawn in code.
 - Species lineup (user picks 2026-10-24): **Cat** (v0.3.0), **Penguin** (v0.3.0 — waddle, belly-slide, flap), **Baby dino** (v0.3.x — stomp, "rawr!" bubble, tail wag, spikes peek from behind the shelf), **Bee** (v0.3.x — flies/hovers, visits tiles, naps on a tile; needs a flight movement system). Optional ideas: Hedgehog (curls into the ball), Octopus (holds several tiles). Settings: choose pet + "Surprise me" (rotates weekly).
 - Later: more tricks, seasonal touches.
+- Shipping note (2026-10-26): v0.2.0 ships the cat only; the species picker arrives with Penguin (v0.3.x).
+- Accepted (QA 2026-10-26): double-click on plain SwiftUI buttons also calls the cat; harmless, left as is.
+- Decision (2026-10-26): `petPreview` defaults ON for new users (pet `petEnabled` stays off until Keep); saved values untouched; after the ask is answered the preview never returns.
 
 ### V3-01 next iteration (user feedback 2026-10-24, build tomorrow; trial branch `worktree-agent-a831b198b0f85dadb` @ 616fbf6)
 - REMOVE the play floor band (no darker background / floor / lip). The cat sits on the BOTTOM edge of the shelf with no extra visual area (earlier it was on the top edge; now bottom). **Decided (user 2026-10-24): on the bottom rim INSIDE the shelf**, over transparent space — no floor, no band, no extra background.
