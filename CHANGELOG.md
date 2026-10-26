@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
+Meet Mochi, an optional shelf pet, plus Shelf Actions, Pin, Search and more. The build is ad-hoc signed and not yet notarized (see README → Install).
+
 ### Added
 - Pet: Mochi appears whenever DragShelf shows (empty shelf too, about a second after) and tells every tip in her speech bubble; with the pet on, no tip appears in the footer (the sponsor line stays). A tip waits while she is out for a drag.
 - Pet intro: the first time the cat appears it says "Meet Mochi 🐱, your shelf pet" and stays until you click anywhere on DragShelf (the click still works as usual); tips follow. Settings → Reset Tips shows it again. A click anywhere also hides a tip bubble without marking it learned.
@@ -61,5 +65,6 @@ First public preview. The build is ad-hoc signed and not yet notarized (see READ
 - Liquid Glass on macOS 26 with a vibrancy fallback on macOS 14–15. Supports light and dark mode, Reduce Motion, Reduce Transparency, Increase Contrast and VoiceOver.
 - An optional one-line "more apps" suggestion, loaded from a static HTTPS feed once a day with no identifiers sent, and a strict domain allowlist.
 
-[Unreleased]: https://github.com/ydvabhee/dragshelf/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ydvabhee/dragshelf/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ydvabhee/dragshelf/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ydvabhee/dragshelf/releases/tag/v0.1.0
