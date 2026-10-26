@@ -105,9 +105,9 @@ struct ShelfView: View {
             // Own row under the grid: never over tiles. Hidden during any drag; the row keeps its height so the
             // panel does not resize under the pointer (a hover at the bottom edge would otherwise flicker).
             // ZStack: an outgoing and incoming line overlap instead of stacking (no height jump on swap).
-            // A tip the cat tells still keeps the promo out (tips come first).
-            if let footer = Self.footer(hint: Self.tipRoute(hint: hint, petOnStage: pet?.tipsOnStage == true).footer,
-                                        promo: hint == nil ? promo : nil) {
+            // Tips the cat tells never use the footer, so the promo keeps its line.
+            let footerHint = Self.tipRoute(hint: hint, petOnStage: pet?.tipsOnStage == true).footer
+            if let footer = Self.footer(hint: footerHint, promo: footerHint == nil ? promo : nil) {
                 let dragging = store.isDragging || store.isDropTargeted
                 ZStack {
                     switch footer {
@@ -124,7 +124,7 @@ struct ShelfView: View {
                 .allowsHitTesting(!dragging)
                 .accessibilityHidden(dragging)
                 .animation(.easeInOut(duration: 0.15), value: dragging)
-                .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1), value: hint)
+                .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1), value: footerHint)
                 .transition(.opacity)
             } else {
                 Color.clear.frame(height: Self.footerRowHeight)
@@ -303,7 +303,7 @@ struct ShelfView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 16)
+        .padding(.bottom, pet?.tipsOnStage == true ? 30 : 16) // Clear of the cat on the rim
         .accessibilityElement(children: .combine)
     }
 

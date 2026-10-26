@@ -411,13 +411,24 @@ nonisolated private func tilePlayShares(_ p: PetPersonality) -> (bat: Double, kn
     #expect(b.nextWake(now: 7) == nil)
 }
 
-@Test nonisolated func appearsTwoToFiveSecondsAfterShow() {
+@Test nonisolated func appearsAboutASecondAfterShowWithOrWithoutItems() {
     for seed: UInt64 in 1...20 {
-        var b = brain(.playful, seed: seed)
-        var first: Double?
-        run(&b, from: 0, to: 8) { b, t in if first == nil && b.activity != .away { first = t } }
-        #expect(first.map { $0 >= 2 && $0 <= 5.05 } == true)
+        for items in [true, false] {
+            var b = PetBrain(traits: PetPersonality.playful.traits, seed: seed)
+            b.track = 280
+            b.shelfShown(hasItems: items, now: 0)
+            var first: Double?
+            run(&b, from: 0, to: 8) { b, t in if first == nil && b.activity != .away { first = t } }
+            #expect(first.map { $0 >= 0.9 && $0 <= 1.15 } == true, "\(String(describing: first))")
+        }
     }
+}
+
+@Test nonisolated func catStaysWhenLastItemLeaves() {
+    var b = awake()
+    b.itemsChanged(count: 0, addedAt: nil, removedAt: 140, now: 6)
+    run(&b, from: 6, to: 9)
+    #expect(b.isVisible)
 }
 
 // MARK: Own ball

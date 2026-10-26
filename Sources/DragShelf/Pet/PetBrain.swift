@@ -372,7 +372,7 @@ nonisolated struct PetBrain: Sendable {
         pending = []
         cursor = nil
         attention = 1
-        appearAt = hasItems && !dragging ? now + Double.random(in: Self.appearDelay, using: &rng) : nil
+        appearAt = dragging ? nil : now + Double.random(in: Self.returnDelay, using: &rng) // Empty shelf too.
     }
 
     mutating func shelfHidden(now: TimeInterval) {
@@ -395,14 +395,9 @@ nonisolated struct PetBrain: Sendable {
     /// `removedAt`: where one left (head follows with a small sad beat).
     mutating func itemsChanged(count: Int, addedAt: Double?, removedAt: Double?, now: TimeInterval) {
         hasItems = count > 0
-        guard hasItems else {
-            set(Step(.away), now)
-            appearAt = nil
-            return
-        }
         lastActive = now
         if activity == .away && appearAt == nil && shelfVisible && !dragging {
-            appearAt = now + Double.random(in: Self.appearDelay, using: &rng)
+            appearAt = now + Double.random(in: Self.returnDelay, using: &rng)
         }
         var reaction: [Step] = []
         if let a = addedAt {
@@ -439,7 +434,7 @@ nonisolated struct PetBrain: Sendable {
             if isOffstage { return set(Step(.away), now) }
             entryRight = right
             run(.exit, (isAsleep ? [Step(.stretch, 0.6)] : []) + exitPlan(right: right), now)
-        } else if shelfVisible && hasItems {
+        } else if shelfVisible {
             lastActive = now
             appearAt = now + Double.random(in: Self.returnDelay, using: &rng)
         }
@@ -463,7 +458,7 @@ nonisolated struct PetBrain: Sendable {
     /// open instead; walks to `target` (the button or tile it is about, if any) and acts out `g` while the bubble
     /// shows. Not during a drag. Reduce Motion: no walk or gesture, just the bubble.
     mutating func deliverTip(_ g: TipGesture, target: Double?, now: TimeInterval) {
-        guard shelfVisible, hasItems, !dragging else { return }
+        guard shelfVisible, !dragging else { return }
         lastActive = now
         tipAt = nil
         tipDeadline = now + Self.tipWait
@@ -582,7 +577,7 @@ nonisolated struct PetBrain: Sendable {
     /// Double-click on the cat or empty shelf space (`p` like `cursorMoved`): always gets attention. Looks, perks up,
     /// goes there, crouches and jumps at the spot, then stays interested in the pointer for a while.
     mutating func call(at p: SIMD2<Double>, now: TimeInterval) {
-        guard shelfVisible, hasItems, !dragging else { return }
+        guard shelfVisible, !dragging else { return }
         attention = 1
         interestUntil = now + Self.callInterest
         cooldownUntil = 0
@@ -605,7 +600,7 @@ nonisolated struct PetBrain: Sendable {
 
     /// Settings → Pet → Play with ball: the own-ball routine right now.
     mutating func playBall(now: TimeInterval) {
-        guard shelfVisible, hasItems, !dragging, !reduceMotion, routine != .bringBall else { return }
+        guard shelfVisible, !dragging, !reduceMotion, routine != .bringBall else { return }
         lastActive = now
         if activity == .away {
             pending = ballPlan(enter: true)
@@ -752,7 +747,7 @@ nonisolated struct PetBrain: Sendable {
             ball = nil
             ballGone = false
         }
-        guard shelfVisible, hasItems else {
+        guard shelfVisible else {
             if activity != .away { set(Step(.away), now) }
             return
         }

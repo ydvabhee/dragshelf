@@ -94,8 +94,7 @@ final class PetController {
     private(set) var name = Preferences.defaultPetName
     /// The tip in the cat's speech bubble right now. Set by the controller (and by snapshot tests).
     var tip: HintEngine.Hint?
-    /// The cat tells tips instead of the footer line: pet on (not the preview or the question) on a shown shelf
-    /// with items. Otherwise tips stay in the footer.
+    /// The cat tells every tip (pet on or previewing); the footer never shows one. Pet off or the question: footer.
     private(set) var tipsOnStage = false
 
     /// Overlay frame in the panel's content coordinates (top-left origin), reported by `PetStage`.
@@ -107,7 +106,7 @@ final class PetController {
     /// The Recent (clock) button's centre x, same space as `stageFrame`.
     @ObservationIgnored var clockX: CGFloat?
     /// The tip the cat was sent to tell (it stays current in `HintEngine` after the bubble fades).
-    @ObservationIgnored private var delivered: HintEngine.Hint?
+    @ObservationIgnored private(set) var delivered: HintEngine.Hint?
     @ObservationIgnored private var brain: PetBrain
     @ObservationIgnored private let shelf: NSWindow
     @ObservationIgnored private let store: ShelfStore
@@ -245,10 +244,13 @@ final class PetController {
 
     /// Hands a new tip to the cat when it is on stage (Settings → Tips off: none).
     private func refreshTips() {
-        let onStage = attached && mode == .on && !store.items.isEmpty
-        if onStage != tipsOnStage { tipsOnStage = onStage }
+        let routed = [.on, .preview].contains(mode)
+        if routed != tipsOnStage { tipsOnStage = routed }
+        let onStage = attached && routed
         let hint = Preferences.tipsOn(defaults) && !introPending ? store.hints.current : nil
         guard hint != delivered else { return }
+        // A tip waits (undelivered) through a drag; the cat comes back and tells it afterwards.
+        if onStage && (store.isDragging || store.isDropTargeted) && hint != nil { return }
         delivered = onStage ? hint : nil
         guard onStage, let hint else { return }
         let gesture = Self.gesture(for: hint)
