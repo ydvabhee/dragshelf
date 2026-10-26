@@ -90,6 +90,11 @@ final class PetController {
     /// Per-tile wiggles; a new `count` wiggles that tile once. Set by the controller (and by snapshot tests).
     var wiggles: [UUID: TileWiggle] = [:]
     private(set) var name = Preferences.defaultPetName
+    /// The tip in the cat's speech bubble right now. Set by the controller (and by snapshot tests).
+    var tip: HintEngine.Hint?
+    /// The cat tells tips instead of the footer line: pet on (not the preview or the question) on a shown shelf
+    /// with items. Otherwise tips stay in the footer.
+    private(set) var tipsOnStage = false
 
     /// Overlay frame in the panel's content coordinates (top-left origin), reported by `PetStage`.
     @ObservationIgnored var stageFrame: CGRect = .zero { didSet { if stageFrame.width != oldValue.width { layout() } } }
@@ -97,6 +102,10 @@ final class PetController {
     /// has not laid out, or that are scrolled away, are not on screen; the cat never plays with those.
     @ObservationIgnored var tileFrames: [UUID: CGRect] = [:]
     @ObservationIgnored var gridFrame: CGRect?
+    /// The Recent (clock) button's centre x, same space as `stageFrame`.
+    @ObservationIgnored var clockX: CGFloat?
+    /// The tip the cat was sent to tell (it stays current in `HintEngine` after the bubble fades).
+    @ObservationIgnored private var delivered: HintEngine.Hint?
     @ObservationIgnored private var brain: PetBrain
     @ObservationIgnored private let shelf: NSWindow
     @ObservationIgnored private let store: ShelfStore
@@ -151,6 +160,14 @@ final class PetController {
 
     func sendHome() { Preferences.sendPetHome(defaults) }
 
+    /// Clicked the tip bubble: learned, never shown again; the cat does a happy bounce.
+    func tipLearned() {
+        store.hints.dismiss()
+        tip = nil
+        brain.tipLearned(now: Self.now())
+        reschedule()
+    }
+
     func answer(keep: Bool) {
         asking = false
         askShown = false
@@ -196,6 +213,47 @@ final class PetController {
     private func refresh() {
         let want = shelfShown && mode != .off
         if want && !attached { attach() } else if !want && attached { detach() }
+        refreshTips()
+    }
+
+    /// Hands a new tip to the cat when it is on stage (Settings → Tips off: none).
+    private func refreshTips() {
+        let onStage = attached && mode == .on && !store.items.isEmpty
+        if onStage != tipsOnStage { tipsOnStage = onStage }
+        let hint = Preferences.tipsOn(defaults) ? store.hints.current : nil
+        guard hint != delivered else { return }
+        delivered = onStage ? hint : nil
+        guard onStage, let hint else { return }
+        let gesture = Self.gesture(for: hint)
+        brain.deliverTip(gesture, target: tipTarget(hint, gesture), now: Self.now())
+        reschedule()
+    }
+
+    /// How the cat acts out each tip.
+    static func gesture(for hint: HintEngine.Hint) -> PetBrain.TipGesture {
+        switch hint {
+        case .firstDrop: .patRim
+        case .paste, .dragOut: .pawTap
+        case .holdCommand: .nudgeTile
+        case .recent, .moveResize: .pointUp
+        case .pin: .pointAtTile
+        case .hotkey: .wave
+        case .clear: .shrug
+        case .search: .lookAround
+        }
+    }
+
+    /// Where the gesture goes on the rim: under the clock button (Recent), the on-screen bottom-row tile nearest
+    /// the cat (nudge, pin), else nowhere in particular.
+    private func tipTarget(_ hint: HintEngine.Hint, _ gesture: PetBrain.TipGesture) -> Double? {
+        switch gesture {
+        case .pointUp:
+            guard hint == .recent, let clockX else { return nil }
+            return Double(clockX - stageFrame.minX - Self.trackInset)
+        case .nudgeTile, .pointAtTile:
+            return visibleRow().min { abs($0.x - brain.x) < abs($1.x - brain.x) }?.x
+        default: return nil
+        }
     }
 
     private func prefsChanged() {
@@ -207,7 +265,7 @@ final class PetController {
             personality = choice
             brain.traits = choice.resolved(using: &brain.rng).traits
         }
-        guard newMode != mode else { return }
+        guard newMode != mode else { return refreshTips() }
         mode = newMode
         if petOn != (mode != .off) { petOn = mode != .off }
         // Kept after the question: back to normal motion, same pet.
@@ -231,6 +289,7 @@ final class PetController {
         brain.shelfShown(hasItems: !store.items.isEmpty, now: Self.now())
         if mode == .preview || mode == .ask { brain.place(at: 0) } // Room for the bubble beside it.
         brain.setDragging(store.isDragging || store.isDropTargeted, now: Self.now())
+        brain.tiles = visibleRow().map(\.x)
         if let view = shelf.contentView { tracker.install(on: view) }
         reschedule()
     }
@@ -244,6 +303,8 @@ final class PetController {
         brain.shelfHidden(now: Self.now())
         wiggles = [:]
         tileFrames = [:]
+        delivered = nil
+        tip = nil
         previewUntil = 0
         snapshot = nil
     }
@@ -274,7 +335,7 @@ final class PetController {
     /// Drags (in, out, over the shelf) and item changes; re-arms itself (Observation fires once per registration).
     private func observeStore() {
         withObservationTracking {
-            _ = (store.isDragging, store.isDropTargeted, store.items.count, store.query)
+            _ = (store.isDragging, store.isDropTargeted, store.items.count, store.query, store.hints.current)
         } onChange: { [weak self] in
             Self.onMain { self?.storeChanged() }()
         }
@@ -300,6 +361,7 @@ final class PetController {
             brain.itemsChanged(count: store.items.count, addedAt: nil, removedAt: removedX, now: now)
             if grew, let added { playWithNewTile(added) }
         }
+        refreshTips()
         reschedule()
     }
 
@@ -361,6 +423,8 @@ final class PetController {
     }
 
     private func publish(_ now: TimeInterval) {
+        let bubbleTip = brain.isVisible && brain.tipShowing(at: now) ? delivered : nil
+        if bubbleTip != tip { tip = bubbleTip }
         guard let frame = brain.frame(at: now) else {
             if snapshot != nil { snapshot = nil }
             return

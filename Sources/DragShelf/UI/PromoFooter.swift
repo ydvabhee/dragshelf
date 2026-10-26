@@ -87,11 +87,15 @@ struct HintFooter: View {
 
 extension HintEngine.Hint {
     /// VoiceOver: "Tip: …" with key symbols spelled out.
-    var spokenText: String {
+    var spokenText: String { Self.spoken(text) }
+    /// VoiceOver for the pet's speech bubble (V3-01).
+    var spokenBubble: String { Self.spoken(bubbleText) }
+
+    private static func spoken(_ text: String) -> String {
         let shortcut = Preferences.shortcut()
-        let words = text.replacingOccurrences(of: shortcut.display, with: shortcut.spoken)
-            .replacingOccurrences(of: "⌘Z", with: "Command-Z")
-            .replacingOccurrences(of: "⌘", with: "Command")
+        var words = text.replacingOccurrences(of: shortcut.display, with: shortcut.spoken)
+        for key in ["Z", "V", "F"] { words = words.replacingOccurrences(of: "⌘" + key, with: "Command-" + key) }
+        words = words.replacingOccurrences(of: "⌘", with: "Command")
             .replacingOccurrences(of: " · ", with: ", ")
         return words.hasPrefix("Tip: ") ? words : "Tip: " + words
     }

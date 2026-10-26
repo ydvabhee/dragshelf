@@ -228,7 +228,7 @@ final class ShelfPanelController {
         store.showRecent = false
         store.resizing = nil
         let hasFile = store.items.contains { if case .file = $0.kind { true } else { false } }
-        store.hints.record(.shown(reason, hasFile: hasFile, hasRecent: !store.recent.isEmpty))
+        store.hints.record(.shown(reason, hasFile: hasFile, hasRecent: !store.recent.isEmpty, itemCount: store.items.count))
         store.hints.visible = true
         // Not during an auto-drag show: a first feed landing mid-drag would add the footer row and grow the panel.
         if reason != .autoDrag { Task { await promos.refreshIfStale() } }

@@ -19,6 +19,8 @@ nonisolated enum PetPose: String, CaseIterable, Sendable {
     case walk, run, carry, crouch, pounce, stretch, backRoll
     // Cursor play: jump up at it, bat up at it, cheek and body rubs; sleeping loaf with one eye open.
     case pounceUp, batUp, headRub, bodyRub, peekEye
+    // Teaching a tip: point up, pat the rim, wave, head tilt with a "?", tap a paw.
+    case pointUp, pat, wave, shrug, pawTap
     // Unused since the floor band went away (kept so the art and its review sheets stay complete).
     case peek, hide
 }
@@ -77,6 +79,8 @@ nonisolated struct PetBrain: Sendable {
         case away, sit, look, perk, sad, sniff, leanIn, yawn, stretch, circle, curl, sleep,
              walk, run, carry, crouch, pounce, bat, backRoll, batTile, knockTile, dropBall, pushOut, pushPrep,
              watch, peekEye, pounceUp, batUp, headRub, bodyRub,
+             /// Tip gestures, and a happy hop when a tip is learned.
+             pointUp, pat, wave, shrug, pawTap, hop,
              /// Expands when it starts: runs over to the cursor (or the call spot) if it is far.
              approach
     }
@@ -119,6 +123,8 @@ nonisolated struct PetBrain: Sendable {
         var target: Target = .none
         /// Turn toward this x first (reactions).
         var lookAt: Double?
+        /// The tip gesture: the speech bubble shows from when this step begins.
+        var tip = false
 
         init(_ activity: Activity, _ duration: TimeInterval = 0, to target: Target = .none, look: Double? = nil) {
             self.activity = activity
@@ -128,7 +134,11 @@ nonisolated struct PetBrain: Sendable {
         }
     }
 
-    enum Routine: Equatable, Sendable { case nap, wake, explore, inspect, idle, stretch, wander, bringBall, cursor, call, exit, react }
+    enum Routine: Equatable, Sendable { case nap, wake, explore, inspect, idle, stretch, wander, bringBall, cursor, call, exit, react, tip }
+
+    /// How the cat acts out a tip (V3-01): pat the rim, tap a paw, nudge a tile, point up (at a button), point at a
+    /// tile from beside it, wave, tilt its head, look around.
+    enum TipGesture: Equatable, Sendable { case patRim, pawTap, nudgeTile, pointUp, pointAtTile, wave, shrug, lookAround }
 
     /// 0…1 each.
     struct Needs: Equatable, Sendable {
@@ -158,6 +168,8 @@ nonisolated struct PetBrain: Sendable {
     static let reach = 22.0
     /// Head-turn in-between after a direction change.
     static let turnTime: TimeInterval = 0.18
+    /// A tip bubble shows this long; it shows anyway if the gesture has not started after `tipWait`.
+    static let tipLength: TimeInterval = 6, tipWait: TimeInterval = 5
 
     var traits: PetTraits
     var reduceMotion = false
@@ -213,6 +225,9 @@ nonisolated struct PetBrain: Sendable {
     private(set) var shelfVisible = false
     private(set) var hasItems = false
     private(set) var dragging = false
+    /// When the current tip's bubble appeared (nil = no tip under way or not yet shown).
+    private(set) var tipAt: TimeInterval?
+    private var tipDeadline: TimeInterval?
     private var from = 0.0, pounceTo = 0.0
     private var circled = false
     private var lastTick: TimeInterval?
@@ -315,7 +330,14 @@ nonisolated struct PetBrain: Sendable {
         case .bodyRub:
             pose = .bodyRub
             turn = 1
-        case .approach: pose = .sit
+        case .approach, .hop: pose = .sit
+        case .pointUp:
+            pose = .pointUp
+            turn = 0.3
+        case .pat: pose = .pat
+        case .wave: pose = .wave
+        case .shrug: pose = .shrug
+        case .pawTap: pose = .pawTap
         }
         // Asleep: an ear flicks at the pointer (ignored, but noticed).
         if pose == .sleep && now - twitchAt < 0.5 && !reduceMotion { turn = 1 }
@@ -324,7 +346,16 @@ nonisolated struct PetBrain: Sendable {
 
     /// How high the cat is off the rim (pt) mid-jump.
     func lift(at now: TimeInterval) -> Double {
-        activity == .pounceUp ? sin(progress(at: now) * .pi) * jumpHeight : 0
+        switch activity {
+        case .pounceUp: sin(progress(at: now) * .pi) * jumpHeight
+        case .hop: sin(progress(at: now) * .pi) * 8
+        default: 0
+        }
+    }
+
+    /// The tip bubble is up.
+    func tipShowing(at now: TimeInterval) -> Bool {
+        tipAt.map { now >= $0 && now < $0 + Self.tipLength } ?? false
     }
 
     // MARK: Events
@@ -356,6 +387,7 @@ nonisolated struct PetBrain: Sendable {
         ballGone = false
         catHasBall = false
         cursor = nil
+        endTip()
     }
 
     /// Items changed. `addedAt`: rim x of the on-screen bottom-row tile to play with (the new one, or the nearest
@@ -379,7 +411,9 @@ nonisolated struct PetBrain: Sendable {
             reaction = [Step(.perk, 0.8, look: r), Step(.sad, 1.2, look: r)]
         }
         guard !reaction.isEmpty else { return }
-        if !isVisible || dragging {
+        if routine == .tip && activity != .away && !dragging {
+            plan += reaction // After the tip.
+        } else if !isVisible || dragging {
             // Plays once the cat is back in view.
             pending = reaction
             pendingRoutine = .react
@@ -396,7 +430,8 @@ nonisolated struct PetBrain: Sendable {
         guard on != dragging else { return }
         dragging = on
         if on {
-            if routine != .react { pending = [] }
+            if routine != .react || pendingRoutine == .tip { pending = [] }
+            endTip()
             appearAt = nil
             guard activity != .away else { return }
             if catHasBall || ball != nil { ball = nil; catHasBall = false; ballSpeed = 0; ballGone = false }
@@ -420,6 +455,74 @@ nonisolated struct PetBrain: Sendable {
         happiness = min(1, happiness + 0.25)
         lastActive = now
         run(.react, (isAsleep ? [Step(.stretch, 1.8)] : []) + [Step(.leanIn, 2.4)], now)
+    }
+
+    // MARK: Tips
+
+    /// Delivers a tip (V3-01): wakes first (stretch) unless it is a very sleepy cat, which tells it with one eye
+    /// open instead; walks to `target` (the button or tile it is about, if any) and acts out `g` while the bubble
+    /// shows. Not during a drag. Reduce Motion: no walk or gesture, just the bubble.
+    mutating func deliverTip(_ g: TipGesture, target: Double?, now: TimeInterval) {
+        guard shelfVisible, hasItems, !dragging else { return }
+        lastActive = now
+        tipAt = nil
+        tipDeadline = now + Self.tipWait
+        if catHasBall {
+            if isOffstage { ball = nil; catHasBall = false } else { dropBallHere() }
+        }
+        func tip(_ a: Activity, _ d: TimeInterval, look: Double? = nil) -> Step {
+            var s = Step(a, d, look: look)
+            s.tip = true
+            return s
+        }
+        if isAsleep && traits.sleepiness >= 0.9 && activity != .away {
+            return run(.tip, [tip(.peekEye, Self.tipLength), Step(.sleep)], now)
+        }
+        let here = track > 100 ? min(max(x, 50), track - 50) : x
+        let t = target.map { min(max($0, 0), track) }
+        var spot = here
+        let gesture: [Step]
+        switch g {
+        case .patRim: gesture = [tip(.pat, 1.6), Step(.sit, 4.4)]
+        case .pawTap: gesture = [tip(.pawTap, 1.4), Step(.sit, 4.6)]
+        case .wave: gesture = [tip(.wave, 1.8), Step(.sit, 4.2)]
+        case .shrug: gesture = [tip(.shrug, 1.6), Step(.sit, 4.4)]
+        case .lookAround: gesture = [tip(.look, 2.4), Step(.sit, 3.6)]
+        case .nudgeTile:
+            spot = t ?? here
+            gesture = [tip(.batTile, 0.5, look: t), Step(.sit, 5.5, look: t)]
+        case .pointUp:
+            spot = t ?? here
+            gesture = [tip(.pointUp, 2.6, look: t), Step(.sit, 3.4)]
+        case .pointAtTile:
+            // Beside the tile, on the side it comes from.
+            if let t { spot = min(max(t + (t >= x ? -26 : 26), 0), track) }
+            gesture = [tip(.pointUp, 2.6, look: t), Step(.sit, 3.4, look: t)]
+        }
+        let walk = abs(spot - x) > 2 || activity == .away ? [Step(.walk, to: .x(spot))] : []
+        let steps = walk + gesture
+        if activity == .away {
+            // Not in yet: comes in right away to tell it (before any reaction that was waiting).
+            pending = steps + (pendingRoutine == .react ? pending : [])
+            pendingRoutine = .tip
+            appearAt = now
+            return
+        }
+        run(.tip, (isAsleep ? [Step(.stretch, 1.2)] : []) + steps, now)
+    }
+
+    /// Clicked the bubble: the tip is learned; a happy bounce and a purr.
+    mutating func tipLearned(now: TimeInterval) {
+        endTip()
+        guard isVisible, !dragging else { return }
+        happiness = min(1, happiness + 0.15)
+        lastActive = now
+        run(.react, (isAsleep ? [Step(.stretch, 0.6)] : []) + [Step(.hop, 0.35), Step(.hop, 0.35), Step(.leanIn, 1.6)], now)
+    }
+
+    private mutating func endTip() {
+        tipAt = nil
+        tipDeadline = nil
     }
 
     // MARK: Cursor
@@ -512,7 +615,7 @@ nonisolated struct PetBrain: Sendable {
 
     /// The cat can take notice: in view, idle enough, and not mid-action on an earlier response.
     private var canNotice: Bool {
-        guard isVisible, !dragging, !reduceMotion, ![.exit, .react, .bringBall, .call].contains(routine) else { return false }
+        guard isVisible, !dragging, !reduceMotion, ![.exit, .react, .bringBall, .call, .tip].contains(routine) else { return false }
         return routine != .cursor || [.watch, .sit, .perk, .peekEye, .sleep].contains(activity)
     }
 
@@ -650,6 +753,10 @@ nonisolated struct PetBrain: Sendable {
             if activity != .away { set(Step(.away), now) }
             return
         }
+        if tipAt == nil, let d = tipDeadline, now >= d, isVisible {
+            tipAt = now
+            tipDeadline = nil
+        }
         // Waiting to appear (first time, or back after a drag): walks in from a side.
         if activity == .away {
             guard !dragging, let t = appearAt, now >= t else { return }
@@ -709,7 +816,11 @@ nonisolated struct PetBrain: Sendable {
         default: wait = reduceMotion ? end : min(1.0 / 20, end)
         }
         // Pointer over the shelf: a slow tick notices when it stops or lingers (≤ 10 Hz; moves tick on their own).
-        let attentive = cursor != nil && canNotice ? min(wait ?? .infinity, 0.1) : wait
+        var attentive = cursor != nil && canNotice ? min(wait ?? .infinity, 0.1) : wait
+        // The tip bubble's deadline and fade.
+        if let edge = [tipDeadline, tipAt.map { $0 + Self.tipLength }].compactMap({ $0 }).filter({ $0 > now }).min() {
+            attentive = min(attentive ?? .infinity, edge - now)
+        }
         guard let attentive, attentive.isFinite else { return nil }
         return max(0.02, attentive)
     }
@@ -771,7 +882,7 @@ nonisolated struct PetBrain: Sendable {
             let spot = min(max(x + Double.random(in: -90...90, using: &rng), 0), track)
             return [Step(.walk, to: .x(spot)), Step(.sit, 2)]
         case .bringBall: return ballPlan()
-        case .cursor, .call, .exit, .react: return [Step(.sit, 2)]
+        case .cursor, .call, .exit, .react, .tip: return [Step(.sit, 2)]
         }
     }
 
@@ -874,6 +985,10 @@ nonisolated struct PetBrain: Sendable {
             }
         }
         set(s, now)
+        if step.tip {
+            tipAt = now
+            tipDeadline = nil
+        }
         if let l = s.lookAt { face(l, now) }
         // Cursor play aims at where the pointer is now; a call keeps its spot.
         if routine == .cursor, let c = cursor, [.crouch, .pounce, .pounceUp, .batUp, .headRub, .watch].contains(s.activity) {

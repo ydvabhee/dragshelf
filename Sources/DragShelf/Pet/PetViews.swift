@@ -5,6 +5,7 @@ import SwiftUI
 /// the cat leaves the shelf past an edge.
 struct PetStage: View {
     let pet: PetController
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private typealias C = PetController
 
@@ -51,6 +52,30 @@ struct PetStage: View {
                     .accessibilityAction(named: "Send Home") { pet.sendHome() }
                 if pet.asking {
                     beside(cx) { question }
+                } else if let tip = pet.tip {
+                    let width = pet.stageFrame.width
+                    // Rises from just above the cat's head over the grid; an overlay, so the stage never grows.
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: 5)
+                        .allowsHitTesting(false)
+                        .overlay(alignment: .bottomLeading) {
+                            TipBubble(tip: tip, onLearned: pet.tipLearned)
+                                .frame(maxWidth: min(230, max(120, width - 24)))
+                                .fixedSize(horizontal: false, vertical: true)
+                                // Centred on the cat but kept inside the shelf.
+                                .alignmentGuide(.leading) { d in
+                                    -min(max(cx - d.width / 2, 8), max(8, width - d.width - 8))
+                                }
+                        }
+                        .transition(reduceMotion ? AnyTransition.opacity
+                                    : .opacity.combined(with: .scale(scale: 0.85, anchor: .bottom)))
+                    TipTail()
+                        .fill(PetArt.paper)
+                        .frame(width: 12, height: 8)
+                        .offset(x: cx - 6, y: 4)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
                 } else if let text = s.bubble {
                     beside(cx) {
                         Text(text)
@@ -61,6 +86,7 @@ struct PetStage: View {
                     .accessibilityHidden(true)
                 }
             }
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.25), value: pet.tip)
         } else {
             Color.clear.allowsHitTesting(false)
         }
@@ -86,6 +112,49 @@ struct PetStage: View {
         }
         .controlSize(.mini)
         .bubble()
+    }
+}
+
+/// A tip in the cat's words (V3-01): a soft clay speech bubble, at most two lines. Clicking it means "got it": the tip
+/// never shows again. VoiceOver reads the tip.
+private struct TipBubble: View {
+    let tip: HintEngine.Hint
+    let onLearned: () -> Void
+
+    var body: some View {
+        Button(action: onLearned) {
+            Text(tip.bubbleText)
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(PetArt.ink)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    shape.fill(LinearGradient(colors: [.white, PetArt.paper, Color(red: 0.97, green: 0.92, blue: 0.86)],
+                                              startPoint: .top, endPoint: .bottom))
+                        .shadow(color: .black.opacity(0.2), radius: 3, y: 1.5)
+                        .overlay(shape.strokeBorder(PetArt.ink.opacity(0.18), lineWidth: 0.6))
+                }
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help("Got it: don't show this tip again")
+        .accessibilityLabel(tip.spokenBubble)
+        .accessibilityHint("Marks the tip as learned")
+    }
+}
+
+/// The bubble's short tail, pointing down at the cat.
+private struct TipTail: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY))
+        p.addQuadCurve(to: CGPoint(x: r.midX + 1, y: r.maxY), control: CGPoint(x: r.midX - 1, y: r.midY))
+        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY), control: CGPoint(x: r.midX + 2, y: r.midY))
+        p.closeSubpath()
+        return p
     }
 }
 
@@ -188,7 +257,7 @@ struct PetSettingsSection: View {
             } header: {
                 Text("Pet")
             } footer: {
-                Text("A little cat lives on the bottom edge of DragShelf. It notices your pointer in its own way: watches, follows, pounces, or enjoys a rub. Double-click it or empty shelf space to call it over. It plays with its own ball, runs off while you drag, and never touches your items. Click it to pet it; right-click to send it home.")
+                Text("A little cat lives on the bottom edge of DragShelf. It notices your pointer in its own way: watches, follows, pounces, or enjoys a rub. Double-click it or empty shelf space to call it over. It plays with its own ball and with your tiles, tells you DragShelf tips in a speech bubble (click it when you've got it), runs off while you drag, and never changes your items. Click it to pet it; right-click to send it home.")
                     .foregroundStyle(.secondary)
             }
         }

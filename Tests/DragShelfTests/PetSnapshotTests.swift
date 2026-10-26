@@ -50,6 +50,9 @@ func petSnapshots() throws {
         ("bat-up-start", PetFrame(pose: .batUp, progress: 0.05)), ("head-rub", PetFrame(pose: .headRub, step: 1, progress: 0.3)),
         ("body-rub", PetFrame(pose: .bodyRub, step: 0, progress: 0.3, turn: 1)), ("peek-eye", PetFrame(pose: .peekEye)),
         ("sleep-twitch", PetFrame(pose: .sleep, turn: 1)), ("watch-up", PetFrame(pose: .perk, turn: 0.1)),
+        ("point-up", PetFrame(pose: .pointUp, progress: 0.1, turn: 0.3)), ("pat", PetFrame(pose: .pat, progress: 0.15)),
+        ("pat-down", PetFrame(pose: .pat, progress: 0.5)), ("paw-tap", PetFrame(pose: .pawTap, progress: 0.1)),
+        ("wave", PetFrame(pose: .wave, progress: 0.08)), ("shrug", PetFrame(pose: .shrug, progress: 0.6)),
     ]
     for (name, f) in frames {
         try write(HStack(spacing: 0) { tile(f, dark: false); tile(f, dark: true) }, "pet-\(name).png")
@@ -141,4 +144,22 @@ func petSnapshots() throws {
     pet.wiggles = [:]
     pet.snapshot = PetSnapshot(frame: PetFrame(pose: .sit), x: 140, facingRight: true)
     try shelf("admire")
+
+    // Tips told by the cat: under the real clock button pointing up, tapping a paw, waving.
+    store.recordDragOut([ShelfItem(kind: .text("Gone"))])
+    try shelf("tip-layout") // Lays out the header so the clock button reports where it is.
+    try? FileManager.default.removeItem(at: out.appendingPathComponent("rim-tip-layout-light.png"))
+    try? FileManager.default.removeItem(at: out.appendingPathComponent("rim-tip-layout-dark.png"))
+    let clock = Double(try #require(pet.clockX) - pet.stageFrame.minX - PetController.trackInset)
+    let tips: [(String, HintEngine.Hint, PetSnapshot)] = [
+        ("recent", .recent, PetSnapshot(frame: PetFrame(pose: .pointUp, progress: 0.1, turn: 0.3), x: clock - 18, facingRight: true)),
+        ("paste", .paste, PetSnapshot(frame: PetFrame(pose: .pawTap, progress: 0.1), x: 120, facingRight: true)),
+        ("shortcut", .hotkey, PetSnapshot(frame: PetFrame(pose: .wave, progress: 0.08), x: 60, facingRight: true)),
+    ]
+    for (name, hint, snap) in tips {
+        pet.tip = hint
+        pet.snapshot = snap
+        try shelf("tip-\(name)")
+    }
+    pet.tip = nil
 }

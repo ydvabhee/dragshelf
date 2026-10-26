@@ -268,10 +268,11 @@ private func beanPaw(_ ctx: GraphicsContext, _ x: CGFloat, _ y: CGFloat, _ c: Cl
 
 /// Sitting loaf (front view): tucked haunches with back feet at the sides, two bean paws under the chest.
 /// `dy` lowers it (behind the lip); `squash` flattens it (sniff); `paw` raises the right front paw (0…1 = swipe
-/// down); `ears` lifts (+, alert) or droops (−) them; `ball` puts the yarn ball in its mouth.
+/// down); `ears` lifts (+, alert) or droops (−) them; `ball` puts the yarn ball in its mouth. `reach` holds the
+/// right front paw up at (x, y from the top of the head): pointing, waving.
 private func catSitting(_ ctx: GraphicsContext, face f: Face, turn: CGFloat = 0, dy: CGFloat = 0, stretchUp: CGFloat = 0,
                         squash: CGFloat = 0, tailSway: CGFloat = 0, paw raised: Double? = nil, pawUp: Double? = nil,
-                        paws: Bool = true, ears lift: CGFloat = 0, ball: Bool = false) {
+                        reach: CGPoint? = nil, paws: Bool = true, ears lift: CGFloat = 0, ball: Bool = false) {
     let g = PetArt.ground + dy, top = g - 41 - stretchUp + squash
     catTail(ctx) { t in
         t.move(to: pt(40, g - 6))
@@ -300,7 +301,11 @@ private func catSitting(_ ctx: GraphicsContext, face f: Face, turn: CGFloat = 0,
     if ball { drawYarn(ctx, center: pt(32 + 4 * turn, faceY + 11), radius: 4.6, shadow: false) }
     guard paws else { return }
     beanPaw(ctx, 27.5, g - 2.6)
-    if let a = pawUp {
+    if let r = reach {
+        let foot = pt(r.x, top + r.y)
+        clay(ctx, [catLeg(pt(43, g - 17), foot, hipWidth: 8.5, footWidth: 6.4)], .cream, lift: true)
+        toeBeans(ctx, at: pt(foot.x + 0.6, foot.y + 0.6))
+    } else if let a = pawUp {
         // Reaching up past its ear, swiping at something above (0…1 = up, swipe, back).
         let swing = CGFloat(sin(a * .pi))
         let foot = pt(51 + 3 * swing, top - 1 + 7 * swing)
@@ -549,6 +554,63 @@ private func drawCat(_ ctx: GraphicsContext, _ fr: PetFrame) {
             let p = pt(f.x + 1, f.y).applying(local)
             toeBeans(ctx, at: p)
         }
+
+    case .pointUp:
+        // Sits tall with a paw raised high, pointing at something above; little "look here" ticks by the paw.
+        let bob = CGFloat(sin(progress * 4 * .pi)) * 1.2
+        contactShadow(ctx, x: 32, halfWidth: 20)
+        catSitting(ctx, face: .open, turn: turn, stretchUp: 1.5, reach: pt(52, -8 - bob), ears: 2)
+        let tick = StrokeStyle(lineWidth: 1.2, lineCap: .round)
+        for (a, b) in [(pt(56, 4 - bob), pt(58, 1 - bob)), (pt(59.5, 7 - bob), pt(62.5, 5.5 - bob)), (pt(52, 3 - bob), pt(52, 0 - bob))] {
+            var l = Path()
+            l.move(to: a)
+            l.addLine(to: b)
+            ctx.stroke(l, with: .color(Clay.caramel.shade.opacity(0.8)), style: tick)
+        }
+
+    case .pat:
+        // Pats the rim three times ("put it here"), eyes happy; a soft puff where the paw lands.
+        let a = abs(sin(progress * 3 * .pi))
+        contactShadow(ctx, x: 33, halfWidth: 21)
+        catSitting(ctx, face: .happy, turn: 0.2, paw: a)
+        if a > 0.85 {
+            for dx: CGFloat in [-5, 6] {
+                ctx.stroke(ellipse(51 + dx, g - 1.5, 1.6, 0.9), with: .color(Clay.cream.shade.opacity(0.7)), lineWidth: 0.8)
+            }
+        }
+
+    case .pawTap:
+        // Quick little taps of a front paw, like pressing a key; tap marks under it.
+        let a = 0.72 + 0.28 * abs(sin(progress * 5 * .pi))
+        contactShadow(ctx, x: 33, halfWidth: 21)
+        catSitting(ctx, face: .open, turn: 0.25, paw: a, ears: 1)
+        if a > 0.95 {
+            let tick = StrokeStyle(lineWidth: 1, lineCap: .round)
+            for (x0, x1) in [(46.0, 44.0), (56.0, 58.0)] as [(CGFloat, CGFloat)] {
+                var l = Path()
+                l.move(to: pt(x0, g - 7))
+                l.addLine(to: pt(x1, g - 10))
+                ctx.stroke(l, with: .color(Clay.caramel.shade.opacity(0.8)), style: tick)
+            }
+        }
+
+    case .wave:
+        // Waves a raised paw side to side, smiling.
+        let swing = CGFloat(sin(progress * 6 * .pi))
+        contactShadow(ctx, x: 32, halfWidth: 20)
+        catSitting(ctx, face: .happy, tailSway: swing > 0 ? 1.5 : 0, reach: pt(52 + 4 * swing, 0 - abs(swing)), ears: 1)
+
+    case .shrug:
+        // Head tilt with a "?": not sure what that button does either.
+        let k = CGFloat(sin(min(1, progress * 3) * .pi / 2))
+        contactShadow(ctx, x: 32, halfWidth: 20)
+        var c = ctx
+        c.translateBy(x: 32, y: g)
+        c.rotate(by: .degrees(Double(-9 * k)))
+        c.translateBy(x: -32, y: -g)
+        catSitting(c, face: .open, turn: -0.2, ears: -1)
+        ctx.draw(Text("?").font(.system(size: 12, weight: .heavy, design: .rounded))
+            .foregroundStyle(Clay.caramel.shade.opacity(Double(k))), at: pt(51, 8 - 2 * k))
 
     case .hide:
         // Ducked behind the front lip: only the ear tips show.

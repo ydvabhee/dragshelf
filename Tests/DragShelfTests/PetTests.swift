@@ -280,6 +280,101 @@ nonisolated private func tilePlayShares(_ p: PetPersonality) -> (bat: Double, kn
     #expect(PetController.bottomRow(frames, viewport: CGRect(x: 0, y: 1000, width: 288, height: 250)).isEmpty)
 }
 
+// MARK: Tips
+
+/// Each gesture walks to its spot and plays its pose; the bubble shows from the gesture for `tipLength`.
+@Test nonisolated func tipGesturesAndBubbleTiming() {
+    let cases: [(PetBrain.TipGesture, Double?, PetBrain.Activity)] = [
+        (.patRim, nil, .pat), (.pawTap, nil, .pawTap), (.nudgeTile, 240, .batTile), (.pointUp, 230, .pointUp),
+        (.pointAtTile, 240, .pointUp), (.wave, nil, .wave), (.shrug, nil, .shrug), (.lookAround, nil, .look),
+    ]
+    for (g, target, act) in cases {
+        var b = awake(.curious, seed: 11)
+        b.place(at: 140)
+        b.start(.idle, now: 6)
+        b.deliverTip(g, target: target, now: 6)
+        var began: Double?, at = 0.0
+        run(&b, from: 6, to: 20) { b, t in if began == nil && b.activity == act { began = t; at = b.x } }
+        let start = try! #require(began, "\(g)")
+        #expect(b.tipAt.map { abs($0 - start) < 0.06 } == true, "\(g)")
+        #expect(b.tipShowing(at: start + 1) && !b.tipShowing(at: start + PetBrain.tipLength + 0.1), "\(g)")
+        if g == .pointUp { #expect(abs(at - 230) < 1) } // Under the button.
+        if g == .nudgeTile { #expect(b.tileBats == 1) }
+        if g == .pointAtTile { #expect(abs(at - 214) < 1) } // Beside the tile.
+    }
+}
+
+@Test nonisolated func tipWakesTheCatOrLazyPeeks() {
+    var c = awake(.curious, seed: 4)
+    c.setNeeds(PetBrain.Needs(energy: 0.2, curiosity: 0.2, play: 0.2))
+    c.start(.nap, now: 6)
+    run(&c, from: 6, to: 20)
+    #expect(c.isAsleep)
+    c.deliverTip(.wave, target: nil, now: 20)
+    #expect(isSubsequence([.stretch, .wave], of: trace(&c, from: 20, to: 30)))
+
+    var l = awake(.lazy, seed: 4)
+    l.setNeeds(PetBrain.Needs(energy: 0.2, curiosity: 0.2, play: 0.2))
+    l.start(.nap, now: 6)
+    run(&l, from: 6, to: 20)
+    l.deliverTip(.wave, target: nil, now: 20)
+    #expect(l.activity == .peekEye)
+    #expect(l.tipShowing(at: 21))
+}
+
+@Test nonisolated func tipNeverDuringDragAndEndsWhenOneStarts() {
+    var b = awake(.curious, seed: 2)
+    b.setDragging(true, now: 6)
+    b.deliverTip(.wave, target: nil, now: 6)
+    run(&b, from: 6, to: 12)
+    #expect(b.tipAt == nil)
+
+    var d = awake(.curious, seed: 2)
+    d.deliverTip(.wave, target: nil, now: 6)
+    run(&d, from: 6, to: 8)
+    #expect(d.tipShowing(at: 8))
+    d.setDragging(true, now: 8)
+    #expect(!d.tipShowing(at: 8.1))
+}
+
+@Test nonisolated func learnedTipGetsAHappyBounce() {
+    var b = awake(.curious, seed: 2)
+    b.deliverTip(.pawTap, target: nil, now: 6)
+    run(&b, from: 6, to: 8)
+    b.tipLearned(now: 8)
+    #expect(!b.tipShowing(at: 8.1))
+    #expect(b.activity == .hop)
+    #expect(b.lift(at: 8.17) > 4)
+    #expect(isSubsequence([.hop, .leanIn], of: trace(&b, from: 8, to: 11)))
+}
+
+@Test nonisolated func reduceMotionTipHasNoGesture() {
+    var b = brain(.curious, reduceMotion: true)
+    run(&b, from: 0, to: 6)
+    let x = b.x
+    b.deliverTip(.wave, target: 200, now: 6)
+    var poses = Set<PetPose>()
+    run(&b, from: 6, to: 14) { b, t in if let f = b.frame(at: t) { poses.insert(f.pose) } }
+    #expect(poses.isSubset(of: [.sit, .sleep, .perk]), "\(poses)")
+    #expect(b.x == x)
+    #expect(b.tipAt != nil) // The bubble still shows.
+}
+
+/// A tip arriving before the cat is in brings it in right away.
+@Test nonisolated func tipCallsTheCatIn() {
+    var b = brain(.curious)
+    b.deliverTip(.patRim, target: nil, now: 0.1)
+    #expect(isSubsequence([.walk, .pat], of: trace(&b, from: 0.1, to: 8)))
+}
+
+@MainActor @Test func gesturePerTip() {
+    let expected: [HintEngine.Hint: PetBrain.TipGesture] = [
+        .firstDrop: .patRim, .paste: .pawTap, .dragOut: .pawTap, .holdCommand: .nudgeTile, .recent: .pointUp,
+        .moveResize: .pointUp, .pin: .pointAtTile, .hotkey: .wave, .clear: .shrug, .search: .lookAround,
+    ]
+    for hint in HintEngine.Hint.allCases { #expect(PetController.gesture(for: hint) == expected[hint], "\(hint)") }
+}
+
 // MARK: Drag
 
 @Test nonisolated func runsOutToNearerSideDuringDragAndWalksBack() {

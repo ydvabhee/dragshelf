@@ -135,3 +135,53 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
     #expect(HintEngine.Hint.hotkey.spokenText == "Tip: Control-Option-Command-D shows DragShelf from anywhere.")
     #expect(HintEngine.Hint.dragOut.spokenText == "Tip: Removed from DragShelf, Command-Z to bring it back")
 }
+
+// MARK: Pet tips (V3-01)
+
+@Test func tipGoesToCatOrFooterNeverBoth() {
+    #expect(ShelfView.tipRoute(hint: .recent, petOnStage: true) == (nil, .recent))
+    #expect(ShelfView.tipRoute(hint: .recent, petOnStage: false) == (.recent, nil)) // Pet off or hidden: footer.
+    #expect(ShelfView.tipRoute(hint: nil, petOnStage: true) == (nil, nil))
+    for hint in HintEngine.Hint.allCases {
+        for onStage in [true, false] {
+            let r = ShelfView.tipRoute(hint: hint, petOnStage: onStage)
+            #expect((r.footer == nil) != (r.bubble == nil))
+        }
+    }
+}
+
+@Test func oneTipAtATime() {
+    let (e, _) = engine()
+    e.record(.dropped)
+    e.record(.cleared)
+    #expect(e.current == .clear) // Highest priority wins; the rest wait for a later show.
+    e.record(.draggedOut(removed: false))
+    #expect(e.current == .recent)
+}
+
+@Test func pastePinSearchTriggers() {
+    let (e, _) = engine()
+    e.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 1))
+    #expect(e.current == nil)
+    e.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 1))
+    #expect(e.current == .paste)
+    let (p, _) = engine()
+    p.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 4))
+    #expect(p.current == .pin)
+    let (f, _) = engine()
+    f.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 8))
+    #expect(f.current == .pin) // Pin first, then search on a later show.
+    f.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 8))
+    f.dismiss()
+    f.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 8))
+    #expect(f.current == .search || f.current == .moveResize)
+}
+
+@Test func bubbleTextIsShortFirstPersonAndUsesTheShortcut() {
+    for hint in HintEngine.Hint.allCases {
+        #expect(hint.bubbleText.count <= 60, "\(hint)")
+        #expect(!hint.bubbleText.contains("Shelf "), "\(hint)")
+    }
+    #expect(HintEngine.Hint.hotkey.bubbleText == "\(Preferences.shortcut().display) brings me back from anywhere")
+    #expect(HintEngine.Hint.paste.spokenBubble == "Tip: Command-V pastes your clipboard here")
+}
