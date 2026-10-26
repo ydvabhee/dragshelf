@@ -188,7 +188,7 @@ nonisolated private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Doubl
     #expect(b.activity == .perk)
     #expect(b.facingRight) // Looks toward the new tile.
     #expect(isSubsequence([.perk, .walk, .sniff], of: trace(&b, from: 6, to: 12)))
-    #expect(abs(b.x - 224) < 1)
+    #expect(abs(b.x - 240) < 1) // Right under the new tile.
 
     var r = awake()
     r.place(at: 140)
@@ -200,6 +200,84 @@ nonisolated private func shares(_ p: PetPersonality) -> [PetBrain.Routine: Doubl
     p.pet(now: 6)
     #expect(p.activity == .leanIn)
     #expect(p.frame(at: 6)?.pose == .purr)
+}
+
+// MARK: Tile play
+
+/// A curious cat walks under a new tile, sniffs, bats it (it wiggles) and sits admiring it.
+@Test nonisolated func newTileIsPlayedWith() {
+    var b = awake(.curious, seed: 3)
+    b.place(at: 40)
+    b.itemsChanged(count: 4, addedAt: 240, removedAt: nil, now: 6)
+    let seen = trace(&b, from: 6, to: 20)
+    #expect(isSubsequence([.perk, .walk, .sniff, .batTile, .sit], of: seen), "\(seen)")
+    #expect(b.tileBats >= 1)
+    #expect(b.frame(at: 20) != nil)
+}
+
+/// Share of tile plays (over 300 seeds) that bat or knock the tile, and that knock it.
+nonisolated private func tilePlayShares(_ p: PetPersonality) -> (bat: Double, knock: Double) {
+    var bats = 0.0, knocks = 0.0
+    for seed: UInt64 in 1...300 {
+        var b = awake(p, seed: seed)
+        b.place(at: 140)
+        b.start(.inspect, now: 6)
+        let seen = trace(&b, from: 6, to: 22)
+        if seen.contains(.batTile) || seen.contains(.knockTile) { bats += 1 }
+        if seen.contains(.knockTile) { knocks += 1 }
+    }
+    return (bats / 300, knocks / 300)
+}
+
+@Test nonisolated func tilePlayFollowsPersonality() {
+    for p: PetPersonality in [.curious, .playful, .mischievous] {
+        #expect(tilePlayShares(p).bat > 0.75, "\(p)")
+    }
+    for p: PetPersonality in [.lazy, .shy] {
+        #expect(tilePlayShares(p).bat < 0.5, "\(p)")
+    }
+    // Only a mischievous cat knocks tiles (and then looks around as if nothing happened).
+    #expect(tilePlayShares(.mischievous).knock > 0.25)
+    #expect(tilePlayShares(.curious).knock == 0)
+}
+
+@Test nonisolated func knockThenInnocentLook() {
+    for seed: UInt64 in 1...40 {
+        var b = awake(.mischievous, seed: seed)
+        b.start(.inspect, now: 6)
+        let seen = trace(&b, from: 6, to: 22)
+        if seen.contains(.knockTile) {
+            #expect(isSubsequence([.knockTile, .look], of: seen))
+            #expect(b.tileKnocks == 1)
+            return
+        }
+    }
+    Issue.record("no knock in 40 seeds")
+}
+
+/// Nothing on screen to play with: no inspect routine.
+@Test nonisolated func noVisibleTilesNoInspect() {
+    var b = brain(.curious)
+    b.tiles = []
+    #expect(b.routineWeights().first { $0.0 == .inspect }?.1 == 0)
+}
+
+/// Only tiles mostly inside the grid's visible area count; the lowest such row is the one above the cat.
+@Test nonisolated func bottomRowIsTheLowestRowOnScreen() {
+    let ids = (0..<8).map { _ in UUID() }
+    func tile(_ col: Int, _ row: Int) -> CGRect { CGRect(x: 12 + CGFloat(col) * 88, y: 60 + CGFloat(row) * 115, width: 80, height: 103) }
+    var frames: [UUID: CGRect] = [:]
+    for i in 0..<8 { frames[ids[i]] = tile(i % 3, i / 3) } // Rows 0, 1, 2 (row 2: two tiles).
+    // Scrolled so row 2 is cut off after 20 pt: row 1 is the bottom row on screen.
+    let viewport = CGRect(x: 0, y: 60, width: 288, height: 250)
+    let row = PetController.bottomRow(frames, viewport: viewport)
+    #expect(row.map(\.id) == [ids[3], ids[4], ids[5]])
+    #expect(row.map(\.x) == [52, 140, 228])
+    // Scrolled to the end: row 2 is fully in view.
+    let end = PetController.bottomRow(frames, viewport: viewport.offsetBy(dx: 0, dy: 115))
+    #expect(end.map(\.id) == [ids[6], ids[7]])
+    // Rows scrolled above the viewport never count.
+    #expect(PetController.bottomRow(frames, viewport: CGRect(x: 0, y: 1000, width: 288, height: 250)).isEmpty)
 }
 
 // MARK: Drag

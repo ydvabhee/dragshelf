@@ -75,7 +75,7 @@ nonisolated struct SplitMix64: RandomNumberGenerator, Sendable {
 nonisolated struct PetBrain: Sendable {
     enum Activity: Equatable, Sendable {
         case away, sit, look, perk, sad, sniff, leanIn, yawn, stretch, circle, curl, sleep,
-             walk, run, carry, crouch, pounce, bat, backRoll, batTile, dropBall, pushOut, pushPrep,
+             walk, run, carry, crouch, pounce, bat, backRoll, batTile, knockTile, dropBall, pushOut, pushPrep,
              watch, peekEye, pounceUp, batUp, headRub, bodyRub,
              /// Expands when it starts: runs over to the cursor (or the call spot) if it is far.
              approach
@@ -166,7 +166,7 @@ nonisolated struct PetBrain: Sendable {
     var track = 280.0 { didSet { x = min(max(x, -80), track + 80); favorite = min(max(favorite, 0), track) } }
     /// Favorite nap nook (a rim corner), remembered by the controller.
     var favorite = 0.0
-    /// Bottom-row tile centres on the rim's axis (for inspecting).
+    /// Centres (rim axis) of the bottom row of tiles actually on screen; the cat only plays with these.
     var tiles: [Double] = []
     var rng: SplitMix64
 
@@ -207,7 +207,9 @@ nonisolated struct PetBrain: Sendable {
     private(set) var ballGoneAt: TimeInterval = 0
     /// The cat holds the ball (carry, back roll).
     private(set) var catHasBall = false
+    /// Tile play: each bat / knock wiggles the bottom-row tile nearest the cat (purely visual).
     private(set) var tileBats = 0
+    private(set) var tileKnocks = 0
     private(set) var shelfVisible = false
     private(set) var hasItems = false
     private(set) var dragging = false
@@ -282,7 +284,10 @@ nonisolated struct PetBrain: Sendable {
         case .yawn: pose = .yawn
         case .stretch: pose = .stretch
         case .curl, .sleep: pose = .sleep
-        case .bat, .batTile, .pushOut: pose = .bat
+        case .bat, .pushOut: pose = .bat
+        case .batTile, .knockTile:
+            // Reaches up at the tile above it.
+            pose = .batUp
         case .walk, .circle:
             pose = .walk
             turn = side
@@ -353,8 +358,9 @@ nonisolated struct PetBrain: Sendable {
         cursor = nil
     }
 
-    /// Items changed. `addedAt` / `removedAt`: rim x of a tile that arrived or left (ears perk, look, inspect;
-    /// or head follows with a small sad beat).
+    /// Items changed. `addedAt`: rim x of the on-screen bottom-row tile to play with (the new one, or the nearest
+    /// one on screen): ears perk, it walks under it, sniffs, often bats it, then sits admiring it.
+    /// `removedAt`: where one left (head follows with a small sad beat).
     mutating func itemsChanged(count: Int, addedAt: Double?, removedAt: Double?, now: TimeInterval) {
         hasItems = count > 0
         guard hasItems else {
@@ -363,10 +369,12 @@ nonisolated struct PetBrain: Sendable {
             return
         }
         lastActive = now
+        if activity == .away && appearAt == nil && shelfVisible && !dragging {
+            appearAt = now + Double.random(in: Self.appearDelay, using: &rng)
+        }
         var reaction: [Step] = []
         if let a = addedAt {
-            let spot = a + (a >= x ? -16 : 16)
-            reaction = [Step(.perk, 0.6, look: a), Step(.walk, to: .x(spot)), Step(.sniff, 1.4, look: a), Step(.sit, 2)]
+            reaction = [Step(.perk, 0.6, look: a), Step(.walk, to: .x(a)), Step(.sniff, 1.2, look: a)] + tilePlay(a)
         } else if let r = removedAt {
             reaction = [Step(.perk, 0.8, look: r), Step(.sad, 1.2, look: r)]
         }
@@ -375,9 +383,6 @@ nonisolated struct PetBrain: Sendable {
             // Plays once the cat is back in view.
             pending = reaction
             pendingRoutine = .react
-            if activity == .away && appearAt == nil && shelfVisible && !dragging {
-                appearAt = now + Double.random(in: Self.appearDelay, using: &rng)
-            }
         } else if isAsleep {
             if addedAt != nil { run(.react, [Step(.stretch, 1.8)] + reaction, now) }
         } else {
@@ -728,8 +733,9 @@ nonisolated struct PetBrain: Sendable {
         let t = mood(), n = needs
         return [(.nap, 5 + 6 * t.sleepiness),
                 (.explore, 0.2 + 1.5 * n.curiosity * (0.4 + t.curiosity)),
-                (.inspect, tiles.isEmpty ? 0 : 0.1 + 1.0 * n.curiosity * (0.4 + t.curiosity) + 0.6 * t.mischief
-                    + 1.5 * t.curiosity * t.curiosity),
+                // Playing with the tiles on screen: Curious most of all, then Mischievous and Playful.
+                (.inspect, tiles.isEmpty ? 0 : 0.3 + 1.0 * n.curiosity * (0.4 + t.curiosity) + 0.8 * t.mischief
+                    + 2.4 * t.curiosity * t.curiosity),
                 (.idle, 0.4 + 1.2 * (1 - n.energy) + 0.8 * t.sleepiness),
                 (.stretch, 0.1 + 0.3 * t.sleepiness),
                 (.wander, 0.1 + 1.2 * t.energy * n.energy),
@@ -756,11 +762,9 @@ nonisolated struct PetBrain: Sendable {
         case .explore:
             return [Step(.walk, to: .x(farSpot())), Step(.sit, Double.random(in: 1.5...3, using: &rng)), Step(.look, 2.4)]
         case .inspect:
-            // Walks to a bottom-row tile, sniffs, maybe bats it (it wiggles), sits beside it.
+            // Walks under an on-screen bottom-row tile, sniffs, then plays with it.
             let tile = tiles.randomElement(using: &rng) ?? x
-            let bat = Double.random(in: 0..<1, using: &rng) < min(1, t.mischief + 0.5 * t.curiosity) * 0.8
-            return [Step(.walk, to: .x(tile + (tile >= x ? -16 : 16))), Step(.sniff, 1.4, look: tile)]
-                + (bat ? [Step(.batTile, 0.9)] : []) + [Step(.sit, Double.random(in: 2...4, using: &rng))]
+            return [Step(.walk, to: .x(tile)), Step(.sniff, 1.2, look: tile)] + tilePlay(tile)
         case .idle: return [Step(.sit, Double.random(in: 3...7, using: &rng) * (1 + t.sleepiness))]
         case .stretch: return [Step(.stretch, 1.8), Step(.sit, 2)]
         case .wander:
@@ -781,6 +785,20 @@ nonisolated struct PetBrain: Sendable {
         let spot = right ? track - 50 : 50
         return (enter ? [] : exitPlan(right: right) + [Step(.sit, 0.8)]) + [Step(.carry, to: .x(spot)), Step(.dropBall, 0.4)]
             + (0..<rounds).flatMap { _ in playRound() } + [Step(.pushPrep), Step(.sit, 1.5)]
+    }
+
+    /// Under a tile: often reaches up and bats it (it wiggles), sometimes twice, then sits admiring it. A
+    /// mischievous cat may knock it instead (a bigger shove toward the edge) and look around as if nothing happened.
+    /// Purely visual: the item never changes.
+    private mutating func tilePlay(_ tile: Double) -> [Step] {
+        let t = mood()
+        let batOdds = min(0.9, max(0.05, 0.2 + 0.5 * t.curiosity + 0.4 * t.energy + 0.4 * t.mischief - 0.5 * t.shyness))
+        guard Double.random(in: 0..<1, using: &rng) < batOdds else { return [Step(.sit, 2.5, look: tile)] }
+        if t.mischief > 0.7 && Double.random(in: 0..<1, using: &rng) < 0.45 {
+            return [Step(.knockTile, 0.6, look: tile), Step(.look, 2.4)]
+        }
+        let twice = Double.random(in: 0..<1, using: &rng) < 0.25 + 0.5 * max(t.energy, t.mischief)
+        return [Step(.batTile, 0.5, look: tile)] + (twice ? [Step(.batTile, 0.5)] : []) + [Step(.sit, 2.5, look: tile)]
     }
 
     private mutating func playRound() -> [Step] {
@@ -882,6 +900,7 @@ nonisolated struct PetBrain: Sendable {
         case .bat: kick()
         case .pushOut: pushBall()
         case .batTile: tileBats += 1
+        case .knockTile: tileKnocks += 1
         case .dropBall:
             if catHasBall { dropBallHere() }
         case .carry:

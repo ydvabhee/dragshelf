@@ -87,12 +87,16 @@ final class PetController {
     /// Drawn state; set by the controller (and by snapshot tests).
     var snapshot: PetSnapshot?
     private(set) var asking = false
-    /// Per-tile wiggle counters; a change wiggles that tile once.
-    private(set) var wiggles: [UUID: Int] = [:]
+    /// Per-tile wiggles; a new `count` wiggles that tile once. Set by the controller (and by snapshot tests).
+    var wiggles: [UUID: TileWiggle] = [:]
     private(set) var name = Preferences.defaultPetName
 
     /// Overlay frame in the panel's content coordinates (top-left origin), reported by `PetStage`.
     @ObservationIgnored var stageFrame: CGRect = .zero { didSet { if stageFrame.width != oldValue.width { layout() } } }
+    /// Tile frames and the grid's visible area, same space as `stageFrame` (reported by `ShelfView`). Tiles the grid
+    /// has not laid out, or that are scrolled away, are not on screen; the cat never plays with those.
+    @ObservationIgnored var tileFrames: [UUID: CGRect] = [:]
+    @ObservationIgnored var gridFrame: CGRect?
     @ObservationIgnored private var brain: PetBrain
     @ObservationIgnored private let shelf: NSWindow
     @ObservationIgnored private let store: ShelfStore
@@ -239,32 +243,32 @@ final class PetController {
         loop = nil
         brain.shelfHidden(now: Self.now())
         wiggles = [:]
+        tileFrames = [:]
         previewUntil = 0
         snapshot = nil
     }
 
-    /// Track length and tile positions follow the panel width.
+    /// Track length follows the panel width.
     private func layout() {
         let width = stageFrame.width > 0 ? stageFrame.width : shelf.frame.width
         guard width > 0 else { return }
         brain.track = max(0, Double(width - 2 * Self.trackInset))
-        brain.tiles = (0..<bottomRowCount).map(tileX)
     }
 
-    private var columns: Int { ShelfView.columnCount(width: stageFrame.width > 0 ? stageFrame.width : shelf.frame.width) }
-
-    /// Items in the grid's last row; the cat visits those tiles.
-    /// ponytail: the last row, not the last row on screen (the grid may be scrolled); visual only.
-    private var bottomRowCount: Int {
-        let n = store.visibleItems.count
-        return n == 0 ? 0 : n - (n - 1) / columns * columns
+    /// The lowest row of tiles that are on screen (at least 60% of the tile inside `viewport`), left to right, as
+    /// (id, centre x). Tiles scrolled away or never laid out are left out.
+    nonisolated static func bottomRow(_ frames: [UUID: CGRect], viewport: CGRect) -> [(id: UUID, x: CGFloat)] {
+        let shown = frames.filter { $0.value.height > 0 && $0.value.intersection(viewport).height >= 0.6 * $0.value.height }
+        guard let lowest = shown.values.map(\.minY).max() else { return [] }
+        return shown.filter { abs($0.value.minY - lowest) < 4 }.map { (id: $0.key, x: $0.value.midX) }.sorted { $0.x < $1.x }
     }
 
-    /// Centre of grid column `col` on the rim track (grid padding 12, spacing 8).
-    private func tileX(_ col: Int) -> Double {
-        let width = stageFrame.width > 0 ? stageFrame.width : shelf.frame.width
-        let cols = CGFloat(columns), cell = (width - 24 - 8 * (cols - 1)) / cols
-        return Double(12 + cell / 2 + CGFloat(col) * (cell + 8) - Self.trackInset)
+    /// The on-screen bottom row on the rim track.
+    private func visibleRow() -> [(id: UUID, x: Double)] {
+        guard let grid = gridFrame, !store.showRecent, store.resizing == nil else { return [] }
+        let ids = Set(store.visibleItems.map(\.id))
+        return Self.bottomRow(tileFrames.filter { ids.contains($0.key) }, viewport: grid)
+            .map { (id: $0.id, x: Double($0.x - stageFrame.minX - Self.trackInset)) }
     }
 
     /// Drags (in, out, over the shelf) and item changes; re-arms itself (Observation fires once per registration).
@@ -288,16 +292,30 @@ final class PetController {
         brain.setDragging(store.isDragging || store.isDropTargeted, now: now)
         let ids = store.visibleItems.map(\.id)
         if ids != itemIDs {
-            let cols = columns
-            let added = ids.firstIndex { !itemIDs.contains($0) }
-            let removed = itemIDs.firstIndex { !ids.contains($0) }
+            let added = ids.first { !itemIDs.contains($0) }
+            let removed = itemIDs.first { !ids.contains($0) }
             let grew = ids.count > itemIDs.count
             itemIDs = ids
-            layout()
-            brain.itemsChanged(count: store.items.count, addedAt: grew ? added.map { tileX($0 % cols) } : nil,
-                               removedAt: !grew ? removed.map { tileX($0 % cols) } : nil, now: now)
+            let removedX = grew ? nil : removed.flatMap { id in visibleRow().first { $0.id == id }?.x }
+            brain.itemsChanged(count: store.items.count, addedAt: nil, removedAt: removedX, now: now)
+            if grew, let added { playWithNewTile(added) }
         }
         reschedule()
+    }
+
+    /// A tile arrived: once the grid has laid it out and scrolled to it, the cat goes to play with it, or with the
+    /// on-screen bottom-row tile nearest it when it landed elsewhere.
+    private func playWithNewTile(_ id: UUID) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.35))
+            guard let self, self.attached else { return }
+            let row = self.visibleRow()
+            let near = self.tileFrames[id].map { Double($0.midX - self.stageFrame.minX - Self.trackInset) } ?? self.brain.x
+            let target = row.first { $0.id == id } ?? row.min { abs($0.x - near) < abs($1.x - near) }
+            self.brain.tiles = row.map(\.x)
+            self.brain.itemsChanged(count: self.store.items.count, addedAt: target?.x, removedAt: nil, now: Self.now())
+            self.reschedule()
+        }
     }
 
     /// Ticks now, then sleeps until the brain next needs time. No timer at all while nothing can change.
@@ -319,9 +337,11 @@ final class PetController {
     private func step() {
         guard attached else { return }
         let now = Self.now()
-        let wasVisible = brain.isVisible, bats = brain.tileBats
+        let wasVisible = brain.isVisible, bats = brain.tileBats, knocks = brain.tileKnocks
+        let row = visibleRow()
+        brain.tiles = row.map(\.x)
         brain.tick(now: now)
-        if brain.tileBats != bats { wiggleTile() }
+        if brain.tileBats != bats || brain.tileKnocks != knocks { wiggleTile(row, knock: brain.tileKnocks != knocks) }
         if brain.isVisible && !wasVisible { appeared(now) }
         publish(now)
     }
@@ -367,14 +387,12 @@ final class PetController {
         if abs(fav - defaults.double(forKey: Self.favoriteKey)) > 0.01 { defaults.set(fav, forKey: Self.favoriteKey) }
     }
 
-    /// Bat a tile: the bottom-row tile nearest the cat wiggles. Purely visual; items never change.
-    private func wiggleTile() {
-        let items = store.visibleItems
-        let count = bottomRowCount
-        guard count > 0 else { return }
-        let start = items.count - count
-        let col = (0..<count).min { abs(tileX($0) - brain.x) < abs(tileX($1) - brain.x) } ?? 0
-        wiggles[items[start + col].id, default: 0] += 1
+    /// Bat or knock a tile: the on-screen bottom-row tile nearest the cat wiggles (a knock shoves it toward the
+    /// nearer edge and back). Purely visual; items never change.
+    private func wiggleTile(_ row: [(id: UUID, x: Double)], knock: Bool) {
+        guard let tile = row.min(by: { abs($0.x - brain.x) < abs($1.x - brain.x) }) else { return }
+        let count = (wiggles[tile.id]?.count ?? 0) + 1
+        wiggles[tile.id] = TileWiggle(count: count, knock: knock, toRight: tile.x > brain.track / 2)
     }
 
     /// The cat takes clicks only while it is in view.

@@ -106,25 +106,61 @@ private extension View {
     }
 }
 
+/// One tile's wiggle (V3-01): `count` changes → it plays once. `freeze` (0…1 through it) draws one still moment
+/// (snapshot review).
+struct TileWiggle: Equatable {
+    var count = 0
+    /// Knock: a bigger shove toward the nearer edge (`toRight`), held a beat, then back.
+    var knock = false
+    var toRight = true
+    var freeze: Double?
+}
+
 extension View {
-    /// Bat a tile (V3-01): the tile wiggles once each time `count` changes. Purely visual.
-    func petWiggle(_ count: Int) -> some View { modifier(PetWiggle(count: count)) }
+    /// Bat a tile (V3-01): the tile wiggles once each time the wiggle's count changes. Purely visual.
+    func petWiggle(_ wiggle: TileWiggle?) -> some View { modifier(PetWiggle(wiggle: wiggle ?? TileWiggle())) }
 }
 
 private struct PetWiggle: ViewModifier {
-    let count: Int
+    let wiggle: TileWiggle
+
+    struct Pose { var angle = 0.0, x = 0.0, y = 0.0 }
 
     func body(content: Content) -> some View {
-        content.keyframeAnimator(initialValue: 0.0, trigger: count) { view, angle in
-            view.rotationEffect(.degrees(angle), anchor: .bottom)
-        } keyframes: { _ in
-            KeyframeTrack {
-                CubicKeyframe(-7, duration: 0.09)
-                CubicKeyframe(6, duration: 0.12)
-                CubicKeyframe(-4, duration: 0.12)
-                CubicKeyframe(2, duration: 0.1)
-                CubicKeyframe(0, duration: 0.1)
-            }
+        if let f = wiggle.freeze {
+            let timeline = KeyframeTimeline(initialValue: Pose()) { keyframes }
+            Self.apply(content, timeline.value(progress: f))
+        } else {
+            content.keyframeAnimator(initialValue: Pose(), trigger: wiggle.count) { view, pose in
+                Self.apply(view, pose)
+            } keyframes: { _ in keyframes }
+        }
+    }
+
+    nonisolated private static func apply(_ view: some View, _ pose: Pose) -> some View {
+        view.rotationEffect(.degrees(pose.angle), anchor: .bottom).offset(x: pose.x, y: pose.y)
+    }
+
+    /// Bat: a springy rock of about 7° with a small hop. Knock: wind up, shoved ~12° and 8 pt toward the edge, held,
+    /// then it springs back.
+    @KeyframesBuilder<Pose> private var keyframes: some Keyframes<Pose> {
+        let d = wiggle.toRight ? 1.0 : -1.0, k = wiggle.knock
+        KeyframeTrack(\.angle) {
+            CubicKeyframe((k ? -4 : -7) * d, duration: 0.11)
+            SpringKeyframe((k ? 12 : 6) * d, duration: 0.14, spring: .snappy)
+            SpringKeyframe((k ? 10 : -3) * d, duration: k ? 0.45 : 0.14)
+            SpringKeyframe(0, duration: k ? 0.5 : 0.3, spring: .bouncy)
+        }
+        KeyframeTrack(\.x) {
+            LinearKeyframe(0, duration: 0.11)
+            SpringKeyframe(k ? 8 * d : 0, duration: 0.14, spring: .snappy)
+            LinearKeyframe(k ? 7 * d : 0, duration: k ? 0.45 : 0.14)
+            SpringKeyframe(0, duration: 0.5, spring: .bouncy)
+        }
+        KeyframeTrack(\.y) {
+            CubicKeyframe(k ? -2 : -4, duration: 0.11)
+            SpringKeyframe(k ? -6 : 0, duration: 0.14, spring: .snappy)
+            SpringKeyframe(0, duration: 0.4, spring: .bouncy)
         }
     }
 }

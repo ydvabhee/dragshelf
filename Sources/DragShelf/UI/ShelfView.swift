@@ -327,7 +327,8 @@ struct ShelfView: View {
                                       isPinned: store.isPinned(item.id),
                                       onRemove: { store.remove(ids: [item.id]) },
                                       onQuickLook: { onQuickLook(item.id) })
-                            .petWiggle(pet?.wiggles[item.id] ?? 0)
+                            .petWiggle(pet?.wiggles[item.id])
+                            .modifier(PetTileProbe(pet: pet, id: item.id))
                             .overlay {
                                 DragOutHandle(store: store, id: item.id, onHover: { inside in
                                     if inside { hovered = item.id } else if hovered == item.id { hovered = nil }
@@ -360,12 +361,30 @@ struct ShelfView: View {
             // Hug content until the cap, then scroll.
             .frame(maxHeight: contentCap)
             .fixedSize(horizontal: false, vertical: true)
+            .modifier(PetTileProbe(pet: pet, id: nil))
             .flashScrollIndicators(trigger: store.items.count)
             // Reveal what was just added (appended at the end) (T-13 AC-3).
             .onChange(of: store.items.count) { old, new in
                 guard new > old, let last = store.items.last?.id else { return }
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { proxy.scrollTo(last, anchor: .bottom) }
             }
+        }
+    }
+}
+
+/// Shelf pet (V3-01): reports a tile's frame (`id`) or the grid's visible area (nil) so the cat only plays with
+/// tiles on screen. Nothing at all without a pet.
+private struct PetTileProbe: ViewModifier {
+    let pet: PetController?
+    let id: UUID?
+
+    func body(content: Content) -> some View {
+        if let pet {
+            content.onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { frame in
+                if let id { pet.tileFrames[id] = frame } else { pet.gridFrame = frame }
+            }
+        } else {
+            content
         }
     }
 }

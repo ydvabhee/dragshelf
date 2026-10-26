@@ -108,8 +108,7 @@ func petSnapshots() throws {
         ("call", PetSnapshot(frame: PetFrame(pose: .perk, turn: 0.7), x: 70, facingRight: true, bubble: "!")),
         ("peek-eye", PetSnapshot(frame: PetFrame(pose: .peekEye), x: 30, facingRight: true)),
     ]
-    for (scene, snap) in scenes {
-        pet.snapshot = snap
+    func shelf(_ scene: String) throws {
         for (scheme, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             // Glass does not render offscreen: a plain fill stands in for it.
             let view = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600, pet: pet)
@@ -128,4 +127,18 @@ func petSnapshots() throws {
                 .write(to: out.appendingPathComponent("rim-\(scene)-\(scheme).png"))
         }
     }
+    for (scene, snap) in scenes {
+        pet.snapshot = snap
+        try shelf(scene)
+    }
+    // Tile play: 5 items in 3 columns, the bottom row's second tile (centre x 140 on the rim) mid-bat, then admired.
+    pet.wiggles = [store.items[4].id: TileWiggle(count: 1, freeze: 0.13)]
+    pet.snapshot = PetSnapshot(frame: PetFrame(pose: .batUp, progress: 0.5), x: 140, facingRight: true)
+    try shelf("bat-tile")
+    pet.wiggles = [store.items[4].id: TileWiggle(count: 1, knock: true, toRight: true, freeze: 0.35)]
+    pet.snapshot = PetSnapshot(frame: PetFrame(pose: .batUp, progress: 0.6), x: 140, facingRight: true)
+    try shelf("knock-tile")
+    pet.wiggles = [:]
+    pet.snapshot = PetSnapshot(frame: PetFrame(pose: .sit), x: 140, facingRight: true)
+    try shelf("admire")
 }
