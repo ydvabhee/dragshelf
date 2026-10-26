@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import DragShelf
@@ -134,4 +135,96 @@ private let promo = PromoFeed.decode(Data(#"{"version":1,"promos":[{"id":"p","ti
 @Test func spokenTextSpellsKeys() {
     #expect(HintEngine.Hint.hotkey.spokenText == "Tip: Control-Option-Command-D shows DragShelf from anywhere.")
     #expect(HintEngine.Hint.dragOut.spokenText == "Tip: Removed from DragShelf, Command-Z to bring it back")
+}
+
+// MARK: Pet tips (V3-01)
+
+@Test func tipGoesToCatOrFooterNeverBoth() {
+    #expect(ShelfView.tipRoute(hint: .recent, petOnStage: true) == (nil, .recent))
+    #expect(ShelfView.tipRoute(hint: .recent, petOnStage: false) == (.recent, nil)) // Pet off or hidden: footer.
+    #expect(ShelfView.tipRoute(hint: nil, petOnStage: true) == (nil, nil))
+    for hint in HintEngine.Hint.allCases {
+        for onStage in [true, false] {
+            let r = ShelfView.tipRoute(hint: hint, petOnStage: onStage)
+            #expect((r.footer == nil) != (r.bubble == nil))
+        }
+    }
+}
+
+@Test func oneTipAtATime() {
+    let (e, _) = engine()
+    e.record(.dropped)
+    e.record(.cleared)
+    #expect(e.current == .clear) // Highest priority wins; the rest wait for a later show.
+    e.record(.draggedOut(removed: false))
+    #expect(e.current == .recent)
+}
+
+@Test func pastePinSearchTriggers() {
+    let (e, _) = engine()
+    e.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 1))
+    #expect(e.current == nil)
+    e.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 1))
+    #expect(e.current == .paste)
+    let (p, _) = engine()
+    p.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 4))
+    #expect(p.current == .pin)
+    let (f, _) = engine()
+    f.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 8))
+    #expect(f.current == .pin) // Pin first, then search on a later show.
+    f.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 8))
+    f.dismiss()
+    f.record(.shown(.hotkey, hasFile: false, hasRecent: false, itemCount: 8))
+    #expect(f.current == .search || f.current == .moveResize)
+}
+
+@Test func bubbleTextIsShortFirstPersonAndUsesTheShortcut() {
+    for hint in HintEngine.Hint.allCases {
+        #expect(hint.bubbleText.count <= 60, "\(hint)")
+        // Branding: the panel is "DragShelf", never a bare "Shelf".
+        #expect(hint.bubbleText.range(of: #"(?<!Drag)Shelf\b"#, options: .regularExpression) == nil, "\(hint)")
+    }
+    #expect(HintEngine.Hint.hotkey.bubbleText == "\(Preferences.shortcut().display) brings DragShelf back from anywhere")
+    #expect(HintEngine.Hint.paste.spokenBubble == "Tip: Command-V pastes your clipboard here")
+}
+
+@MainActor @Test func introFirstThenClickDismissesIntroAndTipUnlearned() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("Intro-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let d = try #require(UserDefaults(suiteName: "Intro-\(UUID().uuidString)"))
+    let store = ShelfStore(cache: ItemCache(root: root), hints: HintEngine(defaults: d))
+    d.set(true, forKey: Preferences.petEnabled)
+    d.set("Pixel", forKey: Preferences.petName)
+    let pet = PetController(shelf: NSPanel(), store: store, defaults: d)
+    #expect(PetController.introText(name: pet.name) == "Hey, I'm Pixel!")
+    #expect(pet.introPending) // Tips wait for it.
+    pet.showIntro()
+    #expect(pet.introShowing)
+    pet.shelfClicked()
+    #expect(!pet.introShowing && !pet.introPending)
+    #expect(d.bool(forKey: Preferences.petIntroSeen))
+    // A click hides a tip bubble without learning it.
+    store.hints.visible = true
+    store.hints.record(.cleared)
+    pet.tip = .clear
+    pet.shelfClicked()
+    #expect(pet.tip == nil)
+    #expect(store.hints.dismissed.isEmpty)
+    pet.tip = .clear
+    pet.tipLearned()
+    #expect(store.hints.dismissed == [HintEngine.Hint.clear.rawValue])
+}
+
+@Test func resetTipsResetsIntro() {
+    let (e, d) = engine()
+    d.set(true, forKey: Preferences.petIntroSeen)
+    e.reset()
+    #expect(!d.bool(forKey: Preferences.petIntroSeen))
+}
+
+@Test func mochiLinesHaveNoEmoji() {
+    let lines = HintEngine.Hint.allCases.map(\.bubbleText) + [PetController.introText(name: "Mochi")]
+    for line in lines {
+        #expect(!line.unicodeScalars.contains { $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value > 0x2000) }, "\(line)")
+    }
 }

@@ -160,3 +160,18 @@ private func scrollViews(in view: NSView) -> [NSScrollView] {
     #expect(one < .milliseconds(1), "add at N=5000 took \(one)")
     #expect(!store.add(ShelfItem(kind: .file(urls[0]))))
 }
+
+/// V3-01: the cat is an overlay on the bottom rim: turning the pet on never changes the shelf's size.
+@Test func petDoesNotChangeLayout() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("DragShelfTests-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = ShelfStore(cache: ItemCache(root: root))
+    for i in 0..<4 { store.add(ShelfItem(kind: .text("item \(i)"))) }
+    let suite = "DragShelfTests-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let pet = PetController(shelf: NSPanel(), store: store, defaults: defaults)
+    let without = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600)).fittingSize
+    let with = NSHostingView(rootView: ShelfView(store: store, maxHeight: 600, pet: pet)).fittingSize
+    #expect(with == without, "\(without) \(with)")
+}

@@ -21,6 +21,8 @@ final class ShelfPanelController {
     @ObservationIgnored private var droppedOnShelf = false
     @ObservationIgnored private var dragActive = false
     @ObservationIgnored private var hideTask: Task<Void, Never>?
+    /// Shelf pet (V3-01); set in init.
+    @ObservationIgnored private(set) var pet: PetController!
 
     /// Gap below the menu bar / notch, and the entry slide distance.
     static let topInset: CGFloat = 12
@@ -33,6 +35,7 @@ final class ShelfPanelController {
     init(store: ShelfStore, promos: PromoLoader) {
         self.store = store
         self.promos = promos
+        pet = PetController(shelf: panel, store: store) // Before the content view: it reads `pet`.
         receiver = DropReceiver(rootView: PanelRoot(controller: self))
         receiver.store = store
         receiver.onDrop = { [weak self] in
@@ -43,6 +46,7 @@ final class ShelfPanelController {
         panel.contentView = receiver
         panel.store = store
         panel.onCancel = { [weak self] in self?.hide() }
+        panel.onPetCall = { [weak self] p in self?.pet.call(at: p) }
         panel.onUserResize = { [weak self] ended in ended ? self?.userResized() : self?.liveResized() }
         panel.minSize = ShelfView.minSize
     }
@@ -75,8 +79,9 @@ final class ShelfPanelController {
     /// Clamped to `ShelfView.minSize` … `visible` (T-16 AC-5).
     static func limits(saved: NSSize?, in visible: NSRect) -> (width: CGFloat, maxHeight: CGFloat) {
         let w = saved?.width ?? ShelfView.defaultWidth
-        let h = saved?.height ?? min(ShelfView.maxContentHeight, (visible.height * 0.5).rounded())
-        return (max(ShelfView.minSize.width, min(w, visible.width)), max(ShelfView.minSize.height, min(h, visible.height)))
+        let h = (saved?.height ?? min(ShelfView.maxContentHeight, (visible.height * 0.5).rounded()))
+        return (max(ShelfView.minSize.width, min(w, visible.width)),
+                max(ShelfView.minSize.height, min(h, visible.height)))
     }
 
     /// Per-screen pair saved under `key` (offsets, sizes).
@@ -152,6 +157,7 @@ final class ShelfPanelController {
         if limits.width != width { width = limits.width }
         if limits.maxHeight != maxHeight { maxHeight = limits.maxHeight }
         panel.maxSize = screen.visibleFrame.size
+        panel.minSize = NSSize(width: ShelfView.minSize.width, height: ShelfView.minSize.height)
     }
 
     /// Menu item / Settings / header double-click: forget all saved spots and sizes, back to top center.
@@ -187,6 +193,7 @@ final class ShelfPanelController {
         dragActive = true
         store.isDragging = true
         droppedOnShelf = false
+        pet.dragSessionStarted()
         show(reason: .autoDrag, at: point)
     }
 
@@ -221,7 +228,7 @@ final class ShelfPanelController {
         store.showRecent = false
         store.resizing = nil
         let hasFile = store.items.contains { if case .file = $0.kind { true } else { false } }
-        store.hints.record(.shown(reason, hasFile: hasFile, hasRecent: !store.recent.isEmpty))
+        store.hints.record(.shown(reason, hasFile: hasFile, hasRecent: !store.recent.isEmpty, itemCount: store.items.count))
         store.hints.visible = true
         // Not during an auto-drag show: a first feed landing mid-drag would add the footer row and grow the panel.
         if reason != .autoDrag { Task { await promos.refreshIfStale() } }
@@ -235,6 +242,7 @@ final class ShelfPanelController {
         // Hotkey: key panel so arrows, Space, Cmd-C, Esc work without the mouse (T-11 AC-4).
         // Menu and auto-show stay non-key (T-14 AC-X). None activates the app.
         if reason == .hotkey { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
+        pet.shelfDidShow()
         // Shadow again once the 0.96→1 scale settles: one taken mid-spring is smaller than the glass (T-16 AC-2).
         withAnimation(.spring(duration: 0.35, bounce: 0.15), completionCriteria: .removed) { isShown = true }
             completion: { [weak self] in self?.panel.invalidateShadow() }
@@ -289,6 +297,7 @@ final class ShelfPanelController {
         store.actions.message = nil
         store.resetSearch() // V2-10 AC-4
         panel.closePreview()
+        pet.shelfDidHide()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(.spring(duration: 0.35, bounce: 0.15)) { isShown = false }
         NSAnimationContext.runAnimationGroup({ context in
@@ -320,7 +329,8 @@ private struct PanelRoot: View {
                   promo: showPromos ? controller.promos.footerPromo : nil,
                   onDismissPromo: controller.promos.dismiss,
                   hint: showTips ? controller.store.hints.current : nil,
-                  onDismissHint: controller.store.hints.dismiss)
+                  onDismissHint: controller.store.hints.dismiss,
+                  pet: controller.pet.petOn ? controller.pet : nil)
             .scaleEffect(controller.isShown || reduceMotion ? 1 : 0.96, anchor: .top)
             // Last item gone (drag out, remove, clear) → hide (ARCHITECTURE §5 rule 4).
             .onChange(of: controller.store.items.isEmpty) { _, empty in if empty { controller.hide() } }

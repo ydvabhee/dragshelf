@@ -37,7 +37,11 @@ struct DragShelfApp: App {
         }
         Settings {
             SettingsView(onResetPosition: { appDelegate.panelController.resetPosition() },
-                         onResetTips: { appDelegate.store.hints.reset() })
+                         onResetTips: { appDelegate.store.hints.reset() },
+                         onPlayBall: {
+                             appDelegate.panelController.show()
+                             appDelegate.panelController.pet.playBall()
+                         })
         }
     }
 }

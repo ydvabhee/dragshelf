@@ -18,6 +18,8 @@ struct ShelfView: View {
     /// Contextual tip (T-18); takes the footer slot over the promo. Nil when tips are off or none is due.
     var hint: HintEngine.Hint?
     var onDismissHint: () -> Void = {}
+    /// Shelf pet (V3-01): when set, a cat sits on the bottom rim (an overlay; no layout change).
+    var pet: PetController?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Tile under the pointer (tracked by its `DragOutHandleView`, which is the hit view).
@@ -44,10 +46,15 @@ struct ShelfView: View {
         hint.map(Footer.hint) ?? promo.map(Footer.promo)
     }
 
+    /// Where a tip goes (V3-01): the cat's speech bubble while the pet is on stage, else the footer line. Never both.
+    static func tipRoute(hint: HintEngine.Hint?, petOnStage: Bool) -> (footer: HintEngine.Hint?, bubble: HintEngine.Hint?) {
+        petOnStage ? (nil, hint) : (hint, nil)
+    }
+
     static let defaultWidth: CGFloat = 360
     private static let gridPadding: CGFloat = 12, columnSpacing: CGFloat = 8, minTileWidth: CGFloat = 80
     /// ponytail: fixed header and tile heights; `tileHeightMatchesLayout` test catches drift.
-    private static let headerHeight: CGFloat = 52
+    static let headerHeight: CGFloat = 52
     static let tileHeight: CGFloat = 103
     /// Tip / promo row, always reserved (empty when neither shows): a tip never grows the panel.
     static let footerRowHeight = PromoFooter.rowHeight + PromoFooter.bottomPadding
@@ -98,7 +105,9 @@ struct ShelfView: View {
             // Own row under the grid: never over tiles. Hidden during any drag; the row keeps its height so the
             // panel does not resize under the pointer (a hover at the bottom edge would otherwise flicker).
             // ZStack: an outgoing and incoming line overlap instead of stacking (no height jump on swap).
-            if let footer = Self.footer(hint: hint, promo: promo) {
+            // Tips the cat tells never use the footer, so the promo keeps its line.
+            let footerHint = Self.tipRoute(hint: hint, petOnStage: pet?.tipsOnStage == true).footer
+            if let footer = Self.footer(hint: footerHint, promo: footerHint == nil ? promo : nil) {
                 let dragging = store.isDragging || store.isDropTargeted
                 ZStack {
                     switch footer {
@@ -115,7 +124,7 @@ struct ShelfView: View {
                 .allowsHitTesting(!dragging)
                 .accessibilityHidden(dragging)
                 .animation(.easeInOut(duration: 0.15), value: dragging)
-                .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1), value: hint)
+                .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3, bounce: 0.1), value: footerHint)
                 .transition(.opacity)
             } else {
                 Color.clear.frame(height: Self.footerRowHeight)
@@ -123,6 +132,7 @@ struct ShelfView: View {
         }
         .frame(width: width)
         .frame(minHeight: Self.minHeight, alignment: .top)
+        .overlay(alignment: .bottom) { if let pet { PetStage(pet: pet) } }
         .shelfBackground(isTargeted: store.isDropTargeted)
         // Clicks make the panel key; never draw the system focus ring (T-16 AC-1). Selection is the tile's own style.
         .focusEffectDisabled()
@@ -193,6 +203,7 @@ struct ShelfView: View {
                         Label("Recent drags", systemImage: "clock.arrow.circlepath")
                     }
                     .help(store.showRecent ? "Show DragShelf items" : "Show recent drags")
+                    .modifier(PetProbe(pet: pet) { $0.clockX = $1.midX })
                     .foregroundStyle(store.showRecent ? Color.accentColor : Color.primary)
                     .accessibilityAddTraits(store.showRecent ? .isSelected : [])
                     .accessibilityHint(store.showRecent ? "Shows DragShelf items again" : "Lists recent drags out to restore or drag again")
@@ -292,7 +303,7 @@ struct ShelfView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 16)
+        .padding(.bottom, pet?.tipsOnStage == true ? 30 : 16) // Clear of the cat on the rim
         .accessibilityElement(children: .combine)
     }
 
@@ -324,6 +335,8 @@ struct ShelfView: View {
                                       isPinned: store.isPinned(item.id),
                                       onRemove: { store.remove(ids: [item.id]) },
                                       onQuickLook: { onQuickLook(item.id) })
+                            .petWiggle(pet?.wiggles[item.id])
+                            .modifier(PetProbe(pet: pet) { $0.tileFrames[item.id] = $1 })
                             .overlay {
                                 DragOutHandle(store: store, id: item.id, onHover: { inside in
                                     if inside { hovered = item.id } else if hovered == item.id { hovered = nil }
@@ -356,12 +369,28 @@ struct ShelfView: View {
             // Hug content until the cap, then scroll.
             .frame(maxHeight: contentCap)
             .fixedSize(horizontal: false, vertical: true)
+            .modifier(PetProbe(pet: pet) { $0.gridFrame = $1 })
             .flashScrollIndicators(trigger: store.items.count)
             // Reveal what was just added (appended at the end) (T-13 AC-3).
             .onChange(of: store.items.count) { old, new in
                 guard new > old, let last = store.items.last?.id else { return }
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { proxy.scrollTo(last, anchor: .bottom) }
             }
+        }
+    }
+}
+
+/// Shelf pet (V3-01): reports where a tile, the grid's visible area or the clock button is, so the cat only plays
+/// with tiles on screen and points at the real button. Nothing at all without a pet.
+private struct PetProbe: ViewModifier {
+    let pet: PetController?
+    let report: (PetController, CGRect) -> Void
+
+    func body(content: Content) -> some View {
+        if let pet {
+            content.onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { report(pet, $0) }
+        } else {
+            content
         }
     }
 }
