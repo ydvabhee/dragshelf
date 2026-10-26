@@ -24,10 +24,7 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<!-- Demo: record ~10–15 s with ⌘⇧5 (drag a file, switch apps, drag it out, Mochi appears),
-     convert to docs/assets/demo.gif (~800 px wide, < 5 MB), then uncomment:
-<p align="center"><img src="docs/assets/demo.gif" width="720" alt="DragShelf demo"></p>
--->
+<p align="center"><img src="docs/assets/demo.gif" width="400" alt="DragShelf demo: drag files onto the shelf, switch folders, then drag them out"></p>
 
 ---
 
